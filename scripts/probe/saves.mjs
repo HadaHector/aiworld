@@ -98,12 +98,28 @@ const progression = loadProgressionRulesFromDisk(CONFIG, rules, WORLD_SEED);
 const items = loadItemRulesFromDisk(CONFIG, rules, WORLD_SEED);
 const worldData = createWorldData(WORLD_SEED, content);
 
+// The tiny world has few settlements, so its start rule relaxes a condition and the server says so
+// (a warning of chooseStarts, meant for authors of real worlds): not a problem with saving.
+const RELAXED_START = /the start ".*" dropped .* to find a settlement/;
+// Inland dry ground nearest to a point: the old spot (30, -20) of this world is in the sea now, where a
+// character drifts with the current and is not where it was left.
+const landNear = (from) => {
+  const dry = (x, z) => worldData.heightAt(x, z) > 2 && worldData.waterAt(x, z).depth === 0;
+  for (let r = 0; r < 300; r += 4) {
+    for (let k = 0; k < 16; k++) {
+      const x = from.x + Math.cos((k / 16) * Math.PI * 2) * r, z = from.z + Math.sin((k / 16) * Math.PI * 2) * r;
+      if (dry(x, z) && [0, 1, 2, 3, 4, 5, 6, 7].every((j) => dry(x + Math.cos(j * 0.785) * 25, z + Math.sin(j * 0.785) * 25))) return { x, z };
+    }
+  }
+  return from;
+};
+
 function startServer(store, world) {
   const problems = [];
   const server = createServer({
     seed: WORLD_SEED, config: CONFIG, packs, dimensions: content.dimensions, rules, creatures, items, progression,
     loadDimension: () => ({ world: worldData }),
-    saves: { store, world, interval: 5, onProblem: (m) => problems.push(m) },
+    saves: { store, world, interval: 5, onProblem: (m) => { if (!RELAXED_START.test(m)) problems.push(m); } },
   });
   const clients = [];
   const connect = () => {
@@ -181,7 +197,7 @@ await section("server", async () => {
   const gold = items.currencies[items.main ?? 0];
   a.send({ type: "debugResource", entity: 0, resource: rules.health, delta: -40 });
   a.send({ type: "saveInterface", value: '{"bar":[1,2,3]}' });
-  a.send({ type: "teleport", x: 30, z: -20 });
+  a.send({ type: "teleport", ...landNear({ x: 30, z: -20 }) });
   await t.pump(5);
   me = t.entity(a);
   me.belongings.wallet[items.main ?? 0] = 1234;

@@ -60,7 +60,7 @@ Checks are as the probe counts them (quick mode, where it differs from full, in 
 | beastGaits | 2.3 | 1.9 | "all good" | feet do not slide or sink | keep |
 | body | 3.9 | 3.5 | - | race bodies: manifold, winding, weights | keep |
 | grove | 9.6 | 9.1 | "ok" | druid grove odds and ring of oaks, 8 seeds | keep |
-| icons | 2.9 | 1.6 | 25 failures | icon names core uses exist in the pack | keep; **fails** (items name icons the pack lacks, e.g. item-bandage, item-iron-ingot) |
+| icons | 2.9 | 1.6 | 25 failures | icon names core uses exist in the pack | keep; passes, with seven icons listed as waiting for generation (torch, bandage, iron ingot, spell scroll, hardened sword short/long/great) |
 | roadWater | 23.5 | 8.6 | 4179 road points (full: 11169) | no road under water | speed-up: 2 seeds/config quick, 6 full |
 | water | 7.2 | 6.0 | 37948 | waterAt agrees with ground, deterministic | keep |
 | yardShape | 5.3 | 4.7 | "no faults" | polygon-yard layouts | keep |
@@ -70,19 +70,19 @@ Checks are as the probe counts them (quick mode, where it differs from full, in 
 | riverLevels | 6.9 | 5.5 | 954 | river levels fall to the sea, fords, bridges | keep |
 | mapTiles | 12.2 | 9.8 | 26 | map tiles: size, determinism, water | keep (also writes a PNG when given a folder) |
 | chat | 9.1 | 4.6 | all pass | chat parser, commands, range, rate limit | speed-up |
-| saves | 9.2 | 4.2 | 53/55 (2) | saves, stores, restart finds the character | speed-up; **fails 2** ("nothing went wrong saving", "where it was left") |
+| saves | 9.2 | 4.2 | 53/55 (2) | saves, stores, restart finds the character | speed-up; passes 55/55 (it had teleported into the sea; the relaxed-start warning is filtered) |
 | npcs | 35.4 | 24.6 | 424 | factions, standing, casts, services | speed-up (setImmediate); still slow - world builds per section |
 | entities | 10.6 | 9.8 | 98 | formulas, stats, entities on the server | keep |
 | items | 12.6 | 12.2 | 129 | item rules, rolls, loot, equipment | keep |
 | progression | 26.3 | 14.2 | 155 | XP, talents, unlocks, saves | speed-up |
 | abilities | 8.7 | 9.5 | 137 | skills, magic, casting, a fight | keep |
-| feedback | 9.8 | 9.3 | 1860/1861 (1) | sounds, particles, textures render | keep; **fails 1** (animation cues for shield, renew, fireball, kick missing) |
+| feedback | 9.8 | 9.3 | 1860/1861 (1) | sounds, particles, textures render | keep; passes (named animation clips need no sound; the chips-fall check averages 20 bursts) |
 | collision | 9.8 | 8.9 | "all good" | collision maths against slow answers | keep |
-| navigation | 57.7 | 26.4 | 486/487 (1) (full 1507) | crypt walk-line graph, motor walks, houses | speed-up: 60 layouts quick, 200 full; known fail: wolf up the stairs |
-| creatures | 118 | 28.7 | 97/99 (2) | creature rules, spawner, brain, hunting bot | speed-up (setImmediate; the 90 s bot is simulated time, not wall); known fails: the bot |
+| navigation | 57.7 | 26.4 | 486/487 (1) (full 1507) | crypt walk-line graph, motor walks, houses | speed-up: 60 layouts quick, 200 full; **known fail: wolf up the stairs** - a real gap: a collider slab 1.5 m over the inn's front-door tile stops any 1.8 m body (see the comment at the check) |
+| creatures | 118 | 28.7 | 97/99 (2) | creature rules, spawner, brain, hunting bot | speed-up (setImmediate; the 90 s bot is simulated time, not wall); passes 99/99 (the bot starts on inland ground; the tiny spawn is in the sea) |
 | quests | 223 | 67 | 432 (full 448) | quest runtime, generator over worlds, intro chains | speed-up: fewer seeds quick (see note), setImmediate |
-| dungeons | >900 (timed out) | 63 | 22239 (full ~113000) | 1000 crypt layouts on the real terrain, rules, walked on the motor | speed-up: 40 layouts quick, 1000 full; quick misses the known failures (layouts 126, 729...) |
-| caves | 176 | 169 | 119 (55 fail) | lairs on a headless server, walked to every spot | not in quick set: a diagnostic that fails until the cave navigation step; drop candidate if that is not coming soon |
+| dungeons | >900 (timed out) | 63 | 22239 (full ~113000) | 1000 crypt layouts on the real terrain, rules, walked on the motor | speed-up: 40 layouts quick, 1000 full; quick misses the known failures; `--full` (2026-11-22, 633 s): 3 of 620535 - layout 126 (rock over cryptHallPillars 7.15 m, needs 7.5), layout 729 loops 17 and 18 (a loop with only 1 join round, below loopSpan); not reproduced: the "no room for the key" and mausoleum-without-lair failures once reported |
+| caves | 176 | 169 | 119 (55 fail) | lairs on a headless server, walked to every spot | not in quick set: the lair check (SLICE.md E6); **keep as the worklist for NAVIGATION.md step 6**: its 28 failures of 129 are the missing cave walk graph ("a way to the boss/chest/spawn spot") and one minimal cave layout with no boss (lair #4) |
 | music | 0.3 | 0.3 | none | prints a tracker text of a song | drop candidate as a probe (a tool; no checks, cannot fail) |
 | aboveWaterRewire | - | - | none | one-off rewrite of the packs' waterline rules (`--write`) | drop candidate: already applied to the packs |
 
@@ -96,7 +96,7 @@ Not run, and not probes: `hook.mjs`, `tsResolve.mjs`, `loadContent.mjs` (the loa
 
 - `music.mjs`: no checks, prints a song; belongs under `scripts/` as a tool (or is covered by ambience.mjs, which composes songs and checks them).
 - `aboveWaterRewire.mjs`: a migration, done; keep only if the rewrite may be needed again for a new pack.
-- `caves.mjs`: always exits 1 today (55 of 119 checks), so it cannot guard anything; it overlaps navigation.mjs (the dungeon graph) and dungeons.mjs (layouts). Worth keeping as a worklist for NAVIGATION.md step 6, otherwise drop.
+- `caves.mjs`: exits 1 today (28 of 129 checks) because cave navigation (NAVIGATION.md step 6) is not built; kept as its worklist, it is the lair check (SLICE.md E6), not a duplicate of navigation.mjs or dungeons.mjs.
 - `vale.mjs` and `starts.mjs` both check that a start village is chosen and is the same twice (vale for its one-zone config, starts for the dimension rule): partial overlap, different configs; fine to keep.
 - Several probes (creatures, navigation, npcs, quests, saves, starts) each build their own tiny world and server; sharing one across probes is not possible (separate processes), but inside npcs, quests and navigation a world is rebuilt per section - the next speed-up if wanted, needs only probe edits.
 - Needing game code, not done: `generateLayout` (0.5 s a layout) and `resolveDungeons` (5 s per run) set the floor for dungeons.

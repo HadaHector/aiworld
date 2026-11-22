@@ -403,6 +403,12 @@ console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${off
           if (closest < 3.5) break;
         }
         console.log(`houses: a wolf in the street, the player upstairs: planned ${planned}, went upstairs ${up1}, got within ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}; the house's graph ${g.points.length} nodes, ${g.exits.length} doors out`);
+        // KNOWN FAIL, a real gap in the house, not in the wolf or the graph (diagnosed 2026-11-22): on `mainland`
+        // the inn's front door tile has a thin collider slab (3 m square, 0.18 thick) about 1.5 m over the
+        // floor, from the door in. Creatures use the 1.8 m motor body (not their look height), so the wolf stops
+        // at the threshold; a 1.8 m human motor stops at the same spot, a 1.0 m capsule walks through. So the
+        // graph and the plan are right (`planned` is true); the doorway is too low for any full-size body.
+        // Fix belongs to the house geometry (what makes that slab), then this check should pass as is.
         check("houses: the wolf goes in and up the stairs to the player", planned && up1 && closest < 3.5, `closest ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}`);
         server.debug.skills.kill(wolf);
       }

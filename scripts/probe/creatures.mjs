@@ -429,6 +429,22 @@ await section("navigation", async () => {
 });
 
 // --- the hunting bot: a client that finds, fights and loots creatures from messages alone ---
+// The old spawn (0, 0) of the tiny world is in the sea now (10 m deep), where the bot only swims
+// slowly with the current and never reaches anything. Dry land a little way off is the open ground
+// the section wants.
+const landNear = (from) => {
+  const world = createWorldData(WORLD_SEED, tinyContent);
+  for (let r = 0; r < 300; r += 4) {
+    for (let a = 0; a < 16; a++) {
+      const x = from.x + Math.cos((a / 16) * Math.PI * 2) * r;
+      const z = from.z + Math.sin((a / 16) * Math.PI * 2) * r;
+      const dry = (px, pz) => world.heightAt(px, pz) > 2 && world.waterAt(px, pz).depth === 0;
+      // Inland: dry all round, not on a beach the bot slides off into the water.
+      if ([0, 1, 2, 3, 4, 5, 6, 7].every((k) => dry(x + Math.cos(k * 0.785) * 25, z + Math.sin(k * 0.785) * 25)) && dry(x, z)) return { x, z };
+    }
+  }
+  return from;
+};
 await section("hunt", async () => {
   const rules = loadRulesFromDisk(CONFIG);
   const kinds = loadCreatureRulesFromDisk(CONFIG, rules, WORLD_SEED);
@@ -452,7 +468,7 @@ await section("hunt", async () => {
     hunter.receive();
     // On the open ground at the old spawn it was written for, not the starting village by a bandit
     // camp, whose corpses it cannot always walk to.
-    if (tick === 15) channel.client.send({ type: "teleport", ...tinyContent.dimension.spawn });
+    if (tick === 15) channel.client.send({ type: "teleport", ...landNear(tinyContent.dimension.spawn) });
     hunter.drive(tick);
   }
   check("the bot kills a creature within 90 s", hunter.state.kills >= 1, `${hunter.state.kills} kills, ${hunter.state.deaths} deaths`);
