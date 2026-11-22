@@ -31,7 +31,7 @@ import {
   LAKE_ROLL_SALT,
   LAKE_EDGE_NOISE_SALT,
 } from "./config";
-import { BOUNDARY_HILL_WIDTH, BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE, BOUNDARY_HILL_STYLE_SALT, SHORE_BAY_SALT } from "../terrain/boundaryHills/boundaryHillsConfig";
+import { BOUNDARY_HILL_WIDTH, BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE, BOUNDARY_HILL_STYLE_SALT, SHORE_BAY_SALT, SHORE_COVER_SALT } from "../terrain/boundaryHills/boundaryHillsConfig";
 import { RIVER_QUERY_RADIUS, RIVER_TRIBUTARY_LINK } from "../terrain/rivers/riverConfig";
 import { rollAreaBiome } from "../content/resolveContent";
 
@@ -289,6 +289,9 @@ const SHORE_GROW_ENCLOSED_REACH = 150;
 const SHORE_GROW_BLEND = 60;
 const SHORE_GROW_PASSES = 8;
 const SHORE_GROW_HOLD_FADE = 160;
+/** The coverage noise (ShoreHills.coverage): its frequency, and how soft a massif's end is in noise units. */
+const SHORE_COVER_FREQUENCY = 1 / 450;
+const SHORE_COVER_EDGE = 0.18;
 
 interface ShoreField {
   /** Distance to the coast, positive on land; -Infinity outside the field. */
@@ -634,7 +637,14 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
     if (!style) {
       const base = content.boundaryHillStyles.find((candidate) => candidate.id === shore.style);
       if (!base) throw new Error(`biome ${biome.id}: shoreHills style "${shore.style}" is not a borderHills style`);
-      shoreStyleCache.set(biome.seedKey, (style = { ...base, width: shore.width, peak: shore.peak, edgeNoise: shore.width * SHORE_EDGE_NOISE }));
+      shoreStyleCache.set(biome.seedKey, (style = {
+          ...base,
+          width: shore.width,
+          peak: shore.peak,
+          edgeNoise: shore.width * SHORE_EDGE_NOISE,
+          steepness: shore.steepness,
+          roughness: shore.roughness,
+        }));
     }
     return style;
   };
@@ -646,6 +656,7 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
   // The world's own wobble (WorldShape.coastWobble); unset keeps the continent's COAST_NOISE_AMPLITUDE.
   const coastAmplitude = content.world.coastWobble === undefined ? COAST_NOISE_AMPLITUDE : COAST_BORDER_WIDTH * content.world.coastWobble;
   const lakeNoise2D = createBaseNoise2D(deriveSeed(seed, LAKE_EDGE_NOISE_SALT));
+  const shoreCoverNoise2D = createBaseNoise2D(deriveSeed(seed, SHORE_COVER_SALT));
 
   function areaIdOf(landFieldIndex: number): number {
     if (landFieldIndex === -1) return -1;
@@ -756,7 +767,17 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
       const thin = 1 - smoothstep(reach * SHORE_THIN_FROM, reach * SHORE_THIN_TO, shoreField.thickness(worldX, worldZ) + pulled);
       // And the river's way out: no ridge across its mouth.
       const estuary = 1 - smoothstep(SHORE_GROW_RIVER_INNER, SHORE_GROW_RIVER_OUTER, toRiver);
-      shoreGap = Math.abs(toCoast - shore.inset) + Math.max(bay, thin, estuary) * shore.width * (1 + SHORE_EDGE_NOISE);
+      // And open shore between the massifs, where the coverage noise falls under its threshold: a slow
+      // noise, so a stretch of hills and a stretch of beach each run some hundreds of metres along
+      // the coast. The threshold is set so about `coverage` of the coast has hills (the noise is
+      // roughly even over -1..1).
+      let open = 0;
+      if (shore.coverage < 1) {
+        const n = shoreCoverNoise2D(worldX * SHORE_COVER_FREQUENCY, worldZ * SHORE_COVER_FREQUENCY);
+        const threshold = 1 - 2 * shore.coverage;
+        open = 1 - smoothstep(threshold - SHORE_COVER_EDGE, threshold + SHORE_COVER_EDGE, n);
+      }
+      shoreGap = Math.abs(toCoast - shore.inset) + Math.max(bay, thin, estuary, open) * shore.width * (1 + SHORE_EDGE_NOISE);
     }
 
     // Every area whose border is close enough to matter, not just the one owning the second-nearest

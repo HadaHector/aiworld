@@ -13,7 +13,13 @@
   // Mountains along the shore, for a world that asks for them (its `world: { shoreHills: true }`, as
   // the autumn vale does: one zone alone has no border for boundary hills to rise on). The land
   // grows out over the sea by `grow` and the hills stand on that, parting for the bays (SLICE.md W15).
-  shoreHills: { style: "jagged-ridge", grow: 300, inset: 120, width: 200, peak: 75, bays: 2, bayWidth: 450, bayDepth: 300 },
+  shoreHills: {
+    style: "jagged-ridge", grow: 300, inset: 170, width: 150, peak: 75,
+    bays: 3, bayWidth: 450, bayDepth: 300,
+    // Massifs along about 60% of the coast with open shore between, their flanks twice as steep as a
+    // plain bell and their crags rougher than the style: hard ground, not a walk.
+    coverage: 0.6, steepness: 2, roughness: 1.8,
+  },
   settlement: ["farmVillage", "marketTown"],
   // Woodland: a settlement in some cells, a logging camp deep in the trees in others.
   features: [

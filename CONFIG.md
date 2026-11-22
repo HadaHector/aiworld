@@ -46,7 +46,7 @@ in 53 s (measured in a hidden browser pane, which runs slower than a visible tab
     rivers: [1, 1],
     riverLength: [6, 8],         // cells
     coastWobble: 4,              // how far the coast wobbles, x COAST_BORDER_WIDTH: 4 a continent, ~1 an island of one zone
-    shoreHills: false,           // raise the biomes' shore hills (a biome's `shoreHills`, SLICE.md W15)
+    shoreHills: false,           // raise the biomes' shore hills (a biome's `shoreHills`: grow, inset, width, peak, bays, coverage, steepness, roughness; SLICE.md W15)
     riverTributaries: [0, 0],    // how many of the later rivers start beside an earlier one
     riverLevels: false,          // rivers at their own level, not sunk below the sea (WATER.md)
   },

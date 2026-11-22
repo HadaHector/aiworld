@@ -2598,7 +2598,7 @@ function readBoundaryHillStyle(id: string, obj: RawObject, reader: Reader): Boun
 }
 
 function readShoreHills(obj: RawObject, reader: Reader): ShoreHills {
-  reader.onlyKeys(obj, "shoreHills", ["style", "grow", "inset", "width", "peak", "bays", "bayWidth", "bayDepth"]);
+  reader.onlyKeys(obj, "shoreHills", ["style", "grow", "inset", "width", "peak", "bays", "bayWidth", "bayDepth", "coverage", "steepness", "roughness"]);
   const path = "shoreHills";
   return {
     style: reader.string(obj, "style", path),
@@ -2609,6 +2609,9 @@ function readShoreHills(obj: RawObject, reader: Reader): ShoreHills {
     bays: reader.optionalNumber(obj, "bays", path, 0, { min: 0, integer: true }),
     bayWidth: reader.optionalNumber(obj, "bayWidth", path, 300, { min: 1 }),
     bayDepth: reader.optionalNumber(obj, "bayDepth", path, 0, { min: 0 }),
+    coverage: reader.optionalNumber(obj, "coverage", path, 1, { min: 0, max: 1 }),
+    steepness: reader.optionalNumber(obj, "steepness", path, 1, { min: 1, max: 6 }),
+    roughness: reader.optionalNumber(obj, "roughness", path, 1, { min: 0, max: 4 }),
   };
 }
 

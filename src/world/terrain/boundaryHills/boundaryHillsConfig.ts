@@ -19,3 +19,5 @@ export const BOUNDARY_HILL_STYLE_SALT = 612;
 // Where a zone's shore hills part for their bays (areaField.ts) - continues the sequence past
 // TREE_SHADE_SALT (621) in terrain/foliage.
 export const SHORE_BAY_SALT = 622;
+// Where the shore hills stand along the coast and where the shore lies open (ShoreHills.coverage).
+export const SHORE_COVER_SALT = 623;
