@@ -311,6 +311,14 @@ export function createCuePlayer(
   /** Projectiles in flight. */
   const projectiles: { source: number; target: number; skill: number; until: number; cue: Lasting }[] = [];
   const auraKey = (host: number, skill: number, caster: number): string => `${host}:${skill}:${caster}`;
+  /** Stops every aura playing on a host. */
+  const dropAuras = (host: number): void => {
+    for (const [key, lasting] of auras) {
+      if (lasting.playing.context.target !== host) continue;
+      lasting.stop();
+      auras.delete(key);
+    }
+  };
   const endCast = (caster: number): void => {
     casts.get(caster)?.stop();
     casts.delete(caster);
@@ -417,7 +425,10 @@ export function createCuePlayer(
             break;
           }
           case "auraOff": {
-            const key = auraKey(c.target, event.skill, c.source);
+            // The caster may have changed since it began (a second spider's web takes the magic over):
+            // then the one nearest to it by host and skill is the one that goes.
+            let key = auraKey(c.target, event.skill, c.source);
+            if (!auras.has(key)) key = [...auras.keys()].find((k) => k.startsWith(`${c.target}:${event.skill}:`)) ?? key;
             auras.get(key)?.stop();
             auras.delete(key);
             playPhase("faded", kind, c);
@@ -427,7 +438,14 @@ export function createCuePlayer(
             playPhase("swing", kind, c, event.name);
             break;
           case "death":
+            // A death ends every magic on the dead (the server says so too); whatever its aura left
+            // playing - a web, its screen overlay - stops here, so none outlives it.
             endCast(c.target);
+            dropAuras(c.target);
+            playPhase(null, kind, c);
+            break;
+          case "respawn":
+            dropAuras(c.target);
             playPhase(null, kind, c);
             break;
           default:
@@ -461,11 +479,7 @@ export function createCuePlayer(
     },
     forget(unit) {
       endCast(unit);
-      for (const [key, lasting] of auras) {
-        if (lasting.playing.context.target !== unit) continue;
-        lasting.stop();
-        auras.delete(key);
-      }
+      dropAuras(unit);
       for (let i = projectiles.length - 1; i >= 0; i--) {
         if (projectiles[i].source !== unit && projectiles[i].target !== unit) continue;
         projectiles[i].cue.stop(0.08);

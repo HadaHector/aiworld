@@ -88,6 +88,13 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
   const { regions } = options;
   const ownFrame = makeFrame(regions.frames);
   const targetFrame = makeFrame(regions.frames);
+  // In combat the own frame glows red and breathes (SLICE.md, I9): a class the server's own in-combat
+  // state switches, so it goes off when the fight is over. The animation wins over the frame's inline shadow.
+  const style = document.createElement("style");
+  style.textContent = `@keyframes aiworld-in-combat { 0%, 100% { box-shadow: 0 0 0 1px #000, 0 0 6px 1px rgba(214, 48, 36, 0.55); } 50% { box-shadow: 0 0 0 1px #000, 0 0 14px 4px rgba(236, 62, 46, 0.85); } }
+    .aiworld-in-combat { border-color: #b8342a !important; animation: aiworld-in-combat 1.6s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .aiworld-in-combat { animation: none; box-shadow: 0 0 0 1px #000, 0 0 10px 2px rgba(226, 55, 40, 0.75) !important; } }`;
+  document.head.appendChild(style);
 
   // The own cast bar, above the spell bar.
   const castBar = el("div", `${BAR_TRACK} width: 280px; height: 18px; display: none; margin-bottom: 6px;`, regions.actions);
@@ -179,6 +186,7 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       const now = mirror.serverTime();
       const own = mirror.entities.get(ownId());
       drawFrame(ownFrame, own, now, false);
+      ownFrame.root.classList.toggle("aiworld-in-combat", !!own && mirror.own.inCombat);
       const experience = options.experience?.() ?? null;
       if (experience) {
         xpBarFill.style.width = `${Math.round(Math.min(1, experience.fraction) * 1000) / 10}%`;
@@ -211,6 +219,7 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
     },
     dispose() {
       chat.dispose();
+      style.remove();
       for (const e of [ownFrame.root, targetFrame.root, castBar, bar, xpBar, deadBox]) e.remove();
     },
   };

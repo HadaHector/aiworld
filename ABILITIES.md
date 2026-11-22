@@ -548,7 +548,7 @@ CombatEvent {
 { type: "entityAuras", id, auras: AuraState[] }             // displayed magics on a unit, whole list on change
 { type: "entityFlags", id, flags }                          // u32 bit set of the control flags held, on change
 AuraState { magic, skill, caster, stacks, start, ends }     // u32, u16, u32, u8, f64, f64 (ends 0: forever)
-{ type: "entitySpells", spells: SpellState[] }              // own player only, on change
+{ type: "entitySpells", spells, gcdUntil, attacking, inCombat } // own player only, on change; inCombat (never while dead) lights the HUD frame red
 SpellState { skill, level, ready }                          // u16, u16, f64 server time
 { type: "entityTarget", id, target }                        // whom a unit targets, for target-of-target
 ```

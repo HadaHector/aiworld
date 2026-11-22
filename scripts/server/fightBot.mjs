@@ -55,6 +55,7 @@ export function createFightClient(rules, end) {
           state.spells = message.spells;
           state.gcdUntil = message.gcdUntil;
           state.attacking = message.attacking;
+          state.inCombat = message.inCombat;
           break;
         case "entityCast":
           state.casting.set(message.id, message.skill);
