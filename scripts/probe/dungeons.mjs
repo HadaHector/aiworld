@@ -4,6 +4,7 @@
 // every room reachable, boss, lock and key as they should be, the same from the same seed - and
 // some walked end to end on the character motor.
 //   npm run probe -- scripts/probe/dungeons.mjs [count=1000]
+import { pick } from "./mode.mjs";
 import { ContentError } from "../../src/world/content/contentReader.ts";
 import { loadContentFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
 import { resolveDungeons } from "../../src/world/dungeons/dungeonDefs.ts";
@@ -13,7 +14,7 @@ import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { createCharacterMotor, createCollisionWorld, vec3 } from "../../src/world/collision/index.ts";
 import { mulberry32 } from "../../src/world/rng.ts";
 
-const COUNT = Number(process.argv[2] ?? 1000);
+const COUNT = Number(process.argv[2] ?? pick(40, 1000));
 let failures = 0, checks = 0;
 function check(what, ok, detail = "") {
   checks++;

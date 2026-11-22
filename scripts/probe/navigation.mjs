@@ -2,6 +2,7 @@
 // every room, walked by the character motor, the same every time, none to where nobody can stand,
 // and how long they take.
 //   npm run probe -- scripts/probe/navigation.mjs [layouts]
+import { pick } from "./mode.mjs";
 import { packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
 import { resolveDungeons } from "../../src/world/dungeons/dungeonDefs.ts";
 import { generateLayout, placedPaths, placedShapes, toWorld } from "../../src/world/dungeons/layout.ts";
@@ -9,7 +10,7 @@ import { createCharacterMotor, createCollisionWorld, vec3 } from "../../src/worl
 import { buildDungeonGraph, dungeonPath, walkableStraight } from "../../src/world/nav/dungeonNav.ts";
 import { collisionStats } from "../../src/world/collision/stats.ts";
 
-const COUNT = Number(process.argv[2] ?? 200);
+const COUNT = Number(process.argv[2] ?? pick(60, 200));
 const WALKED = 20;
 const BUDGET = 4000;
 let failures = 0, checks = 0;
@@ -179,7 +180,7 @@ console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${off
   let id = 0;
   const pump = async (steps) => {
     for (let i = 0; i < steps; i++) {
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setImmediate(r));
       server.step(1 / 30);
       for (const m of channel.client.receive()) {
         if (m.type === "welcome") id = m.playerId;

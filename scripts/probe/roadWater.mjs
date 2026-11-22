@@ -2,6 +2,7 @@
 // against the ground height; a point below the waterline must be on a bridge's deck.
 //   npm run probe -- scripts/probe/roadWater.mjs            (tiny and small over 6 seeds each, plus 475982993 small)
 //   npm run probe -- scripts/probe/roadWater.mjs full       (and the full world over 2 seeds)
+import { pick } from "./mode.mjs";
 import { loadContentFromDisk } from "../diskContent.mjs";
 import { createWorldData } from "../../src/world/worldData.ts";
 
@@ -11,9 +12,9 @@ const quiet = (run) => {
   try { return run(); } finally { console.log = log; }
 };
 const cases = [];
-for (const config of ["tiny", "small"]) for (let s = 0; s < 6; s++) cases.push([config, 1000 + s * 7919]);
+for (const config of ["tiny", "small"]) for (let s = 0; s < pick(2, 6); s++) cases.push([config, 1000 + s * 7919]);
 cases.push(["small", 475982993], ["tiny", 475982993]);
-if (process.argv.includes("full")) cases.push(["default", 475982993], ["default", 1338]);
+if (process.argv.includes("full") || process.env.PROBE_FULL === "1") cases.push(["default", 475982993], ["default", 1338]);
 
 let failures = 0, points = 0;
 for (const [config, seed] of cases) {

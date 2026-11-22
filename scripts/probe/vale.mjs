@@ -1,6 +1,7 @@
 // The autumn vale (SLICE.md, W1 and W9): the `vale` config keeps one dimension, a single autumn
 // wood zone of 14 cells, one landmass, with a start village chosen in it, the same every time.
 //   npm run probe -- scripts/probe/vale.mjs [seeds] [map=<folder>]   (map: a relief PNG of each seed)
+import { pick } from "./mode.mjs";
 import { loadContentFromDisk, loadCreatureRulesFromDisk } from "../diskContent.mjs";
 import { createZones } from "../../src/sim/creatures/zones.ts";
 import { createWorldData } from "../../src/world/worldData.ts";
@@ -78,7 +79,7 @@ check("the full world keeps 10 cells a zone", full.world.cellsPerArea === 10);
 
 const creatures = loadCreatureRulesFromDisk("vale");
 check("levels by cell", content.dimension.creatureLevels === "cells");
-const seeds = Number(process.argv[2]) || 6;
+const seeds = Number(process.argv[2]) || pick(2, 6);
 for (let s = 0; s < seeds; s++) {
   const seed = 1000 + s * 7919;
   const layout = planWorld(seed, content.world);

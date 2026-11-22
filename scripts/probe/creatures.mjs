@@ -172,7 +172,7 @@ function startServer(extra = {}) {
   const client = { id: 0, inbox: [] };
   const pump = async (steps = 1, dt = 1 / 30) => {
     for (let i = 0; i < steps; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setImmediate(resolve));
       server.step(dt);
       for (const m of channel.client.receive()) {
         if (m.type === "welcome") client.id = m.playerId;
@@ -447,7 +447,7 @@ await section("hunt", async () => {
   channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "hunter", dimension: "" });
   const hunter = createHuntClient(rules, kinds, channel.client);
   for (let tick = 0; tick < 30 * 90 && hunter.state.loots.length === 0; tick++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
     server.step(1 / 30);
     hunter.receive();
     // On the open ground at the old spawn it was written for, not the starting village by a bandit

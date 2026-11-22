@@ -279,7 +279,7 @@ await (async () => {
   const b = client("b");
   const pump = async (steps = 1) => {
     for (let i = 0; i < steps; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0)); // let a dimension's load resolve
+      await new Promise((resolve) => setImmediate(resolve)); // let a dimension's load resolve
       server.step(1 / 30);
       for (const c of [a, b]) {
         for (const m of c.end.receive()) {

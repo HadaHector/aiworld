@@ -12,6 +12,7 @@
     "icons:generated": "node scripts/icons/buildGenerated.mjs",
     "shot": "node scripts/shot/shot.mjs",
     "probe": "node --experimental-strip-types --import ./scripts/probe/hook.mjs",
+    "probe:quick": "node scripts/probe/quick.mjs",
     "server": "node --experimental-strip-types --no-warnings=ExperimentalWarning --import ./scripts/server/hook.mjs scripts/server/main.mjs"
   },
   "devDependencies": {
