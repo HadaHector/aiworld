@@ -1,15 +1,17 @@
-// A mine (SLICE.md E6, third lair): the cave style's rock worked by miners - lanterns and torches burning, barrels, crates, sacks and tool racks left on the floor at the light spots. Same parts, same builder. Its timber supports, rails, carts, picks, ore and windlass are 'light.dressing', set at the same spots (DUNGEONS.md, *The mine*).
+// A mine (SLICE.md E6, third lair): the cave style's parts cut square in worked rock - lanterns and torches burning, barrels, crates, sacks and tool racks left at the light spots. Same parts, same builder. Its timbering, track, carts, work faces and windlass are 'light.dressing', laid along its ways (DUNGEONS.md, *The mine*).
 // Was: a natural cave: chambers and winding tunnels in the rock, shaped as a whole in a distance field
 // (DUNGEONS.md, *The cave*), roughened by noise and meshed; its joins blend by themselves.
 {
   name: "Mine",
   builder: "field",
-  // The rock's roughness: a broad swell, a lumpier middle and a fine grain - biased to open the rock,
-  // so it closes it by at most half their amounts together (0.8 m).
+  // Cut, not grown: its tunnels and chambers squared off - upright walls, flat roofs, rounded corners -
+  // and their swells and bulges calmed by as much (caveField.ts, FieldVary.square).
+  hewn: 0.8,
+  // The rock's roughness, as a cave's but a third of it: worked faces, the pick's marks in them.
   noise: [
-    { scale: 0.11, amount: 0.9 },
-    { scale: 0.28, amount: 0.5 },
-    { scale: 0.7, amount: 0.2 },
+    { scale: 0.11, amount: 0.3 },
+    { scale: 0.28, amount: 0.2 },
+    { scale: 0.7, amount: 0.12 },
   ],
   // The cell it is sampled and meshed at: coarse - rock reads as rock without small facets.
   voxel: 1.25,
@@ -48,27 +50,28 @@
       { prop: "sack", weight: 1, place: "floor" },
       { prop: "toolRack", weight: 1, place: "floor" },
     ],
-    // What makes it a mine, set about the same spots and lighting nothing (caveFixtures.ts): timber sets
-    // across the ways at intervals (the one of a group that best fits the gap), shoring against the
-    // walls, track laid along them with carts, tools and ore left where the work was.
-    dressing: [
-      { prop: "timberFrameNarrow", group: "sets", place: "span", chance: 0.85, run: 2, parts: ["tunnel"] },
-      { prop: "timberFrameMid", group: "sets", place: "span", chance: 0.85, run: 2, parts: ["tunnel"] },
-      { prop: "timberFrameWide", group: "sets", place: "span", chance: 0.85, run: 2, parts: ["tunnel"] },
-      { prop: "timberFrameNarrow", group: "chamberSets", place: "span", chance: 0.4, run: 1, parts: ["chamber"] },
-      { prop: "timberFrameMid", group: "chamberSets", place: "span", chance: 0.4, run: 1, parts: ["chamber"] },
-      { prop: "timberFrameWide", group: "chamberSets", place: "span", chance: 0.4, run: 1, parts: ["chamber"] },
-      { prop: "wallShoring", place: "against", chance: 0.45 },
-      { prop: "railTrack", place: "along", chance: 0.6, run: 3 },
-      { prop: "mineCart", place: "along", chance: 0.3, run: 1, parts: ["chamber"] },
-      { prop: "oreCart", place: "along", chance: 0.35, run: 1, parts: ["chamber"] },
-      { prop: "pickLeaning", place: "against", chance: 0.4, parts: ["chamber"] },
-      { prop: "pickInRock", place: "floor", chance: 0.35, parts: ["chamber"] },
-      { prop: "oreOutcrop", place: "against", chance: 0.5, parts: ["chamber"] },
-      { prop: "orePile", place: "floor", chance: 0.5 },
-      { prop: "oreSack", place: "floor", chance: 0.4 },
-      { prop: "windlass", place: "floor", chance: 0.2, parts: ["chamber"] },
-    ],
+    // What makes it a mine, laid by its ways and lighting nothing (caveFixtures.ts, *dress*): a timber
+    // set across every tunnel every 6 m, cut to its width and roof, its cap's boards reaching the next
+    // set's, lagging behind the posts in half the bays; track down every tunnel, through each chamber to
+    // a turnplate in its middle and on to its work face, a cart parked at the buffer stop there; at each
+    // face - a chamber's wall furthest from its ways in, a dead end's end - the vein being worked, the
+    // tools by it and the ore broken from it; shoring up a chamber's walls; now and then a windlass over
+    // a winze sunk in a chamber's floor.
+    dressing: {
+      sets: { prop: "timberSet", every: 6 },
+      lagging: { prop: "wallShoring", chance: 0.5 },
+      shoring: { prop: "wallShoring", count: [1, 2] },
+      track: { prop: "railTrack", turnplate: "turnplate", carts: ["oreCart", "oreCart", "mineCart"], cart: 0.8 },
+      face: [
+        { prop: "oreVein", at: "face" },
+        { prop: "pickLeaning", at: "beside", chance: 0.85 },
+        { prop: "orePile", at: "foot", chance: 0.9 },
+        { prop: "pickInRock", at: "near", chance: 0.4 },
+        { prop: "oreSack", at: "near", chance: 0.6 },
+        { prop: "oreSack", at: "near", chance: 0.4 },
+      ],
+      extras: [{ prop: "windlass", chance: 0.3 }],
+    },
   },
   creatures: {
     groups: [

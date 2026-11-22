@@ -1,0 +1,12 @@
+// A vein of ore across a worked face: a band of pale quartz studded with bright ore, veinlets off it,
+// pieces broken off at its foot - laid on the rock of a mine's work face (DUNGEONS.md, The mine).
+{
+  name: "Ore vein",
+  type: "oreVein",
+  collide: false,
+  parts: {
+    quartz: { tints: [[0.68, 0.66, 0.6], [0.62, 0.61, 0.57]] },
+    ore: { tints: [[0.85, 0.55, 0.3], [0.55, 0.78, 0.66], [0.8, 0.66, 0.32]] },
+    rock: { material: "roughStone", tints: [[0.5, 0.46, 0.43], [0.46, 0.43, 0.42]] },
+  },
+}

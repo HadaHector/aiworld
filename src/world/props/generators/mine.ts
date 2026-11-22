@@ -1,4 +1,4 @@
-import type { PropContext, PropGenerator } from "../propGenerator";
+import type { LineRun, PropContext, PropGenerator } from "../propGenerator";
 import { ORIGIN, between, distance, moved, turned } from "../propShapes";
 import type { Vec3 } from "../../buildings/buildingGeometry";
 import type { Paint } from "../../buildings/buildingTypes";
@@ -58,6 +58,7 @@ export const timberFrame: PropGenerator = {
     width: { kind: "range", default: [3.4, 4.6], min: 1.5, doc: "between its posts" },
     height: { kind: "range", default: [3.4, 4.0], min: 2, doc: "the posts' height, to the cap's underside" },
     thickness: { kind: "range", default: [0.34, 0.44], min: 0.1, doc: "its posts' thickness" },
+    reach: { kind: "range", default: [1.1, 1.1], min: 0.3, doc: "how far the boards over its cap reach along the way either side - half the way to the next set, so a run of sets is roofed" },
   },
   parts: ["timber", "brace"],
   build(ctx) {
@@ -71,12 +72,17 @@ export const timberFrame: PropGenerator = {
     // The cap across their heads, reaching past them.
     slab(ctx, [0, h + t * 0.55, 0], [w + t * 1.3, t * 0.55, t * 0.6], wood, { bevel: t * 0.1 });
     if (ctx.far) return;
-    // Boards over the cap, along the way: the roof the set holds up.
-    for (const x of [-w * 0.6, 0, w * 0.6]) slab(ctx, [x, h + t * 1.1 + 0.07, 0], [t * 0.45, 0.07, 1.1], brace, { bevel: 0.03 });
+    // Boards over the cap, along the way, side by side across it: the roof the sets hold up.
+    const reach = ctx.range("reach");
+    const boards = Math.max(3, Math.round((w * 2) / 0.95));
+    for (let i = 0; i < boards; i++) {
+      const x = -w + (w * 2 * (i + 0.5)) / boards;
+      slab(ctx, [x, h + t * 1.1 + 0.07, (ctx.rng() - 0.5) * 0.3], [(w / boards) * 0.92, 0.07, reach], brace, { bevel: 0.03 });
+    }
     // Knee braces, post to cap, slimmer than either so they sit inside their faces.
-    const reach = Math.min(1.2, w * 0.7);
+    const knee = Math.min(1.4, w * 0.3);
     for (const side of [-1, 1]) {
-      ctx.shape.beam(ORIGIN, [side * (w - t * 0.3), h - reach, 0], [side * (w - reach), h + t * 0.1, 0], t * 0.6, t * 0.55, brace);
+      ctx.shape.beam(ORIGIN, [side * (w - t * 0.3), h - knee, 0], [side * (w - knee), h + t * 0.1, 0], t * 0.6, t * 0.55, brace);
     }
     // A wedge driven in at each joint.
     for (const side of [-1, 1]) slab(ctx, [side * (w + t * 0.55), h - 0.05, 0], [0.12, 0.17, t * 0.3], brace, { bevel: 0.03 });
@@ -92,6 +98,7 @@ export const wallShoring: PropGenerator = {
   params: {
     width: { kind: "range", default: [3, 4.4], min: 1, doc: "along the wall" },
     height: { kind: "range", default: [2.8, 3.4], min: 1.5, doc: "the boards' height" },
+    props: { kind: "chance", default: 1, doc: "how likely raking props hold it from the floor (none: lagging behind a tunnel's sets, held by their posts)" },
   },
   parts: ["timber", "brace"],
   build(ctx) {
@@ -110,6 +117,7 @@ export const wallShoring: PropGenerator = {
     if (ctx.far) return;
     // Two wales across the boards' faces.
     for (const y of [h * 0.3, h * 0.78]) slab(ctx, [0, y, 0.36], [w + 0.1, 0.14, 0.1], brace, { bevel: 0.03 });
+    if (!ctx.chance("props")) return;
     // Raking props: floor to the upper wale, one at each third.
     for (const x of [-w * 0.55, w * 0.55]) ctx.shape.beam(ORIGIN, [x, 0, 1.7], [x, h * 0.78, 0.5], 0.3, 0.3, brace, { collide: true, bevel: 0.03 });
     // A sole piece under each prop's foot.
@@ -117,16 +125,95 @@ export const wallShoring: PropGenerator = {
   },
 };
 
-/** A length of track: sleepers and two iron rails along z, to lay end to end along a way. */
+/** A buffer stop at a track's end (at `at`, the track running away from it along `along`): two
+ *  posts and a beam across the rails' ends. */
+function bufferStop(ctx: PropContext, at: Vec3, along: [number, number]): void {
+  const wood = ctx.paint("timber");
+  const [ax, az] = along;
+  const px = az, pz = -ax;
+  const bx = at[0] - ax * 0.3, by = at[1], bz = at[2] - az * 0.3;
+  for (const s of [-1, 1]) {
+    const x = bx + px * s * (GAUGE / 2), z = bz + pz * s * (GAUGE / 2);
+    ctx.shape.beam(ORIGIN, [x, by, z], [x, by + 1.0, z], 0.3, 0.3, wood, { collide: true, bevel: 0.04 });
+  }
+  const y = by + 0.75, r = GAUGE / 2 + 0.45;
+  ctx.shape.beam(ORIGIN, [bx - px * r, y, bz - pz * r], [bx + px * r, y, bz + pz * r], 0.36, 0.34, wood, { up: [0, 1, 0], collide: true, bevel: 0.05 });
+}
+
+/** A length of track: sleepers and two iron rails along z - or, as a line prop, the whole of a way's
+ *  track along its floor, rising and falling with it, a buffer stop at a free end. */
 export const railTrack: PropGenerator = {
-  doc: "A length of rail track: sleepers and two rails, to lay in a line.",
+  doc: "Rail track: sleepers and two rails - a length of it, or laid along a way's floor.",
   params: {
-    length: { kind: "range", default: [3.4, 3.4], min: 1, doc: "along it" },
+    length: { kind: "range", default: [3.4, 3.4], min: 1, doc: "along it, alone" },
   },
   parts: ["timber", "iron"],
   build(ctx) {
     const l = ctx.range("length") / 2;
     track(ctx, -l, l);
+  },
+  line(ctx: PropContext, run: LineRun) {
+    const wood = ctx.paint("timber");
+    const iron = ctx.paint("iron");
+    const pts = run.points;
+    if (pts.length < 2) return;
+    // Sleepers every so far along, square to the way there; the rails piece by piece over them.
+    let carry = 0.4;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+      const l = Math.hypot(dx, dz);
+      if (l < 1e-3) continue;
+      const ux = dx / l, uz = dz / l;
+      const px = uz, pz = -ux;
+      const hw = GAUGE / 2 + 0.4;
+      for (; carry < l; carry += 0.85) {
+        const t = carry / l;
+        const cx = a[0] + dx * t, cy = a[1] + dy * t + 0.08, cz = a[2] + dz * t;
+        ctx.shape.beam(ORIGIN, [cx - px * hw, cy, cz - pz * hw], [cx + px * hw, cy, cz + pz * hw], 0.34, 0.16, wood, { up: [0, 1, 0], bevel: 0.025 });
+      }
+      carry -= l;
+      // Each rail runs a hair past its joints, so a bend shows no gap.
+      const over = 0.06;
+      for (const side of [-1, 1]) {
+        const ox = px * side * (GAUGE / 2), oz = pz * side * (GAUGE / 2);
+        ctx.shape.beam(ORIGIN, [a[0] + ox - ux * over, a[1] + RAIL_TOP - 0.1, a[2] + oz - uz * over], [b[0] + ox + ux * over, b[1] + RAIL_TOP - 0.1, b[2] + oz + uz * over], 0.17, 0.2, iron, { up: [0, 1, 0] });
+      }
+    }
+    if (ctx.far) return;
+    const away = (i: number, j: number): [number, number] => {
+      const dx = pts[j][0] - pts[i][0], dz = pts[j][2] - pts[i][2], l = Math.hypot(dx, dz) || 1;
+      return [dx / l, dz / l];
+    };
+    if (run.ends[0] === "free") bufferStop(ctx, pts[0], away(0, 1));
+    if (run.ends[1] === "free") bufferStop(ctx, pts[pts.length - 1], away(pts.length - 1, pts.length - 2));
+  },
+};
+
+/** A turnplate where tracks meet: a square of thick planks laid flush with the rails, iron-framed. */
+export const turnplate: PropGenerator = {
+  doc: "A turnplate where tracks meet: an iron-framed square of planks flush with the rails.",
+  params: {
+    size: { kind: "range", default: [4.2, 4.6], min: 1.5, doc: "across it" },
+  },
+  parts: ["timber", "iron"],
+  build(ctx) {
+    const h = ctx.range("size") / 2;
+    const wood = ctx.paint("timber");
+    const iron = ctx.paint("iron");
+    const top = RAIL_TOP + 0.03;
+    const planks = Math.round((h * 2) / 0.5);
+    for (let i = 0; i < planks; i++) {
+      const x = -h + (h * 2 * (i + 0.5)) / planks;
+      slab(ctx, [x, top / 2, 0], [h / planks - 0.025, top / 2, h - 0.12], wood, { bottom: false, bevel: 0.02 });
+    }
+    for (const s of [-1, 1]) {
+      slab(ctx, [s * h, top / 2 + 0.02, 0], [0.12, top / 2 + 0.02, h + 0.12], iron, { bottom: false });
+      slab(ctx, [0, top / 2 + 0.02, s * h], [h, top / 2 + 0.02, 0.12], iron, { bottom: false });
+    }
+    if (ctx.far) return;
+    // Its pivot: a round iron boss in the middle.
+    ctx.shape.cylinder(between(ORIGIN, [0, top - 0.02, 0], [0, top + 0.08, 0]), 0.1, 0.45, iron, { ends: iron, sides: 10 });
   },
 };
 
@@ -139,6 +226,7 @@ export const mineCart: PropGenerator = {
   params: {
     length: { kind: "range", default: [2.2, 2.6], min: 1, doc: "its body's length" },
     load: { kind: "chance", default: 0, doc: "how likely it is heaped with ore" },
+    track: { kind: "chance", default: 1, doc: "how likely it stands on a stub of track of its own (none: on a way's track)" },
   },
   parts: ["timber", "iron", "rock", "ore"],
   build(ctx) {
@@ -146,7 +234,7 @@ export const mineCart: PropGenerator = {
     const wood = ctx.paint("timber");
     const iron = ctx.paint("iron");
     const loaded = ctx.chance("load");
-    track(ctx, -l - 0.9, l + 0.9);
+    if (ctx.chance("track")) track(ctx, -l - 0.9, l + 0.9);
     const wheel = 0.3;
     const axleY = RAIL_TOP + wheel;
     const floor = axleY + 0.22;
@@ -262,33 +350,66 @@ export const orePile: PropGenerator = {
   },
 };
 
-/** An outcrop of ore standing out of the wall: a mound of rock with seams of bright metal crossing it. */
-export const oreOutcrop: PropGenerator = {
-  doc: "A mound of rock against a wall with a seam of ore across its face.",
+/**
+ * A vein of ore in a worked face: a band of pale quartz running across the rock, wandering, swelling
+ * and pinching, studded with bright ore, thin veinlets branching off it; pieces of it broken off at
+ * the foot. Laid on the wall, its back (z 0) in the rock: only its face stands proud of it.
+ */
+export const oreVein: PropGenerator = {
+  doc: "A vein of ore across a worked face: a quartz band studded with ore, veinlets off it, broken pieces at its foot.",
   params: {
-    width: { kind: "range", default: [2.2, 3.2], min: 1, doc: "along the wall" },
-    height: { kind: "range", default: [1.8, 2.6], min: 0.8, doc: "how high" },
-    seams: { kind: "count", default: [2, 4], min: 1, doc: "bright seams across it" },
+    width: { kind: "range", default: [4, 5.5], min: 1, doc: "along the wall" },
+    height: { kind: "range", default: [2.2, 3.4], min: 0.5, doc: "its band's middle over the floor" },
+    veinlets: { kind: "count", default: [2, 4], min: 0, doc: "thin veins branching off it" },
   },
-  parts: ["rock", "ore"],
+  parts: ["quartz", "ore", "rock"],
   build(ctx) {
+    const { rng } = ctx;
     const w = ctx.range("width") / 2;
     const h = ctx.range("height");
-    const rock = ctx.paint("rock");
+    const quartz = ctx.paint("quartz");
     const ore = ctx.paint("ore");
-    // The mound: a big block with its face leaning back, a couple of lumps at its foot.
-    ctx.shape.box(turned(moved(ORIGIN, [0, h / 2, 0.15]), "x", -0.1), [w, h / 2, 0.55], rock, { collide: true, bevel: 0.25, bottom: false });
-    lump(ctx, [-w * 0.8, 0.35, 0.8], 0.5, rock);
-    lump(ctx, [w * 0.7, 0.3, 0.9], 0.45, rock);
+    const rock = ctx.paint("rock");
+    // The band's middle line, tilted and wandering; its thickness swelling and pinching, thinning out at its ends.
+    const tilt = (rng() - 0.5) * 0.5;
+    const phase = rng() * 6;
+    const mid = (x: number): number => h + x * tilt + Math.sin(x * 0.9 + phase) * 0.3;
+    const thick = (x: number): number => (0.32 + 0.22 * (0.5 + 0.5 * Math.sin(x * 1.7 + phase * 2))) * (1 - 0.7 * (Math.abs(x) / w) ** 3);
+    const step = 0.7;
+    for (let x = -w; x <= w + 1e-6; x += step) {
+      const y = mid(x), t = thick(x);
+      const f = turned(moved(ORIGIN, [x, y, 0.02]), "z", Math.atan(tilt) + (rng() - 0.5) * 0.2);
+      ctx.shape.box(f, [step * 0.62, t, 0.16 + rng() * 0.06], quartz, { bevel: 0.08 });
+      if (ctx.far) continue;
+      // Ore in it, the more where it swells.
+      const n = 1 + Math.round(t * 5 * rng());
+      for (let k = 0; k < n; k++) lump(ctx, [x + (rng() - 0.5) * step, y + (rng() - 0.5) * t * 1.2, 0.16 + rng() * 0.08], 0.11 + rng() * 0.1, ore);
+    }
     if (ctx.far) return;
-    // Seams: slim slabs across the face at a slant, proud of the rock, here and there thickening to a nugget.
-    const seams = ctx.count("seams");
-    for (let i = 0; i < seams; i++) {
-      const y = h * (0.25 + (0.6 * (i + 0.5)) / seams);
-      const x0 = -w * (0.35 + ctx.rng() * 0.35), x1 = w * (0.3 + ctx.rng() * 0.4);
-      const tilt = (ctx.rng() - 0.5) * 0.4;
-      ctx.shape.beam(ORIGIN, [x0, y - tilt * 0.5, 0.69], [x1, y + tilt, 0.69], 0.14 + ctx.rng() * 0.1, 0.07, ore, { bevel: 0.04 });
-      lump(ctx, [(x0 + x1) / 2 + (ctx.rng() - 0.5) * 0.6, y + tilt * 0.2, 0.74], 0.15, ore);
+    // Veinlets: short trails of quartz flecks, flat on the rock, running off the band up or down and
+    // dying out - an ore speck here and there.
+    const veinlets = ctx.count("veinlets");
+    for (let i = 0; i < veinlets; i++) {
+      let x = (rng() * 2 - 1) * w * 0.8, y = mid(x);
+      const up = rng() < 0.5 ? 1 : -1;
+      let a = (rng() - 0.5) * 1.6;
+      y += up * thick(x);
+      const steps = 2 + Math.floor(rng() * 3);
+      for (let k = 0; k < steps; k++) {
+        x += Math.sin(a) * 0.3;
+        y += up * Math.cos(a) * 0.3;
+        if (y < 0.3) break;
+        const size = 0.17 * (1 - k / (steps + 1));
+        const f = turned(moved(ORIGIN, [x, y, 0.03]), "z", a * up + (rng() - 0.5) * 0.6);
+        ctx.shape.box(f, [size * 0.8, size * 1.3, 0.08], quartz, { bevel: 0.03 });
+        if (rng() < 0.4) lump(ctx, [x, y, 0.1], 0.07 + rng() * 0.04, ore);
+        a += (rng() - 0.5) * 0.7;
+      }
+    }
+    // Pieces broken off it, at the face's foot.
+    const pieces = 5 + Math.floor(rng() * 4);
+    for (let i = 0; i < pieces; i++) {
+      lump(ctx, [(rng() * 2 - 1) * w * 0.7, 0.12, 0.45 + rng() * 0.9], 0.16 + rng() * 0.14, i % 3 === 0 ? ore : i % 3 === 1 ? quartz : rock);
     }
   },
 };

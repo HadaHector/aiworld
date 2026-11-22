@@ -9,7 +9,7 @@ import { pierBridge } from "./bridges";
 import { gravePost, headstone, lychgate, tomb, urn } from "./graves";
 import { altar, armchair, banner, bed, bench, cabinet, candles, chair, chandelier, chest, counter, fireplace, lantern, rack, sack, sconce, stool, stove, table, wallTorch } from "./furniture";
 import { crystals } from "./crystals";
-import { minerTools, mineCart, orePile, oreOutcrop, railTrack, timberFrame, wallShoring, windlass } from "./mine";
+import { minerTools, mineCart, orePile, oreVein, turnplate, railTrack, timberFrame, wallShoring, windlass } from "./mine";
 import { menhir, offeringSlab, treeMarker } from "./stones";
 
 /** Every prop generator, by the name a prop's `type` gives. A new one is a file of its own here,
@@ -74,6 +74,6 @@ export const PROP_GENERATORS: Record<string, PropGenerator> = {
   mineCart,
   minerTools,
   orePile,
-  oreOutcrop,
+  oreVein, turnplate,
   windlass,
 };

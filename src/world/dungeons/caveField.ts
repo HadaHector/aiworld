@@ -97,9 +97,18 @@ export interface FieldVary {
    *  through it - falling by up to this share of its radius and rising by most of that, in slopes
    *  that are walked (level again near its ways in). */
   rooms: number;
+  /** How square its shapes are cut, 0 to 1 (a style's `hewn` - a mine's): 0 the round tube and dome
+   *  of a cave, 1 near a box - upright walls, a flat roof, the corners rounded off. Squarer only
+   *  ever opens more (a superellipse holds its circle), so the ways stay as wide as measured. */
+  square?: number;
 }
 
 export const NO_VARY: FieldVary = { width: 0, height: 0, lumps: 0, floor: [0, 0], floorScale: 0.05, rooms: 0 };
+
+/** The superellipse's power for a squareness: 2 (round) to 8 (near a box). */
+const squarePower = (square: number | undefined): number => 2 + 6 * (square ?? 0);
+/** The p-norm of two or three values. */
+const pNorm = (p: number, a: number, b: number, c = 0): number => (p === 2 ? Math.hypot(a, b, c) : (Math.abs(a) ** p + Math.abs(b) ** p + Math.abs(c) ** p) ** (1 / p));
 
 /** A chamber's ground rises by this share of how far it falls. */
 const ROOM_RISE = 0.7;
@@ -355,7 +364,8 @@ function compile(shape: FieldShape, vary: FieldVary): Compiled {
     const ry = height * (1 - DOME_DROP);
     const cy = at.y + height * DOME_DROP;
     // Its radius at the floor is `radius`: the ellipsoid's is a little more.
-    const k = 1 / Math.sqrt(1 - (DOME_DROP / (1 - DOME_DROP)) ** 2);
+    const p = squarePower(vary.square);
+    const k = 1 / (1 - (DOME_DROP / (1 - DOME_DROP)) ** p) ** (1 / p);
     const rx = radius[0] * k, rz = radius[1] * k;
     const least = Math.min(rx, ry, rz);
     return {
@@ -368,7 +378,7 @@ function compile(shape: FieldShape, vary: FieldVary): Compiled {
         const w = 1 + vary.width * noise01(x * 0.05, y * 0.03, z * 0.05, 1);
         const h = 1 + vary.height * noise01(x * 0.04, 0, z * 0.04, 2);
         const qx = (x - at.x) / (rx * w), qy = (y - cy) / (ry * h), qz = (z - at.z) / (rz * w);
-        out[0] = (Math.hypot(qx, qy, qz) - 1) * least - vary.lumps * noise01(x * 0.09, y * 0.09, z * 0.09, 3);
+        out[0] = (pNorm(p, qx, qy, qz) - 1) * least - vary.lumps * noise01(x * 0.09, y * 0.09, z * 0.09, 3);
         out[1] = at.y - y;
       },
     };
@@ -376,7 +386,8 @@ function compile(shape: FieldShape, vary: FieldVary): Compiled {
   const { points, width, height } = shape;
   const cuts = shape.cut ?? [];
   const ry = height * (1 - DOME_DROP);
-  const rh = (width / 2) / Math.sqrt(1 - (DOME_DROP / (1 - DOME_DROP)) ** 2);
+  const p = squarePower(vary.square);
+  const rh = (width / 2) / (1 - (DOME_DROP / (1 - DOME_DROP)) ** p) ** (1 / p);
   const least = Math.min(rh, ry);
   return {
     box: fieldBounds([shape], BLEND + 1, vary),
@@ -390,9 +401,16 @@ function compile(shape: FieldShape, vary: FieldVary): Compiled {
         const a = points[i], b = points[i + 1];
         const dx = b.x - a.x, dz = b.z - a.z;
         const l2 = dx * dx + dz * dz;
-        const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2)) : 0;
+        const u = l2 > 0 ? ((x - a.x) * dx + (z - a.z) * dz) / l2 : 0;
+        const t = Math.max(0, Math.min(1, u));
         const px = a.x + dx * t, pz = a.z + dz * t;
-        const d = Math.hypot(x - px, z - pz);
+        // Past a piece's end, a squared way ends squarer too: square across it and how far beyond.
+        let d = Math.hypot(x - px, z - pz);
+        if (p !== 2 && u !== t && l2 > 0) {
+          const l = Math.sqrt(l2);
+          const beyond = Math.abs(u - t) * l;
+          d = pNorm(p, Math.sqrt(Math.max(0, d * d - beyond * beyond)), beyond);
+        }
         if (d < best) {
           best = d;
           across = d;
@@ -404,7 +422,7 @@ function compile(shape: FieldShape, vary: FieldVary): Compiled {
       const w = 1 + vary.width * noise01(x * 0.06, 0, z * 0.06, 4);
       const h = 1 + vary.height * noise01(x * 0.05, 0, z * 0.05, 5);
       const qh = across / (rh * w), qy = (y - floor - height * DOME_DROP) / (ry * h);
-      out[0] = (Math.hypot(qh, qy) - 1) * least - vary.lumps * noise01(x * 0.11, y * 0.11, z * 0.11, 6);
+      out[0] = (pNorm(p, qh, qy) - 1) * least - vary.lumps * noise01(x * 0.11, y * 0.11, z * 0.11, 6);
       // Square past a socket: only along the piece reaching past it.
       for (const c of cuts) {
         if ((c.end === "start" && piece !== 0) || (c.end === "end" && piece !== points.length - 2)) continue;

@@ -1,0 +1,12 @@
+// A timber set across a way: two posts, a cap, boards over it, knee braces (DUNGEONS.md, The mine).
+// A mine cuts each one to its way - its width, its roof, how far to the next set (caveFixtures.ts);
+// these are its sizes alone, in the workbench.
+{
+  name: "Timber set",
+  type: "timberFrame",
+  timberFrame: { width: [7.4, 8], height: [5.6, 6.2], thickness: [0.48, 0.52], reach: [2.6, 2.6] },
+  parts: {
+    timber: { material: "timber", tints: [[0.7, 0.58, 0.46], [0.62, 0.52, 0.42], [0.55, 0.47, 0.4]] },
+    brace: { material: "timber", tints: [[0.5, 0.42, 0.34], [0.45, 0.38, 0.32]] },
+  },
+}
