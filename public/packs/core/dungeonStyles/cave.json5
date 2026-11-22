@@ -13,7 +13,7 @@
   // The cell it is sampled and meshed at: coarse - rock reads as rock without small facets.
   voxel: 1.25,
   sizes: {
-    lair: { rooms: [3, 5], entry: "seamless" },
+    lair: { rooms: [2, 3], entry: "seamless" },
     dungeon: { rooms: [8, 12], entry: "seamless" },
   },
   branching: 0.4,

@@ -8,6 +8,11 @@ import type { ItemRules } from "../sim/rules/itemRules";
 import { bodyDone } from "../character/bodyTiming";
 import { gearOfItems } from "./itemGear";
 import { createBeastBody, type BeastKit } from "./beastBody";
+import type { PropDef } from "../world/props/propTypes";
+import type { BuildingMaterial } from "../world/buildings/buildingMesh";
+import { generateProp } from "../world/props/propGenerator";
+import { splitModel } from "../world/props/modelMeshes";
+import { createPropMesh, propMaterialsFor } from "../world/props/propMesh";
 import { splitBeastLook } from "../character/beast/beastDef";
 
 export interface EntityMeshes {
@@ -42,6 +47,8 @@ export interface EntityBodies {
   items?: ItemRules;
   /** Beast body plans (BEASTS.md): a template whose look names one is drawn as that beast. */
   beasts?: BeastKit;
+  /** The packs' props and the buildings' material, for a look that names a prop (a lair's chest). */
+  props?: { find: (id: string) => PropDef | undefined; building: BuildingMaterial };
 }
 
 interface Drawn {
@@ -120,6 +127,20 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     material.maxSimultaneousLights = 6;
     capsule.material = material;
     capsule.metadata = { entity: entity.id, halfHeight: look.height / 2 };
+    // A look that names a prop: the prop drawn on the box, which stays (nearly clear) to be clicked.
+    const propDef = look.prop ? bodies.props?.find(look.prop) : undefined;
+    if (look.prop && !propDef) console.warn(`Entity #${entity.id} (${entity.templateId}) wants prop "${look.prop}", which these packs lack - its box stays.`);
+    if (propDef && bodies.props) {
+      const parts = splitModel(generateProp(propDef, entity.look.seed, 0), bodies.props.building, true).props;
+      if (parts) {
+        const drawnProp = createPropMesh(scene, `entity${entity.id}Prop`, parts, { x: 0, y: 0, z: 0, frontX: 0, frontZ: 1 }, propMaterialsFor(scene, bodies.props.building), null, new Map(), false) as Mesh;
+        drawnProp.parent = capsule;
+        drawnProp.position.y = -look.height / 2;
+        drawnProp.rotation.y = entity.facing ?? 0;
+        drawnProp.isPickable = false;
+        material.alpha = 0.001;
+      }
+    }
     // The entity's own choices over its template's - a player's race, outfit and sex.
     const race = entity.look.race || look.race;
     const sex = entity.look.sex || look.sex;
