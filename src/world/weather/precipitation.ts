@@ -267,10 +267,10 @@ export function createPrecipitation(scene: Scene, heightAt: (x: number, z: numbe
   // The grid of tree cover the leaves are masked by: laid a couple of rows a frame round the player,
   // swapped in whole when done, and begun again when the player strays from its middle.
   const gridCentre = new Vector3(0, 0, COVER_CELLS * COVER_CELL);
-  const building = { x: NaN, z: NaN, row: COVER_CELLS, data: new Uint8Array(COVER_CELLS * COVER_CELLS) };
+  const building = { x: NaN, z: NaN, row: COVER_CELLS, data: new Uint8Array(COVER_CELLS * COVER_CELLS * 4) };
   let centreSet = false;
   function layCover(eye: Vector3): void {
-    if (building.row >= COVER_CELLS && (!centreSet || Math.hypot(eye.x - gridCentre.x, eye.z - gridCentre.z) > COVER_RELAY)) {
+    if (building.row >= COVER_CELLS && (!centreSet || Math.hypot(eye.x - gridCentre.x, eye.z - gridCentre.y) > COVER_RELAY)) {
       building.x = Math.round(eye.x / COVER_CELL) * COVER_CELL;
       building.z = Math.round(eye.z / COVER_CELL) * COVER_CELL;
       building.row = 0;
@@ -282,7 +282,12 @@ export function createPrecipitation(scene: Scene, heightAt: (x: number, z: numbe
       const z = building.z + (building.row + 0.5 - COVER_CELLS / 2) * COVER_CELL;
       for (let i = 0; i < COVER_CELLS; i++) {
         const x = building.x + (i + 0.5 - COVER_CELLS / 2) * COVER_CELL;
-        building.data[building.row * COVER_CELLS + i] = Math.round(Math.max(0, Math.min(1, coverAt(x, z))) * 255);
+        const at = (building.row * COVER_CELLS + i) * 4;
+        const level = Math.round(Math.max(0, Math.min(1, coverAt(x, z))) * 255);
+        building.data[at] = level;
+        building.data[at + 1] = level;
+        building.data[at + 2] = level;
+        building.data[at + 3] = 255;
       }
     }
     if (building.row >= COVER_CELLS) {
@@ -613,8 +618,9 @@ function buildLeaves(scene: Scene): { mesh: Mesh; material: ShaderMaterial; trav
   material.setVector3("box", new Vector3(...box));
   material.setFloat("sway", LEAVES.sway);
   material.setFloat("size", LEAVES.size);
-  const coverData = new Uint8Array(COVER_CELLS * COVER_CELLS);
-  const cover = RawTexture.CreateRTexture(coverData, COVER_CELLS, COVER_CELLS, scene, false, false, Texture.BILINEAR_SAMPLINGMODE);
+  // RGBA, the cover in every channel: a one-channel texture would not upload.
+  const coverData = new Uint8Array(COVER_CELLS * COVER_CELLS * 4);
+  const cover = RawTexture.CreateRGBATexture(coverData, COVER_CELLS, COVER_CELLS, scene, false, false, Texture.BILINEAR_SAMPLINGMODE);
   cover.name = "leaves_cover";
   cover.wrapU = Texture.CLAMP_ADDRESSMODE;
   cover.wrapV = Texture.CLAMP_ADDRESSMODE;

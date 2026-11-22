@@ -639,7 +639,9 @@ real G1 switch, then the wave 2 sessions (section 8) now that the curves exist.
   **Only under trees**: each leaf reads the tree cover of the ground beneath it from a 32 x 32 grid (1.5 m cells) laid about
   the player, two rows a frame, re-laid when the player strays 4 m (`coverAt` in `createPrecipitation`; world.ts passes
   `createTreeCover`). Cover 0 in the village squares, 0.5-1 in the wood (checked headless, `scripts/probe/leafCover.local.mjs`);
-  the mask is `smoothstep(0.25, 0.65, cover)`. Cover is a density, not the trees themselves, so a leaf may fall between two trunks.
+  the mask is `smoothstep(0.25, 0.65, cover)`. The grid is an RGBA texture (a one-channel R8 one never reached the GPU: no leaves at all in the first
+  version of the mask), and the "strayed 4 m" test compares x with z (it once compared z with the grid's size). Checked headless
+  in the deep wood: texture 255, leaves visible under a tree. Chimney smoke is now 2x the size (puffs 0.5 to 3.8 m; camp smoke 0.4 to 2.4 m). Cover is a density, not the trees themselves, so a leaf may fall between two trunks.
 - **Chimney smoke**: `smoke` on a chimney part (`stoneChimney`, `bigChimney`) names a looping effect, laid as a model
   effect on the stack top by `houseGenerator.ts` in near models only, and only where a hearth room is behind the chimney
   (a house with no interior: always). It runs through the existing flame manager, so it shares its distance slider and cap.
