@@ -164,6 +164,14 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   how many of the later rivers start beside one already placed, `cells/riverGeneration.ts`, its own
   random stream so a world asking for none rolls as before). With `riverLevels` a river whose mouth is
   within 600 m of an earlier river's line has its line carried on to it (`cells/riverField.ts`).
+- **Tributaries join part way.** A tributary starts beside one of its trunk's middle cells - not its first
+  or last, clear of its ends and the coast where it can be - and drains into the one furthest down the
+  trunk; boxed in, it tries another spot (up to 6). With no middle to join (a trunk too short) it is a
+  river of its own, kept from beside the others' ends. Before, half the vale's seeds had the "tributary"
+  starting at the trunk's source - one river drawn as two (the user's catch, `vale` seed 1000); now 12 of
+  12 join 31-92 % of the way up (`scripts/probe/riverJoins.local.mjs`). A river also stays under its own
+  channel where it comes back past itself (a hairpin): its ceiling reads its own stations further than
+  twice its reach plus 40 m along it.
 - **Each river's water** (`terrain/rivers/riverLevels.ts`): stations every 24 m along the line, each with
   a surface level, the depth of water under it and how far from the line the water reaches. The surface
   starts at the ground at the source and runs down never rising, never above the ground anywhere across

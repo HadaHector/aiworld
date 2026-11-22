@@ -60,9 +60,13 @@ for (const seed of seeds.length ? seeds : [1338, 7, 4242, 90210]) {
   check(`${tag}: the water query finds the river along it`, stations === 0 || wetStations / stations > 0.9, `${wetStations}/${stations}`);
   if (profiles.length > 1) {
     const [trunk, trib] = profiles;
-    let best = Infinity, level = 0;
-    for (let i = 0; i < trunk.level.length; i++) { const d = Math.hypot(trunk.x[i] - trib.x[0], trunk.z[i] - trib.z[0]); if (d < best) { best = d; level = trunk.level[i]; } }
+    let best = Infinity, level = 0, at = 0;
+    for (let i = 0; i < trunk.level.length; i++) { const d = Math.hypot(trunk.x[i] - trib.x[0], trunk.z[i] - trib.z[0]); if (d < best) { best = d; level = trunk.level[i]; at = i; } }
     if (best < 900) check(`${tag}: the tributary meets its trunk at the trunk's level`, Math.abs(trib.level[0] - Math.max(WATER_SURFACE, level)) < 1e-6, `${trib.level[0]} vs ${level}`);
+    // Part way along it: at its source it only carries the river on (one river drawn as two), at its
+    // mouth it shares it.
+    const along = at / (trunk.level.length - 1);
+    if (best < 60) check(`${tag}: the tributary joins its trunk part way along`, along > 0.05 && along < 0.95, `at ${along.toFixed(2)} of the trunk`);
     log(`${tag}: second river's mouth ${best.toFixed(0)} m from the first river's line`);
   }
   // No step in the ground across a river: sampled across each station every metre, against the
@@ -83,12 +87,16 @@ for (const seed of seeds.length ? seeds : [1338, 7, 4242, 90210]) {
   };
   const { worst: worstStep, at } = steps(world);
   const { worst: legacyStep } = steps(old);
-  check(`${tag}: no cliff across a river`, worstStep < Math.max(2, legacyStep + 0.5), `${worstStep.toFixed(2)} m in 1 m at ${at} (legacy ${legacyStep.toFixed(2)})`);
+  // The land alone has slopes past 4 m a metre (scripts/probe/steepest.local.mjs); the coast's fall to the seabed
+  // beside a river's mouth reaches 2. A river must not make it worse than that, nor than the legacy world.
+  check(`${tag}: no cliff across a river`, worstStep < Math.max(2.5, legacyStep + 0.5), `${worstStep.toFixed(2)} m in 1 m at ${at} (legacy ${legacyStep.toFixed(2)})`);
+  // Water under some of each bridge (a bridge reaches out to firm bank, further on one side than the
+  // other, so its middle may be on the bank), and its deck a metre over it wherever it is.
   for (const b of world.bridges) {
+    const wet = b.points.map((q, i) => ({ q, deck: b.heights[i], w: world.waterAt(q.x, q.z) })).filter((e) => e.w.depth > 0);
     const m = b.points[Math.floor(b.points.length / 2)];
-    const w = world.waterAt(m.x, m.z);
-    check(`${tag}: under a bridge is water`, w.depth > 0, `${m.x.toFixed(0)},${m.z.toFixed(0)}`);
-    check(`${tag}: a bridge's deck is over the water`, b.heights[Math.floor(b.heights.length / 2)] > w.surface + 1, `deck ${b.heights[Math.floor(b.heights.length / 2)].toFixed(1)} over ${w.surface.toFixed(1)}`);
+    check(`${tag}: under a bridge is water`, wet.length > 0, `${m.x.toFixed(0)},${m.z.toFixed(0)}`);
+    for (const e of wet) check(`${tag}: a bridge's deck is over the water`, e.deck > e.w.surface + 1, `deck ${e.deck.toFixed(1)} over ${e.w.surface.toFixed(1)} at ${e.q.x.toFixed(0)},${e.q.z.toFixed(0)}`);
   }
   // No road through deep water off a bridge (a ford is shallow: wading, under 0.35 m).
   let roadWet = 0, fordCrossings = 0, wetAt = "";

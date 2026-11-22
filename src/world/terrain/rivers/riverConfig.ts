@@ -154,6 +154,9 @@ export const RIVER_MIN_FALL = 0.003;
 // Past a river's reach the line its waterside layers read "above the water" from falls back toward the
 // sea's level this many metres per metre (TerrainSample.waterLine): far enough out it is the sea's again.
 export const RIVER_WATERLINE_FADE = 0.35;
+// A river reads its own channel as ground it must stay under where it comes back past itself, beyond
+// twice its reach plus this many metres along it either way of a station (riverLevels.ts).
+export const RIVER_OWN_STRETCH = 40;
 // The most the surface falls per metre - under the bank's slope, or a steep stretch's own bank below it
 // would cut under the water above (a steep head becomes a gully cut into the hill instead).
 export const RIVER_MAX_FALL = 0.15;

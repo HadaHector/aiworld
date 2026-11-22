@@ -17,6 +17,7 @@ import {
   RIVER_MAX_FALL,
   RIVER_MAX_UNDERCUT,
   RIVER_MIN_FALL,
+  RIVER_OWN_STRETCH,
   RIVER_REACH_MARGIN,
   RIVER_SPRING_DEPTH,
   RIVER_SPRING_HALF_WIDTH,
@@ -96,10 +97,11 @@ function resample(polyline: readonly CellPoint[], count: number): { x: Float64Ar
 }
 
 /** The ground at (x, z) as another river's valley leaves it: its bank's profile, rising from its bed. */
-function cutByOther(other: RiverProfile, x: number, z: number): number {
+function cutByOther(other: RiverProfile, x: number, z: number, skip?: [number, number]): number {
   let best = Infinity;
   let at = 0;
   for (let i = 0; i < other.level.length; i++) {
+    if (skip && i >= skip[0] && i <= skip[1]) continue;
     const d = (other.x[i] - x) ** 2 + (other.z[i] - z) ** 2;
     if (d < best) {
       best = d;
@@ -198,11 +200,16 @@ function buildPass(
     // other rivers' valleys leave it.
     const ground = (px: number, pz: number): number => {
       let h = baseHeight(px, pz);
-      if (previous) previous.forEach((other, k) => k !== river && (h = Math.min(h, cutByOther(other, px, pz))));
+      // Its own channel too, where the river comes back past itself (a hairpin, a loop) - but not the
+      // stretch right here, which is this station's own.
+      if (previous) previous.forEach((other, k) => (h = Math.min(h, cutByOther(other, px, pz, k === river ? ownStretch : undefined))));
       return h;
     };
     const ceiling = new Float64Array(count);
+    let ownStretch: [number, number] = [0, 0];
     for (let i = 0; i < count; i++) {
+      const near = Math.ceil((2 * reach[i] + RIVER_OWN_STRETCH) / step);
+      ownStretch = [i - near, i + near];
       const a = Math.max(0, i - 1);
       const b = Math.min(count - 1, i + 1);
       const tl = Math.hypot(x[b] - x[a], z[b] - z[a]) || 1;

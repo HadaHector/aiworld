@@ -97,6 +97,9 @@ function walkRiver(
 
 /** One generated river: its path through the cell graph, plus the neighbour whose shared border its
  *  centreline starts at - the lake, trunk river or stretch of sea it drains into. */
+/** How many spots a tributary tries before giving up (see generateRivers). */
+const TRIBUTARY_ATTEMPTS = 6;
+
 export interface RiverPath {
   cells: number[];
   mouthLink: number;
@@ -138,20 +141,57 @@ export function generateRivers(params: RiverGenParams): RiverPath[] {
 
   const paths: RiverPath[] = [];
 
+  // For tributaries: each placed river's cells by their place along it (0 its mouth). A tributary joins
+  // a river part way along - beside one of its middle cells, not its first or last: beside its last it
+  // only carries the river on past its source (one river drawn as two), beside its first it shares its
+  // mouth.
+  const placeOnRiver = new Map<number, { index: number; length: number }>();
+
   for (let i = 0; i < riverCount; i++) {
     let mouths = [...landCells].filter((c) => isMouthCandidate(c, adjacency, landCells, lakeCells, usedRiverCells));
     // A tributary: one of the later rivers starts beside a river already placed, if a free cell is there.
-    if (i >= 1 && i <= tributaryCount) {
+    const tributary = i >= 1 && i <= tributaryCount;
+    const middleOf = (c: number): boolean => {
+      const at = placeOnRiver.get(c);
+      return at !== undefined && at.index > 0 && at.index < at.length - 1;
+    };
+    const endOf = (c: number): boolean => {
+      const at = placeOnRiver.get(c);
+      return at !== undefined && (at.index === 0 || at.index === at.length - 1);
+    };
+    if (tributary) {
       const beside = mouths.filter((c) => adjacency[c].some((n) => usedRiverCells.has(n)));
-      if (beside.length > 0) mouths = beside;
+      // The best spot there is, in turn: beside a middle cell and clear of the ends and the coast; beside
+      // one and clear of the ends; beside one at all. With none (a river too short to have a middle) it is
+      // a river of its own, kept from beside the others' ends - it would only carry one on past its source.
+      const midway = beside.filter((c) => adjacency[c].some(middleOf));
+      const clearOfEnds = midway.filter((c) => !adjacency[c].some(endOf));
+      const inland = clearOfEnds.filter((c) => !isOceanAdjacent(c, adjacency, landCells));
+      const apart = mouths.filter((c) => !adjacency[c].some((n) => usedRiverCells.has(n)));
+      const best = [inland, clearOfEnds, midway, apart].find((tier) => tier.length > 0);
+      if (best) mouths = best;
     }
     if (mouths.length === 0) break;
 
-    const mouth = mouths[Math.floor(walkRng() * mouths.length)];
-    const mouthLink = findMouthLink(mouth, adjacency, landCells, lakeCells, usedRiverCells);
     const length = randomIntInRange(lengthRng, shape.riverLength);
-    const path = walkRiver(walkRng, adjacency, landCells, lakeCells, usedRiverCells, mouth, length);
-    if (path.length >= 2) paths.push({ cells: path, mouthLink });
+    // A tributary whose spot is boxed in (no free cell to run on into) tries another, a few times.
+    let mouth = -1;
+    let mouthLink = -1;
+    let path: number[] = [];
+    for (let attempt = 0; attempt < (tributary ? TRIBUTARY_ATTEMPTS : 1) && mouths.length > 0; attempt++) {
+      mouth = mouths[Math.floor(walkRng() * mouths.length)];
+      // A tributary drains into the trunk's cell beside it that lies furthest down the trunk.
+      const trunkCells = tributary ? adjacency[mouth].filter(middleOf).sort((a, b) => placeOnRiver.get(a)!.index - placeOnRiver.get(b)!.index) : [];
+      mouthLink = trunkCells.length > 0 ? trunkCells[0] : findMouthLink(mouth, adjacency, landCells, lakeCells, usedRiverCells);
+      path = walkRiver(walkRng, adjacency, landCells, lakeCells, usedRiverCells, mouth, length);
+      if (path.length >= 2 || !tributary) break;
+      usedRiverCells.delete(mouth);
+      mouths = mouths.filter((c) => c !== mouth);
+    }
+    if (path.length >= 2) {
+      paths.push({ cells: path, mouthLink });
+      path.forEach((cell, index) => placeOnRiver.set(cell, { index, length: path.length }));
+    }
   }
 
   return paths;
