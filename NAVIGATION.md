@@ -301,6 +301,12 @@ later than the rest. 1-3 are the plan; without them nothing changes for the play
   Straight: within one house on one level by rays; between a house and anywhere else never - a way
   goes by a door. A graph made before the house's collision was in (furniture not looked at) is
   made again once it is.
+- Fixed 2026-11-22 (a wolf chasing a player upstairs in the inn wedged between a table and its chairs just inside
+  the door; first read as a collider slab over the door, but that slab is a table top 1.5 m up, the door is clear): links between
+  two tile spots were not checked, so a way ran through furniture. Now, with the collision in, the graph also has a finer net
+  (a node every 0.75 m of each floored tile where the 1.8 m body fits, joined by a capsule swept along each link, so a way goes
+  round a table); a tile with no middle spot stands for its nearest finer node (a stair's foot); a stair's nodes lie on its lane
+  against the wall, with a node at its head, and a way is never pulled straight across them. The taut pull sweeps the body too.
 - Probe (`navigation.mjs`): an inn on the `tiny` server; the tile upstairs found from its point, a
   way from the street to it, none straight; the player upstairs, a wolf in the street goes in, up
   the stairs and to it. 1489/1489 checks.

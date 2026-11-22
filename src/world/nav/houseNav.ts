@@ -8,8 +8,8 @@ import { Layers } from "../collision/shapes";
 import type { Vec3 } from "../collision/vec";
 import type { Enterable } from "../buildings/buildingCollision";
 import { cellKey, STEP, type FaceDir } from "../buildings/interiorLayout";
+import { WALL } from "../buildings/interiorGeometry";
 import { createNodeHeap } from "./heap";
-import { walkableStraight } from "./dungeonNav";
 
 /** A body as a tile sees it: its capsule over the step, as the surface's cells have it. */
 const RADIUS = 0.4;
@@ -19,6 +19,12 @@ const HEAD = 1.8;
 const SPOTS: [number, number][] = [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3], [0.3, 0.3], [-0.3, 0.3], [0.3, -0.3], [-0.3, -0.3]];
 /** A point this far over or under a level's floor is not on it. */
 const ON_FLOOR = 1.2;
+const FLOOR_EVERY = 2;
+const FLOOR_REACH = 2.2;
+/** A finer node's neighbours, in finer steps (half of them, the rest are the same pairs the other way): the next, the diagonal, a knight's move, two along. */
+const NET: [number, number][] = [[1, 0], [0, 1], [1, 1], [1, -1], [2, 1], [1, 2], [2, -1], [1, -2]];
+/** How many finer nodes a tile has along a side. */
+const SUBS = 6;
 
 export interface HouseGraph {
   enterable: Enterable;
@@ -29,6 +35,8 @@ export interface HouseGraph {
   nodeOf: Map<string, number>;
   /** The nodes on the ground before each door out. */
   exits: number[];
+  /** The nodes on a stair's lane, a way never pulled straight across: they are where it turns. */
+  stairNodes: Set<number>;
   /** Whether the collision was in when it was made (else its tiles were not tested for furniture). */
   whole: boolean;
 }
@@ -44,6 +52,25 @@ function toModel(e: Enterable, p: Vec3): Vec3 {
   return { x: house.frontZ * dx - house.frontX * dz, y: p.y - house.y, z: house.frontX * dx + house.frontZ * dz };
 }
 
+/**
+ * Whether a body can walk straight from `a` to `b`: a floor all the way, and the body itself swept
+ * along it - a chair's back or a table's edge too thin or too high for a ray to meet is met by a
+ * capsule 0.7 m across (rays, as `walkableStraight` casts them, miss them).
+ */
+function walkable(world: CollisionWorld, a: Vec3, b: Vec3): boolean {
+  // A floor under it all the way (no drop, no hole), looked for every couple of metres.
+  const across = Math.hypot(b.x - a.x, b.z - a.z);
+  const steps = Math.max(1, Math.ceil(across / FLOOR_EVERY));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (!world.raycastAny({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t + 1, z: a.z + (b.z - a.z) * t }, { x: 0, y: -1, z: 0 }, 1 + FLOOR_REACH)) return false;
+  }
+  const r = RADIUS - 0.05;
+  const at = (p: Vec3) => ({ kind: "capsule" as const, a: { x: p.x, y: p.y + STEP_UP + r, z: p.z }, b: { x: p.x, y: p.y + HEAD - r, z: p.z }, radius: r });
+  const hit = world.sweep(at(a), { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }, Layers.solid);
+  return !hit || hit.shape.kind === "heightfield";
+}
+
 export function buildHouseGraph(e: Enterable, world: CollisionWorld, groundAt: (x: number, z: number) => number, whole: boolean): HouseGraph {
   const { layout, levels, X0, Z0, tile, exits } = e.interior;
   const floorOf = new Map(levels.map((l) => [l.index, l.floor]));
@@ -53,7 +80,7 @@ export function buildHouseGraph(e: Enterable, world: CollisionWorld, groundAt: (
   const centre = (i: number, j: number, y: number): Vec3 => toWorld(e, X0 + (i + 0.5) * tile, y, Z0 + (j + 0.5) * tile);
   const standable = (p: Vec3): boolean => {
     if (!whole) return true;
-    const capsule = { kind: "capsule" as const, a: { x: p.x, y: p.y + STEP_UP + RADIUS, z: p.z }, b: { x: p.x, y: p.y + HEAD, z: p.z }, radius: RADIUS };
+    const capsule = { kind: "capsule" as const, a: { x: p.x, y: p.y + STEP_UP + RADIUS, z: p.z }, b: { x: p.x, y: p.y + HEAD - RADIUS, z: p.z }, radius: RADIUS };
     return world.overlap(capsule, Layers.solid).every((c) => c.shape.kind === "heightfield");
   };
   const spotOn = (i: number, j: number, y: number): Vec3 | null => {
@@ -63,6 +90,9 @@ export function buildHouseGraph(e: Enterable, world: CollisionWorld, groundAt: (
     }
     return null;
   };
+  // Whether a body can walk straight between two nodes: a table's top or a chair's back between the
+  // spots chosen on two tiles is in the way, though each spot is clear. (Before the collision is in, all can.)
+  const walks = (a: number, b: number): boolean => !whole || walkable(world, points[a], points[b]);
   const add = (key: string, p: Vec3): number => {
     points.push(p);
     links.push([]);
@@ -77,11 +107,13 @@ export function buildHouseGraph(e: Enterable, world: CollisionWorld, groundAt: (
   };
   const onStair = (i: number, j: number, k: number): boolean => layout.stairs.some((s) => s.level === k && s.tiles.some(([a, b]) => a === i && b === j));
 
+  const floored: [number, number, number, number][] = [];
   // Each floored tile of each room, not a stair's and not open to the level under it.
   for (const [key, id] of layout.cells) {
     const [i, j, k] = key.split(",").map(Number);
     const room = layout.rooms.find((r) => r.id === id);
     if (!room || !((k === room.base || layout.gallery.has(key)) && !layout.holes.has(key)) || onStair(i, j, k)) continue;
+    floored.push([i, j, k, id]);
     // Its middle, or where a body fits on it beside the furniture.
     const p = spotOn(i, j, floorOf.get(k)!);
     if (p) add(key, p);
@@ -92,7 +124,61 @@ export function buildHouseGraph(e: Enterable, world: CollisionWorld, groundAt: (
     const id = layout.cells.get(key);
     for (const [di, dj] of [[1, 0], [0, 1]]) {
       const other = cellKey(i + di, j + dj, k);
-      if (layout.cells.get(other) === id) link(a, nodeOf.get(other));
+      const b = nodeOf.get(other);
+      if (layout.cells.get(other) === id && b !== undefined && walks(a, b)) link(a, b);
+    }
+  }
+  // A tile is 3 m, and furniture on it leaves no straight way from one tile's spot to the next's: a
+  // finer net, a node every 0.75 m where a body fits, each joined to its neighbours and to
+  // the tile's own node by what it can walk straight to - so a way goes round a table, not through it.
+  if (whole) {
+    const sub = new Map<string, number>();
+    const roomOfSub = new Map<number, number>();
+    for (const [i, j, k, id] of floored) {
+      const y = floorOf.get(k)!;
+      for (let u = 0; u < SUBS; u++) {
+        for (let v = 0; v < SUBS; v++) {
+          const p = centre(i + (u + 0.5) / SUBS - 0.5, j + (v + 0.5) / SUBS - 0.5, y);
+          if (!standable(p)) continue;
+          const n = add(`g,${SUBS * i + u},${SUBS * j + v},${k}`, p);
+          sub.set(`${SUBS * i + u},${SUBS * j + v},${k}`, n);
+          roomOfSub.set(n, id);
+        }
+      }
+    }
+    for (const [key, a] of sub) {
+      const [gi, gj, k] = key.split(",").map(Number);
+      for (const [di, dj] of NET) {
+        const b = sub.get(`${gi + di},${gj + dj},${k}`);
+        if (b !== undefined && roomOfSub.get(a) === roomOfSub.get(b) && walks(a, b)) link(a, b);
+      }
+    }
+    // A tile the furniture leaves no middle spot on stands for its finer node nearest the middle - a stair's foot, a door.
+    for (const [i, j, k] of floored) {
+      const key = cellKey(i, j, k);
+      if (nodeOf.has(key)) continue;
+      const mid = centre(i, j, 0);
+      let best = -1, bestD = Infinity;
+      for (let u = 0; u < SUBS; u++) {
+        for (let v = 0; v < SUBS; v++) {
+          const b = sub.get(`${SUBS * i + u},${SUBS * j + v},${k}`);
+          if (b === undefined) continue;
+          const d = Math.hypot(points[b].x - mid.x, points[b].z - mid.z);
+          if (d < bestD) [best, bestD] = [b, d];
+        }
+      }
+      if (best >= 0) nodeOf.set(key, best);
+    }
+    // Each tile's node, to the finer nodes round it.
+    for (const [key, node] of [...nodeOf]) {
+      if (key.startsWith("g,")) continue;
+      const [i, j, k] = key.split(",").map(Number);
+      for (let u = -1; u <= SUBS; u++) {
+        for (let v = -1; v <= SUBS; v++) {
+          const b = sub.get(`${SUBS * i + u},${SUBS * j + v},${k}`);
+          if (b !== undefined && Math.hypot(points[node].x - points[b].x, points[node].z - points[b].z) < 1.3 && roomOfSub.get(b) === layout.cells.get(key) && walks(node, b)) link(node, b);
+        }
+      }
     }
   }
   // Through the open doors.
@@ -107,11 +193,28 @@ export function buildHouseGraph(e: Enterable, world: CollisionWorld, groundAt: (
     const [di, dj] = STEP[stair.dir];
     let prev = nodeOf.get(cellKey(stair.tiles[0][0] - di, stair.tiles[0][1] - dj, stair.level));
     stair.tiles.forEach(([i, j], n) => {
-      const node = add(`s,${i},${j},${stair.level}`, centre(i, j, floor + (rise * (n + 0.5)) / stair.tiles.length));
+      // Along its lane, against the wall it stands on - not down the tile's middle, off its edge.
+      const side = stair.wallSide as FaceDir;
+      const sign = side === "px" || side === "pz" ? 1 : -1;
+      const lane = WALL + 0.02 + Math.min(1.9, tile - 2 * WALL) / 2;
+      const across = (side === "px" || side === "nx" ? X0 + (side === "px" ? i + 1 : i) * tile : Z0 + (side === "pz" ? j + 1 : j) * tile) - sign * lane;
+      const y = floor + (rise * (n + 0.5)) / stair.tiles.length;
+      const node = add(`s,${i},${j},${stair.level}`, side === "px" || side === "nx" ? toWorld(e, across, y, Z0 + (j + 0.5) * tile) : toWorld(e, X0 + (i + 0.5) * tile, y, across));
       link(prev, node);
       prev = node;
     });
-    link(prev, nodeOf.get(cellKey(stair.arrival[0], stair.arrival[1], stair.level + 1)));
+    // The stair's head, on its lane at the upper floor's height: where it ends, before the way turns off it.
+    const last = stair.tiles[stair.tiles.length - 1];
+    const side = stair.wallSide as FaceDir;
+    const sign = side === "px" || side === "pz" ? 1 : -1;
+    const lane = WALL + 0.02 + Math.min(1.9, tile - 2 * WALL) / 2;
+    const across = (side === "px" || side === "nx" ? X0 + (side === "px" ? last[0] + 1 : last[0]) * tile : Z0 + (side === "pz" ? last[1] + 1 : last[1]) * tile) - sign * lane;
+    const runSign = stair.dir === "px" || stair.dir === "pz" ? 1 : -1;
+    const runEdge = stair.dir === "px" || stair.dir === "nx" ? X0 + (stair.dir === "px" ? last[0] + 1 : last[0]) * tile : Z0 + (stair.dir === "pz" ? last[1] + 1 : last[1]) * tile;
+    const along = runEdge - runSign * 0.6;
+    const head = add(`s,head,${stair.level}`, side === "px" || side === "nx" ? toWorld(e, across, floor + rise, along) : toWorld(e, along, floor + rise, across));
+    link(prev, head);
+    link(head, nodeOf.get(cellKey(stair.arrival[0], stair.arrival[1], stair.level + 1)));
   }
   // Out of each door: to the ground a tile and a half before it.
   const exitNodes: number[] = [];
@@ -125,7 +228,9 @@ export function buildHouseGraph(e: Enterable, world: CollisionWorld, groundAt: (
     link(inside, node);
     exitNodes.push(node);
   }
-  return { enterable: e, points, links, nodeOf, exits: exitNodes, whole };
+  const stairNodes = new Set<number>();
+  for (const [key, node] of nodeOf) if (key.startsWith("s,")) stairNodes.add(node);
+  return { enterable: e, points, links, nodeOf, exits: exitNodes, stairNodes, whole };
 }
 
 /** The tile node a point inside a house stands on (or the nearest standable one of its room), or
@@ -153,7 +258,7 @@ export function houseNodeAt(g: HouseGraph, p: Vec3): number | null {
   const room = layout.cells.get(cellKey(i, j, best));
   let near: number | null = null, nearD = Infinity;
   for (const [key, node] of g.nodeOf) {
-    if (key.startsWith("s,") || key.startsWith("x,") || layout.cells.get(key) !== room || !key.endsWith(`,${best}`)) continue;
+    if (key.startsWith("s,") || key.startsWith("x,") || key.startsWith("g,") || layout.cells.get(key) !== room || !key.endsWith(`,${best}`)) continue;
     const d = Math.hypot(g.points[node].x - p.x, g.points[node].z - p.z);
     if (d < nearD) [near, nearD] = [node, d];
   }
@@ -187,17 +292,25 @@ export function housePath(g: HouseGraph, world: CollisionWorld, from: Vec3, a: n
   }
   if (!closed[b]) return null;
   const nodes: Vec3[] = [];
-  for (let i = b; i >= 0; i = prev[i]) nodes.push(g.points[i]);
+  const keep: boolean[] = [];
+  for (let i = b; i >= 0; i = prev[i]) {
+    nodes.push(g.points[i]);
+    keep.push(g.stairNodes.has(i));
+  }
   nodes.reverse();
+  keep.reverse();
   nodes.push({ ...to });
+  keep.push(false);
   // Pulled taut: on from each kept point to the furthest of the next few it can walk straight to.
   const out: Vec3[] = [];
   let at = from;
   for (let k = 0; k < nodes.length; ) {
     let reach = k;
     for (let j = k + 1; j < nodes.length && j <= k + 6; j++) {
-      if (!walkableStraight(world, at, nodes[j])) break;
+      if (!walkable(world, at, nodes[j])) break;
       reach = j;
+      // Not past a stair's lane: its nodes are where the way turns, not corners to cut.
+      if (keep[j]) break;
     }
     out.push(nodes[reach]);
     at = nodes[reach];
