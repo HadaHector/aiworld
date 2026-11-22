@@ -474,7 +474,7 @@ await section("a fight", async () => {
       const coalesced = kind === "animation" && event.time - (lastSwing.get(event.source) ?? -Infinity) <= 0.05;
       if (kind === "animation") lastSwing.set(event.source, event.time);
       if (played === before && !coalesced) {
-        const key = `${kind} ${fightRules.skills[event.skill]?.id ?? "-"}`;
+        const key = `${kind} ${fightRules.skills[event.skill]?.id ?? "-"}${kind === "animation" ? ` (${event.name})` : ""}`;
         silent.set(key, (silent.get(key) ?? 0) + 1);
       }
     }
@@ -486,7 +486,10 @@ await section("a fight", async () => {
   // Silent by design: an aura that only keeps a rule (Weakened Soul), the ends of things (a cast
   // stopped, an aura's stacks counted), a physical instant going off (its swing and hit carry it),
   // and what the fight bot's own client is told only for its bars.
-  const allowed = (key) => /^(castStopped|auraStacks|castFailed|summon|resisted|respawn|dispelled) /.test(key) || key === "auraOn weakenedSoul" || key === "auraOff weakenedSoul" || /^castDone (heroicStrike|kick|sunder|thunderClap|charge)$/.test(key) || /^auraOff /.test(key);
+  const allowed = (key) => /^(castStopped|auraStacks|castFailed|summon|resisted|respawn|dispelled) /.test(key) || key === "auraOn weakenedSoul" || key === "auraOff weakenedSoul" || /^castDone (heroicStrike|kick|sunder|thunderClap|charge)$/.test(key) || /^auraOff /.test(key)
+    // A named clip (a cast's empower, heal or castForward, a kick, an NPC's hammer or sit) moves a body and
+    // has no sound of its own: its effects, hits and casts carry the sound. Only a "swing" has a cue.
+    || /^animation \S+ \((?!swing\))/.test(key);
   const missing = [...silent.keys()].filter((k) => !allowed(k));
   check("every hit, miss, heal, cast and aura of the fight finds feedback", missing.length === 0, missing.join(", "));
   check("the fight's events are many and varied", events.length > 100 && ["hit", "heal", "castStart", "castDone", "auraOn", "interrupted"].every((k) => kinds.has(k)));
