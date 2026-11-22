@@ -36,8 +36,14 @@ export function createBoundaryHillEvaluator(seed: number, styles: BoundaryHillSt
       (style.edgeNoise ?? BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE);
     // Smooth, symmetric, zero-slope at its own peak (border) and at the width edge - a proper bell,
     // not a pointy tent.
-    const bell = 1 - smoothstep(0, style.width ?? BOUNDARY_HILL_WIDTH, borderGap + jitter);
+    let bell = 1 - smoothstep(0, style.width ?? BOUNDARY_HILL_WIDTH, borderGap + jitter);
     if (bell <= 0) return 0;
+    // Steeper flanks (style.steepness over 1): the bell reaches its top sooner and stays there, so
+    // the sides are that much steeper round a broader crest - a massif, not a mound.
+    if (style.steepness !== undefined && style.steepness > 1) {
+      const b = Math.min(1, bell * style.steepness);
+      bell = b * b * (3 - 2 * b);
+    }
 
     // Two separate additive layers, not one noise field tapered by the bell: a guaranteed smooth
     // bump (bell * peak height) gives the hill its silhouette regardless of what the noise happens
@@ -45,7 +51,7 @@ export function createBoundaryHillEvaluator(seed: number, styles: BoundaryHillSt
     // scaled by the same bell so it stays localized to the border and fades to 0 at the same edge,
     // rather than leaking its texture out past the intended width.
     const bump = bell * (style.peak ?? BOUNDARY_HILL_PEAK_HEIGHT);
-    const texture = bell * compiledStyles.get(style.id)!(worldX, worldZ);
+    const texture = bell * compiledStyles.get(style.id)!(worldX, worldZ) * (style.roughness ?? 1);
     return bump + texture;
   };
 }

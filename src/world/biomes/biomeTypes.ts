@@ -199,6 +199,10 @@ export interface BoundaryHillStyle {
   peak?: number;
   /** How far the hill's edge wobbles in and out. Unset: BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE. */
   edgeNoise?: number;
+  /** How much steeper the flanks are than the plain bell (1 or unset: the bell). */
+  steepness?: number;
+  /** Multiplies the style's own noise (1 or unset: as the style has it). */
+  roughness?: number;
 }
 
 /**
@@ -224,4 +228,11 @@ export interface ShoreHills {
   bayWidth: number;
   /** How far a bay pulls the grown coast back toward the old one (at most `grow`). */
   bayDepth: number;
+  /** Share of the coast the hills stand on, 0..1: below 1 the ring breaks into separate massifs with
+   *  open shore between them (1: an unbroken ring but for the bays). */
+  coverage: number;
+  /** How much steeper the hills' flanks are than the plain bell (1: the bell). */
+  steepness: number;
+  /** Multiplies the style's own noise - higher is more broken ground (1: as the style has it). */
+  roughness: number;
 }
