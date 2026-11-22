@@ -135,10 +135,11 @@ export function createReplicator(rules: GameRules): Replicator {
       out.push({ type: "entityTarget", id: entity.id, target: combat.target });
     }
     if (own) {
-      const spellSig = `${combat.gcdUntil}|${combat.attacking}|${combat.spells.map((sp) => `${sp.skill}:${sp.level}:${sp.ready}`).join(",")}`;
+      const inCombat = entity.inCombat && !combat.dead;
+      const spellSig = `${combat.gcdUntil}|${combat.attacking}|${inCombat}|${combat.spells.map((sp) => `${sp.skill}:${sp.level}:${sp.ready}`).join(",")}`;
       if (spellSig !== k.spells) {
         k.spells = spellSig;
-        out.push({ type: "entitySpells", id: entity.id, spells: combat.spells.map(({ skill, level, ready }) => ({ skill, level, ready })), gcdUntil: combat.gcdUntil, attacking: combat.attacking });
+        out.push({ type: "entitySpells", id: entity.id, spells: combat.spells.map(({ skill, level, ready }) => ({ skill, level, ready })), gcdUntil: combat.gcdUntil, attacking: combat.attacking, inCombat });
       }
     }
   }

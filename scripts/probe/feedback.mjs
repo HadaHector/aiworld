@@ -227,6 +227,17 @@ await section("lasting phases", () => {
   cues.events([event("castStart", 2, 1, "dummyBolt"), event("auraOn", 1, 2, "burn")]);
   cues.forget(2);
   check("a unit leaving takes its cast and auras with it", cues.lasting().casts === 0 && cues.lasting().auras === 0);
+  // A death or a respawn leaves no aura playing on the unit, whatever came off the wire; and a
+  // magic taken over by another caster ends under that caster's name, which still stops it.
+  cues.events([event("auraOn", 1, 2, "burn")]);
+  cues.events([event("auraOff", 3, 2, "burn")]);
+  check("an aura ended under another caster still stops", cues.lasting().auras === 0 && playing("burning") === 0);
+  cues.events([event("auraOn", 1, 2, "burn")]);
+  cues.events([event("death", 1, 2)]);
+  check("a death stops every aura on the dead", cues.lasting().auras === 0 && playing("burning") === 0);
+  cues.events([event("auraOn", 1, 2, "burn")]);
+  cues.events([event("respawn", 0, 2)]);
+  check("a respawn stops every aura on the unit", cues.lasting().auras === 0 && playing("burning") === 0);
   cues.events([event("death", 1, 3)]);
   check("a death plays its family's sound, else the general one", sounds.at(-1)?.sound === "death");
 });

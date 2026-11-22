@@ -45,6 +45,8 @@ export interface OwnSpells {
   spells: SpellState[];
   gcdUntil: number;
   attacking: boolean;
+  /** In combat, as the server says (the HUD's red glow). */
+  inCombat: boolean;
 }
 
 /**
@@ -68,7 +70,7 @@ export interface EntityMirror {
 
 export function createEntityMirror(rules: GameRules): EntityMirror {
   const entities = new Map<number, MirroredEntity>();
-  const own: OwnSpells = { spells: [], gcdUntil: 0, attacking: false };
+  const own: OwnSpells = { spells: [], gcdUntil: 0, attacking: false, inCombat: false };
   let time = 0;
   let timeAt = performance.now();
   const spawnListeners = new Set<(entity: MirroredEntity) => void>();
@@ -169,6 +171,7 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
         own.spells = message.spells;
         own.gcdUntil = message.gcdUntil;
         own.attacking = message.attacking;
+        own.inCombat = message.inCombat;
         return true;
       case "snapshot":
         time = message.time;
@@ -197,6 +200,7 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
       for (const id of [...entities.keys()]) remove(id);
       own.spells = [];
       own.attacking = false;
+      own.inCombat = false;
     },
     onSpawn: (listener) => listen(spawnListeners, listener),
     onDespawn: (listener) => listen(despawnListeners, listener),

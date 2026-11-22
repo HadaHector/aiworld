@@ -16,6 +16,7 @@ import { createLocalChannel } from "../../src/sim/channel.ts";
 import { PROTOCOL_VERSION } from "../../src/sim/protocol.ts";
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { describeEvent } from "../../src/sim/skills/combatLog.ts";
+import { createReplicator } from "../../src/sim/replication.ts";
 import { createFightClient } from "../server/fightBot.mjs";
 
 let failures = 0;
@@ -527,6 +528,37 @@ section("areas", () => {
   check("the dead cannot cast", w2.system.cast(t3, S(probeRules, "renew"), 0).reason === "dead");
   w2.system.revive(t3);
   check("revived: full health, not dead", !t3.combat.dead && t3.combat.flags.bits === 0 && res(probeRules, t3, "health") === t3.resources.max[probeRules.health]);
+});
+
+// --- death clears every aura (the spider's web must not outlive a death) ---
+section("death clears auras", () => {
+  const w = makeWorld(rules);
+  const spider = w.make("player", 0, 0);
+  const victim = w.make("player", 0, 2);
+  const webbed = rules.skillIndex.get("webbed");
+  const m = w.system.apply(webbed, spider, victim);
+  check("webbed: rooted and shown", !!m && victim.combat.magics.includes(m) && m.skill.display !== "hidden");
+  w.drain();
+  w.system.kill(victim);
+  const events = w.drain();
+  check("death: the web's aura ended with an auraOff event", m.ended && events.some((e) => kindOf(e) === "auraOff" && e.target === victim.id && e.skill === webbed));
+  check("death: no non-passive magic left on the dead", victim.combat.magics.every((x) => x.skill.passive || x.skill.keepOnDeath));
+  // The own player is told when it is in combat, and when it is not (the HUD's red glow), never while dead.
+  const rep = createReplicator(rules);
+  const tell = () => rep.update(spider, [spider], 1, 0, w.now(), []).filter((m) => m.type === "entitySpells").at(-1);
+  spider.inCombat = true;
+  check("replication: in combat is told to its player", tell()?.inCombat === true);
+  spider.inCombat = false;
+  check("replication: out of combat is told too", tell()?.inCombat === false);
+  spider.inCombat = true;
+  tell();
+  w.system.kill(spider);
+  check("replication: the dead are not in combat", tell()?.inCombat === false);
+  w.system.revive(spider);
+  w.system.revive(victim);
+  check("respawn: not rooted, no web, no combat", !victim.combat.magics.some((x) => x.skill.id === "webbed") && victim.combat.flags.bits === 0);
+  w.run(7);
+  check("respawn: the web never comes back on its own", !victim.combat.magics.some((x) => x.skill.id === "webbed") && w.drain().every((e) => kindOf(e) !== "auraOn" || e.skill !== webbed));
 });
 
 // --- threat ---

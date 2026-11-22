@@ -714,5 +714,13 @@ Not started; to be sized and put into sessions.
 - **Regeneration (I9):** fine. Wanted: a **UI indication of being in battle or not**, e.g. a red glow on the
   character panel (the one with HP and MP). Rain in buildings is fixed.
 - **Bug:** if the player dies while a cobweb effect is on, the visual effect stays after respawning.
+  **Fixed:** the sim already ended every magic on death; the leak was the client's aura cues, keyed by
+  host+skill+caster, so a magic taken over by a second caster (two spiders) ended under a key that stopped nothing.
+  `auraOff` now falls back to host+skill, and `death`/`respawn` stop every aura on that unit (`cues.ts`
+  `dropAuras`). Probes: `abilities` (death clears auras) and `feedback`.
+- **In-battle indication (done):** `entitySpells` carries `inCombat` (the server's `entity.inCombat` that regen uses,
+  false while dead); the mirror keeps it in `own`, and `combatHud.ts` toggles the CSS class `aiworld-in-combat` on the
+  own frame: a red border and a slow pulsing glow (static under reduced motion). Probe: `abilities` (replication).
+  Not yet seen in game.
 - **Next step chosen by the user:** look at the failing probes (creatures hunting bot 2, navigation 1, icons 25,
   saves 2, feedback 1, dungeons 4 in the full run, caves diagnostic).

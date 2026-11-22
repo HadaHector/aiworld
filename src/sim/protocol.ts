@@ -861,6 +861,8 @@ export interface EntitySpells {
   spells: SpellState[];
   gcdUntil: number; // f64, server time
   attacking: boolean;
+  /** In combat: the state regeneration and the HUD's red glow follow. Dead, it is off. */
+  inCombat: boolean;
 }
 
 /** Whom a unit has selected: 0 for nobody (for target-of-target). */
