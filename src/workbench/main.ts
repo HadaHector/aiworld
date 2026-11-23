@@ -334,6 +334,8 @@ function writeUrl(): void {
   // A dungeon part's vault as asked for (see the part's preview), kept over a reload.
   const vault = new URLSearchParams(location.search).get("vault");
   if (vault) params.set("vault", vault);
+  const dstyle = new URLSearchParams(location.search).get("dstyle");
+  if (dstyle) params.set("dstyle", dstyle);
   history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
 }
 
@@ -1314,7 +1316,9 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     ground = groundMaterial(content, asset);
     const dungeons = resolveDungeons(sourcesWithEdit());
     const part = dungeons.parts.get(asset.id)!;
-    const style = [...dungeons.styles.values()].find((st) => [st.parts, st.entrances, st.bosses, st.caps, st.doorways].some((list) => list.includes(part))) ?? [...dungeons.styles.values()][0];
+    // `dstyle=mine` draws it in another style that uses it (the mine's cave parts, dressed as a mine).
+    const styleId = new URLSearchParams(location.search).get("dstyle");
+    const style = (styleId ? dungeons.styles.get(styleId) : undefined) ?? [...dungeons.styles.values()].find((st) => [st.parts, st.entrances, st.bosses, st.caps, st.doorways].some((list) => list.includes(part))) ?? [...dungeons.styles.values()][0];
     const frame = { x: 0, z: 0, yaw: 0 };
     const layout = { style: style.id, size: "", seed, attempt: 0, minimal: false, parts: [{ part, x: 0, y: 0, z: 0, yaw: 0, bounds: part.bounds, box: part.bounds, entry: -1, parent: -1, role: "room" as const }], joins: [], boss: -1, lock: -1, key: -1, failures: [], frame };
     if (style.builder === "field") {

@@ -1,0 +1,11 @@
+// A turnplate where a mine's tracks meet: an iron-framed square of planks flush with the rails (DUNGEONS.md, The mine).
+{
+  name: "Turnplate",
+  type: "turnplate",
+  collide: false,
+  ground: "plumb",
+  parts: {
+    timber: { material: "timber", tints: [[0.5, 0.42, 0.34], [0.44, 0.37, 0.3]] },
+    iron: { material: "iron", tints: [[1, 1, 1]] },
+  },
+}

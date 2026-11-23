@@ -1,0 +1,11 @@
+// A windlass over a shaft: a collar of timbers round the dark hole, two posts, a crank drum and a bucket on its rope.
+{
+  name: "Windlass",
+  type: "windlass",
+  parts: {
+    timber: { material: "timber", tints: [[0.62, 0.52, 0.42], [0.55, 0.47, 0.4]] },
+    iron: { material: "iron", tints: [[1, 1, 1]] },
+    rope: { tints: [[0.6, 0.5, 0.34]] },
+    hole: { tints: [[0.02, 0.02, 0.025]] },
+  },
+}

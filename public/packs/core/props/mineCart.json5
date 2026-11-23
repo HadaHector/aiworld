@@ -1,0 +1,12 @@
+// A mine cart on a stub of track: boards on four iron wheels, iron bands round it - an empty.
+{
+  name: "Mine cart",
+  type: "mineCart",
+  mineCart: { load: 0 },
+  parts: {
+    timber: { material: "timber", tints: [[0.6, 0.5, 0.4], [0.52, 0.44, 0.36]] },
+    iron: { material: "iron", tints: [[1, 1, 1]] },
+    rock: { material: "roughStone", tints: [[0.55, 0.5, 0.46], [0.5, 0.47, 0.45]] },
+    ore: { tints: [[0.62, 0.42, 0.28], [0.45, 0.6, 0.55], [0.68, 0.68, 0.74]] },
+  },
+}

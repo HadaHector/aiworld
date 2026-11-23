@@ -911,6 +911,15 @@ kind names its own.
 | `headstone` | an upright slab, its top round, gabled or square, an emblem proud on its face, leaning | `width`, `height`, `thickness`, `round`, `gabled`, `emblem` (chances), `emblems`, `lean` (degrees) | `stone` |
 | `gravePost` | a wooden post, an emblem board high on it, now and then a little roof over it | `height`, `board`, `roof` (chance), `emblems`, `lean` | `wood`, `roof`, `emblem` |
 | `tomb` | a stone chest under an overhanging lid (a table tomb), or with `height` 0 the lid alone, flat (a ledger slab) | `length`, `width`, `height`, `lid`, `overhang`, `askew` (chance) | `stone`, `lid` |
+| `timberFrame` | a mine's timber set: two posts, a cap, boards over it reaching along the way, knee braces (a mine cuts each to its way) | `width`, `height`, `thickness`, `reach` | `timber`, `brace` |
+| `wallShoring` | boards stood against a wall, wales across, raking props (back on z 0); without them, lagging between a tunnel's sets | `width`, `height`, `props` (chance) | `timber`, `brace` |
+| `railTrack` | sleepers and two iron rails along z; a line prop: a way's whole track along its floor, a buffer stop at a free end | `length` | `timber`, `iron` |
+| `turnplate` | an iron-framed square of planks flush with the rails, where tracks meet | `size` | `timber`, `iron` |
+| `mineCart` | a cart of boards on four wheels on a stub of track, empty or heaped with ore | `length`, `load` (chance), `track` (chance: its own stub) | `timber`, `iron`, `rock`, `ore` |
+| `minerTools` | a pick and shovel leaning on a wall, or a pick stuck in a rock | `stuck` (chance), `length` | `handle`, `iron`, `rock` |
+| `orePile` | a heap of broken rock with bright ore in it | `radius`, `lumps` | `rock`, `ore` |
+| `oreVein` | a vein in a worked face: a wandering quartz band studded with ore, veinlets off it, pieces at its foot (back on z 0) | `width`, `height`, `veinlets` | `quartz`, `ore`, `rock` |
+| `windlass` | a shaft's collar and dark hole, two posts, a crank drum, a bucket on its rope | `height` | `timber`, `iron`, `rope`, `hole` |
 | `lychgate` | a churchyard's roofed gateway: four posts, a steep roof, benches under it | `opening`, `depth`, `height`, `pitch`, `bench` (chance) | `posts`, `roof`, `bench` |
 
 A prop's model is a building's kind of model, so it is drawn with the buildings' materials, has a

@@ -297,9 +297,30 @@ export interface DungeonLight {
   /** Several fixtures instead (a cave's), one rolled by weight at each lit spot: set on the floor at
    *  it, at the foot of the nearest wall, or on that wall (caveFixtures.ts). */
   fixtures?: { prop: string; weight: number; place: "floor" | "foot" | "wall" }[];
+  /** Dressing (a mine's - DUNGEONS.md, *The mine*): props laid by the cave's own ways rather than at
+   *  its light spots, lighting nothing (caveFixtures.ts). */
+  dressing?: MineDressing;
   /** Candles (a prop, a cluster of them) left on its benches, on its ledger stones and at its tombs'
    *  heads: the share of each such place that has some. */
   candles?: { prop: string; share: number };
+}
+
+/**
+ * A mine's dressing (caveFixtures.ts): timber `sets` stood across every tunnel `every` metres, each
+ * cut to the way's width and roof there; `lagging` boards behind their posts between two sets (that
+ * share of the bays); `shoring` against a chamber's walls (that many stretches), cut to the wall;
+ * `track` laid along every tunnel and through every chamber to its middle (a `turnplate` where they
+ * meet), on to its work face, a cart (one of `carts`) parked at the end that share of the time; and
+ * at every dead end and one wall of each chamber a work `face`, each prop of it `at` the face itself,
+ * `beside` it on the wall, at its `foot` or `near` it on the floor; `extras` free on a chamber's floor.
+ */
+export interface MineDressing {
+  sets?: { prop: string; every: number };
+  lagging?: { prop: string; chance: number };
+  shoring?: { prop: string; count: [number, number] };
+  track?: { prop: string; turnplate?: string; carts: string[]; cart: number };
+  face: { prop: string; at: "face" | "beside" | "foot" | "near"; chance: number }[];
+  extras: { prop: string; chance: number }[];
 }
 
 export interface DungeonContent {
@@ -746,7 +767,7 @@ export function shapesBounds(shapes: readonly ShapeDesc[]): Aabb {
   return { min, max };
 }
 
-const STYLE_KEYS = ["name", "builder", "noise", "voxel", "rock", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "chandeliers", "altar", "creatures", "barrels", "doorways", "trims"];
+const STYLE_KEYS = ["name", "builder", "noise", "voxel", "rock", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "chandeliers", "altar", "creatures", "barrels", "doorways", "trims", "hewn"];
 
 function colour(reader: Reader, value: unknown, path: string, fallback: [number, number, number]): [number, number, number] {
   if (value === undefined) return fallback;
@@ -962,8 +983,44 @@ function fieldPaths(field: readonly FieldShape[], sockets: readonly SocketDef[])
   return lines;
 }
 
+/** A style's `light.dressing` (MineDressing). */
+function readDressing(reader: Reader, raw: RawObject): MineDressing {
+  const at = "light.dressing";
+  reader.onlyKeys(raw, at, ["sets", "lagging", "shoring", "track", "face", "extras"]);
+  const part = (key: string, keys: string[]): RawObject | undefined => {
+    if (raw[key] === undefined) return undefined;
+    const r = reader.object(raw[key], `${at}.${key}`);
+    reader.onlyKeys(r, `${at}.${key}`, keys);
+    return r;
+  };
+  const sets = part("sets", ["prop", "every"]);
+  const lagging = part("lagging", ["prop", "chance"]);
+  const shoring = part("shoring", ["prop", "count"]);
+  const track = part("track", ["prop", "turnplate", "carts", "cart"]);
+  const list = (key: string, keys: string[]): { r: RawObject; path: string }[] =>
+    raw[key] === undefined ? [] : reader.array(raw, key, at).map((v, i) => {
+      const path = `${at}.${key}[${i}]`;
+      const r = reader.object(v, path);
+      reader.onlyKeys(r, path, keys);
+      return { r, path };
+    });
+  return {
+    sets: sets && { prop: reader.string(sets, "prop", `${at}.sets`), every: reader.optionalNumber(sets, "every", `${at}.sets`, 6, { min: 2 }) },
+    lagging: lagging && { prop: reader.string(lagging, "prop", `${at}.lagging`), chance: reader.optionalNumber(lagging, "chance", `${at}.lagging`, 0.5, { min: 0, max: 1 }) },
+    shoring: shoring && { prop: reader.string(shoring, "prop", `${at}.shoring`), count: shoring.count === undefined ? [1, 2] : reader.range(shoring, "count", `${at}.shoring`, { allowEqual: true }) },
+    track: track && {
+      prop: reader.string(track, "prop", `${at}.track`),
+      turnplate: reader.optionalString(track, "turnplate", `${at}.track`),
+      carts: track.carts === undefined ? [] : reader.stringList(track, "carts", `${at}.track`),
+      cart: reader.optionalNumber(track, "cart", `${at}.track`, 0.7, { min: 0, max: 1 }),
+    },
+    face: list("face", ["prop", "at", "chance"]).map(({ r, path }) => ({ prop: reader.string(r, "prop", path), at: reader.oneOf(r, "at", path, ["face", "beside", "foot", "near"] as const), chance: reader.optionalNumber(r, "chance", path, 1, { min: 0, max: 1 }) })),
+    extras: list("extras", ["prop", "chance"]).map(({ r, path }) => ({ prop: reader.string(r, "prop", path), chance: reader.optionalNumber(r, "chance", path, 1, { min: 0, max: 1 }) })),
+  };
+}
+
 function readLight(reader: Reader, raw: RawObject): DungeonLight {
-  reader.onlyKeys(raw, "light", ["ambient", "fixture", "fixtures", "lit", "candles"]);
+  reader.onlyKeys(raw, "light", ["ambient", "fixture", "fixtures", "lit", "candles", "dressing"]);
   const fixtures = raw.fixtures === undefined
     ? undefined
     : reader.array(raw, "fixtures", "light").map((value, i) => {
@@ -972,10 +1029,12 @@ function readLight(reader: Reader, raw: RawObject): DungeonLight {
         reader.onlyKeys(f, at, ["prop", "weight", "place"]);
         return { prop: reader.string(f, "prop", at), weight: reader.optionalNumber(f, "weight", at, 1, { min: 0 }), place: reader.oneOf(f, "place", at, ["floor", "foot", "wall"] as const) };
       });
+  const dressing = raw.dressing === undefined ? undefined : readDressing(reader, reader.object(raw.dressing, "light.dressing"));
   const candles = raw.candles === undefined ? undefined : readPropShare(reader, reader.object(raw.candles, "light.candles"), "light.candles", "candles");
   return {
     candles,
     fixtures,
+    dressing,
     ambient: colour(reader, raw.ambient, "light.ambient", [0.02, 0.02, 0.025]),
     fixture: reader.optionalString(raw, "fixture", "light") ?? "wallTorch",
     lit: reader.optionalNumber(raw, "lit", "light", 1, { min: 0, max: 1 }),
@@ -1027,7 +1086,7 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
     noise: readNoise(reader, obj),
     voxel: reader.optionalNumber(obj, "voxel", "", 0.75, { min: 0.25, max: 2 }),
     rock: readCaveLook(reader, obj.rock === undefined ? {} : reader.object(obj.rock, "rock")),
-    vary: rules.field,
+    vary: hewnVary(rules.field, reader.optionalNumber(obj, "hewn", "", 0, { min: 0, max: 1 })),
     sizes,
     branching: reader.optionalNumber(obj, "branching", "", 0.35, { min: 0, max: 1 }),
     loops: obj.loops === undefined ? [0, 0] : reader.range(obj, "loops", "", { allowEqual: true }),
@@ -1078,6 +1137,15 @@ function readCaveLook(reader: Reader, raw: RawObject): CaveLook {
     };
   };
   return { floor: layer("floor", "caveFloor"), wall: layer("wall", "caveRock"), ceiling: layer("ceiling", "flowstone"), low: layer("low", "caveGravel") };
+}
+
+/** A style's `hewn` (0 to 1) on the rules' `field`: its shapes cut squarer and their swells, bulges
+ *  and room floors calmed by as much - worked rock, not grown. Each of those only ever opens the way
+ *  wider than measured, so lessening them never narrows it. */
+function hewnVary(vary: FieldVary, hewn: number): FieldVary {
+  if (hewn <= 0) return vary;
+  const calm = 1 - 0.8 * hewn;
+  return { ...vary, square: hewn, width: vary.width * calm, height: vary.height * calm, lumps: vary.lumps * calm, rooms: vary.rooms * calm, floor: [vary.floor[0] * (1 - 0.5 * hewn), vary.floor[1] * (1 - 0.5 * hewn)] };
 }
 
 /** The rules' `field`: how a field cave's shapes vary (FieldVary). */

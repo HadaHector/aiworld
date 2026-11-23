@@ -1,0 +1,11 @@
+// A miner's pick (and shovel) stuck in a lump of rock.
+{
+  name: "Pick in rock",
+  type: "minerTools",
+  minerTools: { stuck: 1 },
+  parts: {
+    handle: { material: "timber", tints: [[0.8, 0.7, 0.58], [0.7, 0.62, 0.52]] },
+    iron: { material: "iron", tints: [[1, 1, 1]] },
+    rock: { material: "roughStone", tints: [[0.55, 0.5, 0.46], [0.5, 0.47, 0.45]] },
+  },
+}
