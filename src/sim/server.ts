@@ -1012,9 +1012,17 @@ export function createServer(options: ServerOptions): Server {
       const site = dungeonSiteNear(dimension.world, feet.x, feet.z, 1500, options.dungeons?.styles.get(style)?.builder !== "field");
       if (!site) return null;
       // One dungeon a site, a style and a size, unless a seed is asked for.
-      const key = `${dimension.id}/dungeon/${Math.round(site.x)},${Math.round(site.z)}/${style}/${size}`;
+      const key = `${siteKey(dimension.id, site)}/${style}/${size}`;
       const rolled = seed ?? deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
-      const dungeon = dimension.dungeons.open(seed === undefined ? key : `${key}/${rolled}`, style, size, rolled, site);
+      const id = seed === undefined ? key : `${key}/${rolled}`;
+      // One dungeon a site at a time: their rock would stand in each other's ways. The one there (a
+      // mouth's own, opened as it was walked up to) goes, unless someone else is down in it.
+      const there = placedAt(dimension, site);
+      if (there && there.id !== id) {
+        if (playersIn(dimension.id).some((p) => p !== entity && dimension.dungeons!.at(p.x, p.y + 1, p.z) === there)) return "taken";
+        closeDungeon(dimension, there);
+      }
+      const dungeon = dimension.dungeons.open(id, style, size, rolled, site);
       peopleDungeon(dimension.id, dungeon);
       chestsDungeon(dimension.id, dungeon);
       enterDungeonAt(entity, dungeon);
@@ -1026,10 +1034,13 @@ export function createServer(options: ServerOptions): Server {
       const dungeon = id ? dimension?.dungeons?.placed.get(id) : undefined;
       if (!dimension || !dungeon || !entity.body) return false;
       inDungeon.delete(entity.id);
+      nearMouth.delete(entity.id);
       entity.body.teleport(dungeon.exit.x, dungeon.exit.z);
       follow(entity);
       dimension.streamer.loadAround(dungeon.exit.x, dungeon.exit.z, pointsIn(entity.dimension));
       connectionOf(entity)?.end.send({ type: "dungeon", id: "", style: "", size: "", seed: 0, x: 0, y: 0, z: 0, facing: 0, entry: "" });
+      // One /dungeon opened over a mouth goes once nobody is sent into it, so the mouth's own comes back.
+      if (!mouthOpened.has(dungeon.id) && ![...inDungeon.values()].includes(dungeon.id)) closeDungeon(dimension, dungeon);
       return true;
     },
   };
@@ -1068,6 +1079,37 @@ export function createServer(options: ServerOptions): Server {
   const inDungeon = new Map<number, string>();
   /** Those of them sent because the player came near its mouth (not by /dungeon). */
   const nearMouth = new Set<number>();
+  /** The dungeons the seamless entry opened, under their mouths (not by /dungeon). */
+  const mouthOpened = new Set<string>();
+
+  /** The start of the id of every dungeon at a site. */
+  function siteKey(dimension: string, site: { x: number; z: number }): string {
+    return `${dimension}/dungeon/${Math.round(site.x)},${Math.round(site.z)}`;
+  }
+  /** The dungeon placed at a site, if any (there is one a site at a time). */
+  function placedAt(dimension: Dimension, site: { x: number; z: number }): PlacedDungeon | undefined {
+    for (const d of dimension.dungeons?.placed.values() ?? []) if (Math.round(d.site.x) === Math.round(site.x) && Math.round(d.site.z) === Math.round(site.z)) return d;
+    return undefined;
+  }
+  /** Takes a dungeon away: its rock, its creatures and chests, and its drawing from whoever was sent it. */
+  function closeDungeon(dimension: Dimension, dungeon: PlacedDungeon): void {
+    creatureSystem?.setPoints(dimension.id, dungeon.id, null);
+    const chests = `${dungeon.id}/c/`;
+    for (const e of [...dimension.entities.values()]) {
+      if (!e.key?.startsWith(chests)) continue;
+      skills.leave(e, true);
+      itemSystem?.release(e);
+      dimension.entities.delete(e.id);
+    }
+    dimension.dungeons?.close(dungeon.id);
+    mouthOpened.delete(dungeon.id);
+    for (const player of players.values()) {
+      if (inDungeon.get(player.entity.id) !== dungeon.id) continue;
+      inDungeon.delete(player.entity.id);
+      nearMouth.delete(player.entity.id);
+      connectionOf(player.entity)?.end.send({ type: "dungeon", id: "", style: "", size: "", seed: 0, x: 0, y: 0, z: 0, facing: 0, entry: "" });
+    }
+  }
   /** How long since the players were last looked over for mouths near them. */
   let sinceMouths = 0;
   /**
@@ -1084,13 +1126,19 @@ export function createServer(options: ServerOptions): Server {
       const site = mouthNear(dimension.world, feet.x, feet.z, MOUTH_OPEN);
       const current = inDungeon.get(entity.id);
       if (site) {
-        const key = `${dimension.id}/dungeon/${Math.round(site.x)},${Math.round(site.z)}/${site.style}/dungeon`;
+        // The mouth's own - or whatever /dungeon put there instead, one dungeon a site.
+        const there = placedAt(dimension, site);
+        const key = there?.id ?? `${siteKey(dimension.id, site)}/${site.style}/dungeon`;
         if (current === key) continue;
         if (current && !nearMouth.has(entity.id)) continue;
-        const seed = deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
-        const dungeon = dimension.dungeons.open(key, site.style, "dungeon", seed, site);
-        peopleDungeon(dimension.id, dungeon);
-        chestsDungeon(dimension.id, dungeon);
+        let dungeon = there;
+        if (!dungeon) {
+          const seed = deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
+          dungeon = dimension.dungeons.open(key, site.style, "dungeon", seed, site);
+          mouthOpened.add(key);
+          peopleDungeon(dimension.id, dungeon);
+          chestsDungeon(dimension.id, dungeon);
+        }
         inDungeon.set(entity.id, dungeon.id);
         nearMouth.add(entity.id);
         connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, mouth: site.mouth ?? false, entry: dungeon.entry });
@@ -1098,6 +1146,9 @@ export function createServer(options: ServerOptions): Server {
         inDungeon.delete(entity.id);
         nearMouth.delete(entity.id);
         connectionOf(entity)?.end.send({ type: "dungeon", id: "", style: "", size: "", seed: 0, x: 0, y: 0, z: 0, facing: 0, entry: "" });
+        // A /dungeon one walked away from by its last: gone, as on /dungeon leave.
+        const left = dimension.dungeons.placed.get(current);
+        if (left && !mouthOpened.has(current) && ![...inDungeon.values()].includes(current)) closeDungeon(dimension, left);
       }
     }
   }

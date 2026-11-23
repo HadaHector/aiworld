@@ -110,6 +110,10 @@ for (const [n, site] of sites.entries()) {
   const where = `${STYLE}/${SIZE} #${n} at ${site.x.toFixed(0)}, ${site.z.toFixed(0)}`;
   check(`${where}: opened by /dungeon`, !!dungeon, told.join(" / "));
   if (!dungeon) continue;
+  // Alone at its site: the mouth's own cave, opened as the player came near, closed for it - else both
+  // rocks would collide in the same space and the walks below measure the two together.
+  const others = [...dim.dungeons.placed.values()].filter((d) => d !== dungeon && Math.hypot(d.site.x - site.x, d.site.z - site.z) < 5);
+  check(`${where}: the only dungeon at its site`, others.length === 0, others.map((d) => d.id).join(", "));
   const layout = dungeon.layout;
   total.parts += layout.parts.length;
   check(`${where}: a boss part, not minimal`, layout.boss > 0 && !layout.minimal, `boss ${layout.boss}, minimal ${layout.minimal}`);
@@ -176,7 +180,12 @@ for (const [n, site] of sites.entries()) {
   }
   // Leave: out again.
   channel.client.send({ type: "chat", channel: "command", text: "dungeon leave" });
-  pump(10);
+  pump(40);
+  // Out again, the lair gone and the mouth's own back (the seamless entry), once the mouths are looked over.
+  const after = [...dim.dungeons.placed.values()].filter((d) => Math.hypot(d.site.x - site.x, d.site.z - site.z) < 5);
+  const own = STYLE === "cave" && SIZE === "dungeon"; // (the mouth's own itself: it stays)
+  if (!own) check(`${where}: on leaving, the lair closed`, !after.includes(dungeon), after.map((d) => d.id).join(", "));
+  if (dungeons.styles.get(STYLE).builder === "field") check(`${where}: on leaving, the mouth's own cave open again`, after.length === 1 && after[0].size === "dungeon", after.map((d) => d.id).join(", "));
 }
 console.log(`${STYLE}: ${sites.length} ${SIZE}s, ${total.parts} parts, ${total.creatures} creatures, ${total.chests} chests, ${total.bosses} boss spots; ${total.walked}/${total.spots} spots walked to`);
 console.log(failures === 0 ? `all good (${checks} checks)` : `${failures} failures of ${checks} checks`);

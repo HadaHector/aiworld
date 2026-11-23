@@ -44,8 +44,9 @@ export interface CommandHost {
   say: (entity: Entity, text: string) => void;
   /** The dungeon styles there are, and their sizes (DUNGEONS.md). */
   dungeonStyles: () => { id: string; sizes: string[] }[];
-  /** Opens a dungeon at the site nearest the entity and puts it inside; null where none can open. */
-  enterDungeon: (entity: Entity, style: string, size: string, seed?: number) => { dungeon: PlacedDungeon; kind: string } | null;
+  /** Opens a dungeon at the site nearest the entity and puts it inside; null where none can open,
+   *  "taken" where another dungeon is there with someone else down in it (one a site at a time). */
+  enterDungeon: (entity: Entity, style: string, size: string, seed?: number) => { dungeon: PlacedDungeon; kind: string } | "taken" | null;
   /** Takes it out of the dungeon it was put in, onto the ground before the door; false if in none. */
   leaveDungeon: (entity: Entity) => boolean;
 }
@@ -355,6 +356,7 @@ export function createServerCommands(packs: readonly CommandPackDef[] = []): Ret
       if (!style.sizes.includes(size)) return reply('A {style} has no size "{size}": {sizes}.', { style: style.id, size, sizes: style.sizes.join(", ") });
       const opened = host.enterDungeon(entity, style.id, size, typeof seedArg === "number" ? seedArg >>> 0 : undefined);
       if (!opened) return reply("There is nowhere near here for a dungeon to open.");
+      if (opened === "taken") return reply("Someone is down in the dungeon here already; wait for them to come out.");
       const { dungeon } = opened;
       reply("Into a {style} {size} (seed {seed}) under the {kind} at {x}, {z}: {parts} parts, {rooms} rooms. /dungeon leave takes you out.", {
         style: style.id,
