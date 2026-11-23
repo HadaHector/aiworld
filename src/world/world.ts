@@ -60,6 +60,8 @@ export interface World {
   settlements: SettlementSite[];
   /** Each cell's major feature other than a settlement (a quarry) - see features/featureSites.ts. */
   features: FeatureSite[];
+  /** The land cells' sites (a cell is everything nearest its site) - for the debug map's Zone view. */
+  landCellSites: { x: number; z: number }[];
   /** What the world's things say to a player standing by them - each wayside sign its place's name
    *  (see ui/placeLabels.ts). */
   labels: PlaceLabel[];
@@ -442,6 +444,7 @@ export async function createWorld(
     areaNames,
     settlements,
     features,
+    landCellSites: data.landCellSites,
     labels: data.labels,
     roads,
     compoundLayouts,

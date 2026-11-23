@@ -18,6 +18,7 @@ const MARKER_RADIUS_PX = 4;
 const HEADING_LENGTH_PX = 14;
 const WORLD_VIEW_MARGIN = 1.5; // margin beyond the land's true (non-safety-inflated) radius
 const ZONE_VIEW_MARGIN = 1.25; // margin beyond the zone's own footprint, so its borders stay visible
+const CELL_REACH = 500; // how far past its site a cell can reach (CELL_SPACING), for picking the sites near a view
 const ZONE_MIN_HALF_SIZE = 600; // a one-cell zone would otherwise zoom in past anything useful
 
 // Zone view dims everything outside the zone the player is standing in. Without it the view is
@@ -99,6 +100,8 @@ export function createDebugMap(
   areaNames: Map<number, string>,
   settlements: SettlementSite[],
   features: FeatureSite[],
+  /** The land cells' sites (a cell is everything nearest its site): the Zone view draws them. */
+  cellSites: readonly { x: number; z: number }[],
   roads: RoadNetwork,
   /** Where this dimension's links stand - drawn always, and clicking one travels by it. */
   links: readonly DimensionLink[],
@@ -270,7 +273,7 @@ export function createDebugMap(
     for (let py = 0; py < SAMPLE_RESOLUTION; py++) {
       for (let px = 0; px < SAMPLE_RESOLUTION; px++) {
         const worldX = viewport.centerX + (px / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
-        const worldZ = viewport.centerZ + (py / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
+        const worldZ = viewport.centerZ + viewport.halfSize - (py / SAMPLE_RESOLUTION) * viewport.halfSize * 2;
         samples[py * SAMPLE_RESOLUTION + px] = sampleTerrain(worldX, worldZ);
       }
     }
@@ -287,7 +290,7 @@ export function createDebugMap(
           color = LAKE_COLOR;
         } else if (detailEnabled) {
           const worldX = viewport.centerX + (px / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
-          const worldZ = viewport.centerZ + (py / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
+          const worldZ = viewport.centerZ + viewport.halfSize - (py / SAMPLE_RESOLUTION) * viewport.halfSize * 2;
 
           // Analytic heightmap normal from a one-pixel-step gradient (mirrors the mesh's own
           // per-vertex ComputeNormals closely enough for a preview at this resolution).
@@ -296,7 +299,8 @@ export function createDebugMap(
           const north = gridHeightAt(samples, px, py - SLOPE_SAMPLE_STEP_PX);
           const south = gridHeightAt(samples, px, py + SLOPE_SAMPLE_STEP_PX);
           const dHdx = (east - west) / (2 * worldStepPerPixel * SLOPE_SAMPLE_STEP_PX);
-          const dHdz = (south - north) / (2 * worldStepPerPixel * SLOPE_SAMPLE_STEP_PX);
+          // A row up is a step north (+z), so the rise towards +z is north minus south.
+          const dHdz = (north - south) / (2 * worldStepPerPixel * SLOPE_SAMPLE_STEP_PX);
           const invLen = 1 / Math.sqrt(dHdx * dHdx + dHdz * dHdz + 1);
 
           const farNorth = gridHeightAt(samples, px, py - curvatureRadiusPx);
@@ -345,8 +349,74 @@ export function createDebugMap(
       }
     }
 
+    if (focusAreaId !== -1) drawCellBorders(imageData, viewport);
     ctx.putImageData(imageData, 0, 0);
     return canvas;
+  }
+
+  /** The cell sites near a view (a margin of one cell spacing, since a cell reaches past its site). */
+  function sitesNear(viewport: Viewport): { x: number; z: number; index: number }[] {
+    const reach = viewport.halfSize + CELL_REACH;
+    const near: { x: number; z: number; index: number }[] = [];
+    cellSites.forEach((site, index) => {
+      if (Math.abs(site.x - viewport.centerX) <= reach && Math.abs(site.z - viewport.centerZ) <= reach) near.push({ x: site.x, z: site.z, index });
+    });
+    return near;
+  }
+
+  /** Each pixel's nearest cell site, then a light line where a neighbour's differs: the cells as the
+   *  world has them (everything nearest its site). Drawn into the image, so it is cached with it. */
+  function drawCellBorders(imageData: ImageData, viewport: Viewport): void {
+    const near = sitesNear(viewport);
+    if (near.length === 0) return;
+    const owner = new Int32Array(SAMPLE_RESOLUTION * SAMPLE_RESOLUTION);
+    for (let py = 0; py < SAMPLE_RESOLUTION; py++) {
+      const worldZ = viewport.centerZ + viewport.halfSize - (py / SAMPLE_RESOLUTION) * viewport.halfSize * 2;
+      for (let px = 0; px < SAMPLE_RESOLUTION; px++) {
+        const worldX = viewport.centerX + (px / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
+        let best = -1;
+        let bestDistance = Infinity;
+        for (const site of near) {
+          const d = (site.x - worldX) * (site.x - worldX) + (site.z - worldZ) * (site.z - worldZ);
+          if (d < bestDistance) {
+            bestDistance = d;
+            best = site.index;
+          }
+        }
+        owner[py * SAMPLE_RESOLUTION + px] = best;
+      }
+    }
+    for (let py = 0; py < SAMPLE_RESOLUTION - 1; py++) {
+      for (let px = 0; px < SAMPLE_RESOLUTION - 1; px++) {
+        const here = owner[py * SAMPLE_RESOLUTION + px];
+        if (here === owner[py * SAMPLE_RESOLUTION + px + 1] && here === owner[(py + 1) * SAMPLE_RESOLUTION + px]) continue;
+        const i = (py * SAMPLE_RESOLUTION + px) * 4;
+        for (let c = 0; c < 3; c++) imageData.data[i + c] = Math.round(imageData.data[i + c] * 0.35 + 255 * 0.65);
+      }
+    }
+  }
+
+  /** What each cell holds: the features whose nearest site is it, by the site's index. Built once. */
+  let featuresByCell: Map<number, string[]> | null = null;
+  function cellContents(): Map<number, string[]> {
+    if (featuresByCell) return featuresByCell;
+    featuresByCell = new Map();
+    for (const feature of features) {
+      let best = -1;
+      let bestDistance = Infinity;
+      cellSites.forEach((site, index) => {
+        const d = (site.x - feature.x) * (site.x - feature.x) + (site.z - feature.z) * (site.z - feature.z);
+        if (d < bestDistance) {
+          bestDistance = d;
+          best = index;
+        }
+      });
+      if (best < 0) continue;
+      const list = featuresByCell.get(best) ?? [];
+      list.push(feature.name && feature.name !== feature.kind.name ? `${feature.kind.name}: ${feature.name}` : feature.kind.name);
+      featuresByCell.set(best, list);
+    }
+    return featuresByCell;
   }
 
   function getBaseCanvas(): HTMLCanvasElement {
@@ -362,7 +432,7 @@ export function createDebugMap(
     const viewport = activeViewport();
     return {
       x: ((worldX - viewport.centerX + viewport.halfSize) / (viewport.halfSize * 2)) * SAMPLE_RESOLUTION,
-      y: ((worldZ - viewport.centerZ + viewport.halfSize) / (viewport.halfSize * 2)) * SAMPLE_RESOLUTION,
+      y: ((viewport.centerZ + viewport.halfSize - worldZ) / (viewport.halfSize * 2)) * SAMPLE_RESOLUTION,
     };
   }
 
@@ -370,7 +440,7 @@ export function createDebugMap(
     const viewport = activeViewport();
     return {
       x: viewport.centerX + fracX * viewport.halfSize * 2 - viewport.halfSize,
-      z: viewport.centerZ + fracZ * viewport.halfSize * 2 - viewport.halfSize,
+      z: viewport.centerZ + viewport.halfSize - fracZ * viewport.halfSize * 2,
     };
   }
 
@@ -458,6 +528,24 @@ export function createDebugMap(
     markerLayer.replaceChildren();
     const roadLayer = drawRoads();
     if (roadLayer) markerLayer.appendChild(roadLayer);
+    if (viewMode === "zone" && cellSites.length > 0) {
+      const contents = cellContents();
+      for (const site of sitesNear(activeViewport())) {
+        const { x, y } = worldToPixel(site.x, site.z);
+        if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
+        const found = contents.get(site.index);
+        const tag = document.createElement("div");
+        tag.title = `Cell #${site.index}: ${found ? found.join(", ") : "no feature"}`;
+        tag.innerHTML = `<b>#${site.index}</b> ${found ? found.join("<br>") : "<i>empty</i>"}`;
+        tag.style.cssText = `
+          position: absolute; left: ${(x / SAMPLE_RESOLUTION) * 100}%; top: ${(y / SAMPLE_RESOLUTION) * 100}%;
+          transform: translate(-50%, -50%); text-align: center; font-family: sans-serif; font-size: 11px; line-height: 1.15;
+          color: rgb(255, 255, 255); text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 2px #000; white-space: nowrap;
+          opacity: ${found ? 1 : 0.6};
+        `;
+        markerLayer.appendChild(tag);
+      }
+    }
     for (const point of spawnPoints) {
       const { x, y } = worldToPixel(point.x, point.z);
       if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
@@ -546,7 +634,8 @@ export function createDebugMap(
         background: rgb(200, 200, 205); border: 1px solid rgba(0,0,0,0.75); box-sizing: border-box;
       `;
       markerLayer.appendChild(square);
-      if (!labelled) continue;
+      // The Zone view's cell tags already name what each cell holds.
+      if (!labelled || (viewMode === "zone" && cellSites.length > 0)) continue;
       const name = document.createElement("div");
       name.textContent = feature.name ?? feature.kind.name;
       name.style.cssText = `
@@ -602,7 +691,7 @@ export function createDebugMap(
     const { x: markerPxX, y: markerPxZ } = worldToPixel(markerX, markerZ);
 
     const dirX = -Math.cos(heading);
-    const dirZ = -Math.sin(heading);
+    const dirZ = Math.sin(heading); // the screen's y runs against +z
     displayCtx.strokeStyle = MARKER_COLOR;
     displayCtx.lineWidth = 2;
     displayCtx.beginPath();
