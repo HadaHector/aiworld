@@ -724,3 +724,15 @@ Not started; to be sized and put into sessions.
   Not yet seen in game.
 - **Next step chosen by the user:** look at the failing probes (creatures hunting bot 2, navigation 1, icons 25,
   saves 2, feedback 1, dungeons 4 in the full run, caves diagnostic).
+
+### Top development priority: put the features on the map (the user, 2026-11-23, not started)
+
+- **Caves:** today cave mouths are generated automatically everywhere the terrain allows. They should belong to
+  certain cells instead (cave mouths as a cell feature, W16 "cave mouth yard"), or the feature carries a
+  terrain modification, a dip that makes a valid entry point to the cave (the slip cut into a slope exists
+  already, 80a48ce).
+- **Abandoned camp (W3):** place it in the world (it is in no biome's feature list with real odds yet). Change
+  its yard from round to a polygon (polygon yards exist). No fireplace with fire or smoke in an abandoned
+  place, and no active light sources at all (no lanterns, torches, glowing windows).
+- **Abandoned road:** an "abandoned" road material or generation rule for the road that leads to such a place
+  (overgrown, broken, faded track).
