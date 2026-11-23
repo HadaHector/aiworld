@@ -63,7 +63,8 @@ export interface CreatureSystem {
   drainKills(): KillRecord[];
   /** Turns every brain off (creatures stand still and do nothing) or back on; the switch's state after. */
   setAi(on?: boolean): boolean;
-  /** Spawn points of an owner's own (a dungeon's), filled as the field's are; null takes them away. */
+  /** Spawn points of an owner's own (a dungeon's), filled as the field's are; null takes them away,
+   *  and with them the creatures standing at them. */
   setPoints(dimension: string, owner: string, points: SpawnPoint[] | null): void;
   /** A dimension's zone at a point. */
   zoneAt(dimension: string, x: number, z: number): Zone | undefined;
@@ -364,6 +365,14 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
     setPoints(dimension, owner, points) {
       const state = states.get(dimension);
       if (!state) return;
+      // Points taken away take what stands at them along (a dungeon closed: its rock is gone).
+      const kept = new Set((points ?? []).map((p) => p.key));
+      for (const old of state.extra.get(owner) ?? []) {
+        const active = state.active.get(old.key);
+        if (!active || kept.has(old.key)) continue;
+        for (const m of active.members) if (m) world.despawn(m);
+        state.active.delete(old.key);
+      }
       if (points) state.extra.set(owner, points);
       else state.extra.delete(owner);
     },
