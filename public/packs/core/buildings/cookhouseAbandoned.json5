@@ -35,13 +35,15 @@
         fakeDoors: 0,
         grow: 1,
         rooms: [
-          { room: "messHall", priority: 10, tiles: [6, 6], grow: 1.5, minSide: 2, at: "entrance", oneBlock: true },
-          { room: "campKitchen", priority: 8, tiles: [4, 6], minSide: 2, maxSide: 3, next: "messHall", oneBlock: true },
+          { room: "messHallCold", priority: 10, tiles: [6, 6], grow: 1.5, minSide: 2, at: "entrance", oneBlock: true },
+          { room: "campKitchenCold", priority: 8, tiles: [4, 6], minSide: 2, maxSide: 3, next: "messHallCold", oneBlock: true },
         ],
       },
     },
     // Its windows with a lamp behind them at night, this share of them.
+    // Nothing burns here: no lamp behind a window, no smoke off the chimney.
     litWindows: 0,
+    cold: true,
     parts: {
       walls: { material: "logWall", tints: [[0.7, 0.7, 0.66], [0.62, 0.62, 0.6], [0.74, 0.72, 0.66]] },
       timber: { material: "roundLog", tints: [[0.7, 0.7, 0.66], [0.62, 0.62, 0.6], [0.74, 0.72, 0.66]] },

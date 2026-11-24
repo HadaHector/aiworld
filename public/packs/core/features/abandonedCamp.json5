@@ -16,7 +16,8 @@
     // The logging camp's ground: gentle, trees all round it - a little more cover wanted, it is in
     // the wood's deep - and a river near is in its favour.
     site: { grade: [0, 0.2], cover: [0.55, 0.95], nearWater: 300 },
-    yard: { radius: [18, 24] },
+    // A polygon, not a round: a yard nobody keeps round (see the sheepfold).
+    yard: { shape: "polygon", points: [4, 6], radius: [18, 24] },
     pads: { slope: 0.6, blend: [1.5, 10] },
     arrangement: "ring",
     // The skid trail is half grown over: shorter, and not always there.
@@ -79,7 +80,9 @@
   },
   // On a road, but a road that is hardly one: one link to a settlement, or a dead end, and of little
   // importance (the road it had was the loggers').
-  road: { importance: 0.5, links: [1, 1], wants: ["settlement"], maxLength: 2500 },
+  // `condition: "abandoned"`: the road that leads only here is a narrow overgrown track (roadConfig's
+  // abandoned class, painted by layers/abandonedRoad.json5).
+  road: { importance: 0.5, links: [1, 1], wants: ["settlement"], maxLength: 2500, condition: "abandoned" },
   // What the abandoned camp can be in a quest (QUESTS.md, *Places*): a place with a story. Tags for
   // the chain of four (W3's quests, E4 b): `abandoned`, `ruin`, `mystery`; objects to find.
   quest: {

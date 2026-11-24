@@ -206,7 +206,7 @@ const ROADSIDE_MAX_BEND = 0.35;
  */
 export function placeRoadsideFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, settlements, treeCover, features, stretches }: FeatureInput & { features: FeatureSite[]; stretches: RoadStretch[] }): FeatureSite[] {
   const placed: FeatureSite[] = [];
-  const roads = stretches.filter((stretch) => stretch.roadClass !== "track");
+  const roads = stretches.filter((stretch) => stretch.roadClass !== "track" && stretch.roadClass !== "abandoned");
   // Each road's length along it, point by point, to walk it by distance.
   const along = roads.map((stretch) => {
     const lengths = [0];

@@ -49,6 +49,7 @@ export function createSurfaceProbe(world: World, rules: FeedbackRules): SurfaceP
       riverGap: sample.riverGap,
       roadGap: sample.roadGap,
       roadMiddle: sample.roadMiddle,
+      roadAbandoned: sample.roadAbandoned,
       featureKind: sample.featureKind,
       featureGap: sample.featureGap,
       featureDepth: sample.featureDepth,

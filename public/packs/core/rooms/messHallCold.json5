@@ -1,0 +1,24 @@
+// An abandoned camp's mess hall: the mess hall with a cold fireplace and no sconce - nothing burns.
+// A logging camp's mess hall: a long room of bare log walls, worn boards underfoot, a plank ceiling
+// on round log beams - a loft's floor, in a bunkhouse, with an open stair up to it - or, with
+// nothing over it (a cookhouse), open up to the roof, the beams tying across at the walls' top.
+{
+  name: "Cold Mess Hall",
+  floor: { material: "floorboards", tints: [[0.9, 0.86, 0.8], [0.82, 0.78, 0.74]] },
+  walls: { material: "logWall", tints: [[0.92, 0.88, 0.84], [0.86, 0.82, 0.78]] },
+  ceiling: { material: "planks", tints: [[0.7, 0.64, 0.58]] },
+  beams: { material: "roundLog", tints: [[0.8, 0.76, 0.72]] },
+  timber: { material: "timber", tints: [[0.5, 0.42, 0.36], [0.45, 0.38, 0.34]] },
+  stair: "open",
+  underRoof: true,
+  // A fireplace against its chimney.
+  hearth: true,
+  // What it is furnished with, highest priority first (see FURNITURE.md) - a `per` count so many
+  // for each that many tiles of floor.
+  furnish: [
+    { prop: "coldFireplace", at: "hearth", priority: 9 },
+    { group: "messTableCold", count: [0.8, 1.1], per: 12, at: "centre", priority: 7 },
+    { prop: "barrel", count: [0.5, 1], per: 10, at: "corner", priority: 4 },
+    { prop: "bench", chance: 0.5, at: "wall", priority: 3 },
+  ],
+}

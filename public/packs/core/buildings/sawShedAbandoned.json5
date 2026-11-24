@@ -34,6 +34,7 @@
         rooms: [{ room: "toolRoom", priority: 10, tiles: [4, 8], at: "entrance", through: true }],
       },
     },
+    cold: true,
     parts: {
       walls: { material: "logWall", tints: [[0.7, 0.7, 0.66], [0.62, 0.62, 0.6], [0.74, 0.72, 0.66]] },
       timber: { material: "roundLog", tints: [[0.7, 0.7, 0.66], [0.62, 0.62, 0.6], [0.74, 0.72, 0.66]] },

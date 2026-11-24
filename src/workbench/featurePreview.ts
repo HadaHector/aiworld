@@ -183,6 +183,7 @@ export function buildFeaturePreview(
       // In each line's own widths (a path half a road's width keeps trees half as far).
       roadGap: Math.min(Infinity, ...lines.map((line) => distanceToLine(line.points, x, z) / (line.width / (ROAD_HALF * 2)))),
       roadMiddle: 0,
+      roadAbandoned: 0,
       featureKind: inReach ? (forGround ? 0 : kindIndex) : -1,
       featureGap: inReach ? gap : Infinity,
       featureDepth: 0,

@@ -55,5 +55,59 @@ for (let seed = 1; seed <= 12; seed++) {
 check(Math.abs(rottedTris - soundTris) < soundTris * 0.25, `rotted roofs are whole geometry (${rottedTris} triangles against ${soundTris} sound)`);
 for (const id of ["bunkhouseAbandoned", "sawShedAbandoned", "toolShedAbandoned", "cookhouseAbandoned"]) check(def(id).house.parts.roof.material === "rottedShingles", `${id} roof is rottedShingles`);
 check(!!content.buildingMaterials.find((m) => m.id === "rottedShingles"), "the rottedShingles material exists");
+// Nothing active: no light, flame or smoke anywhere in the camp - buildings (their rooms' furniture, the
+// windows' lamps, the chimneys' smoke) and the outdoor props.
+const propOf = (id) => content.props.find((p) => p.id === id);
+const lit = (p) => !!p && ((p.light ?? null) !== null || (p.effects?.length ?? 0) > 0);
+const roomOf = (id) => content.roomTypes?.find?.((r) => r.id === id) ?? content.rooms?.find?.((r) => r.id === id);
+for (const id of ["bunkhouseAbandoned", "sawShedAbandoned", "toolShedAbandoned", "cookhouseAbandoned"]) {
+  const d = def(id);
+  check(d.house.cold === true && d.house.litWindows === 0, `${id}: cold, no lit windows`);
+  for (const r of d.house.interior?.rooms.rooms ?? []) {
+    for (const entry of r.room.furnish) {
+      const items = entry.group ? entry.group.members.map((m) => m.prop) : [entry.prop];
+      for (const prop of items) check(!lit(prop), `${id}: room ${r.room.id} furnishes a light or flame (${prop?.id})`);
+    }
+  }
+  for (let seed = 1; seed <= 6; seed++) {
+    const m = generateBuilding(d, seed, 0);
+    // (A window's daylight - `sky` - is not a source: it is gone at night.)
+    const sources = (m.lights ?? []).filter((l) => !l.sky);
+    check((m.effects?.length ?? 0) === 0 && sources.length === 0, `${id} seed ${seed}: no effects or lights in the model (${m.effects?.length ?? 0} effects, ${sources.length} lights)`);
+  }
+}
+for (const e of kind.compound.props) {
+  const members = e.placed.kind === "prop" ? [e.placed.prop] : e.placed.group.members.map((m) => m.prop);
+  for (const prop of members) check(!lit(prop), `the camp's prop ${prop?.id} gives light or a flame`);
+}
+
+// In the world: it is placed, and the road that leads only to it is abandoned.
+const { loadContentFromDisk } = await import("../diskContent.mjs");
+const { createWorldData } = await import("../../src/world/worldData.ts");
+const quiet = (run) => { const l = console.log; console.log = (...a) => (String(a[0]).startsWith("[") ? undefined : l(...a)); try { return run(); } finally { console.log = l; } };
+const vale = loadContentFromDisk("vale").content;
+let paintedAbandoned = 0, camps = 0, abandonedStretches = 0, seedsWith = 0;
+const seedsN = Number(process.argv[2]) || 8;
+for (let i = 0; i < seedsN; i++) {
+  const w = quiet(() => createWorldData(1000 + i * 7919, vale));
+  const n = (w.features ?? []).filter((f) => (f.kind?.id ?? f.kindId) === "abandonedCamp").length;
+  camps += n;
+  if (n > 0) seedsWith++;
+  const roads = w.roads?.stretches ?? w.roadNetwork?.stretches ?? [];
+  const a = roads.filter((st) => st.roadClass === "abandoned").length;
+  abandonedStretches += a;
+  // The ground on an abandoned stretch's line is painted as one (roadAbandoned), the sound roads' is not.
+  for (const st of roads) {
+    if (st.points.length < 5) continue;
+    const mid = st.points[Math.floor(st.points.length / 2)];
+    const sample = w.sampleTerrain(mid.x, mid.z);
+    if (st.roadClass === "abandoned" && st.points.length > 12) { paintedAbandoned++; check(sample.roadAbandoned > 0.3, `an abandoned stretch's middle reads roadAbandoned ${sample.roadAbandoned.toFixed(2)}`); }
+    if (st.roadClass !== "abandoned") check(sample.roadAbandoned === 0, `a sound road reads roadAbandoned ${sample.roadAbandoned}`);
+  }
+  check(n <= 3, `vale seed ${i}: ${n} abandoned camps is too many`);
+}
+check(paintedAbandoned >= 1, `at least one long abandoned stretch checked for its paint (${paintedAbandoned})`);
+check(camps >= 1, `the vale places the camp in at least one of ${seedsN} seeds (${camps} camps, ${seedsWith} seeds)`);
+console.log(`vale: ${camps} camps over ${seedsN} seeds, ${seedsWith} seeds with one, ${abandonedStretches} abandoned road stretches`);
 console.log(`abandonedCamp: ${checks - fails}/${checks} checks; ${placed} layouts, ${(props / Math.max(1, placed)).toFixed(1)} props each`);
 process.exit(fails ? 1 : 0);

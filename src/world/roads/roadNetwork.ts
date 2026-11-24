@@ -13,6 +13,7 @@ import { createBaseNoise2D } from "../terrain/noise";
 import { deriveSeed } from "../rng";
 import { createRoadPathfinder, nodePoint } from "./roadPathfinder";
 import {
+  ROAD_CLASSES,
   ROAD_EXTRA_LINK_FRACTION,
   ROAD_HALF_WIDTH,
   ROAD_NEAREST_CANDIDATES,
@@ -1121,6 +1122,12 @@ export function generateRoadNetwork(
     const roadClass = roadClassFor(stretch.traffic);
     stretch.roadClass = roadClass.id;
     stretch.widthScale = roadClass.width;
+    // A road that leads only to abandoned places - every route over it ends at one - is one too.
+    if (stretch.routes.size > 0 && [...stretch.routes].every((id) => links[id] && (places[links[id].from]?.condition === "abandoned" || places[links[id].to]?.condition === "abandoned"))) {
+      const abandoned = ROAD_CLASSES.find((c) => c.id === "abandoned")!;
+      stretch.roadClass = abandoned.id;
+      stretch.widthScale = abandoned.width;
+    }
     // Narrower up a steep hillside.
     stretch.widths = steepWidths(stretch.points, groundHeight);
   }

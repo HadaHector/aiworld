@@ -217,6 +217,9 @@ export interface PlaceRoadSpec {
   wants: string[];
   /** The longest straight line it will be joined across. */
   maxLength: number;
+  /** The state of the roads that lead only to it: `abandoned` (roadConfig's abandoned class - a narrow
+   *  overgrown track) or null, as any road. A road it shares with other places keeps its own class. */
+  condition: "abandoned" | null;
 }
 
 /** What a place can be in a quest (QUESTS.md, *Places*): said by the place, in its own file. */

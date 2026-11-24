@@ -1044,7 +1044,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
-    reader.onlyKeys(block, path, ["tile", "width", "depth", "plan", "storeys", "cellars", "wallHeight", "upperHeight", "cellarHeight", "plinth", "plinthOutset", "framing", "jetty", "roof", "doors", "wallExtras", "parts", "interior", "litWindows"]);
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "plan", "storeys", "cellars", "wallHeight", "upperHeight", "cellarHeight", "plinth", "plinthOutset", "framing", "jetty", "roof", "doors", "wallExtras", "parts", "interior", "litWindows", "cold"]);
     // A list of building parts, each with a weight.
     const partNamed = (entry: RawObject, at: string, key = "part"): BuildingPartDef | undefined => {
       const partId = reader.string(entry, key, at);
@@ -1342,6 +1342,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       parts,
       interior: readInterior(),
       litWindows: reader.optionalNumber(block, "litWindows", path, 0, { min: 0, max: 1 }),
+      cold: block.cold === undefined ? false : reader.boolean(block, "cold", path, false),
     };
   }
   return { id, name: reader.string(obj, "name", ""), generator, boxes, house, mouth, spill: readSpill(obj, reader) };
@@ -1929,7 +1930,7 @@ function readPropGroup(id: string, obj: RawObject, reader: Reader, props: Map<st
 function readPlaceRoad(obj: RawObject, reader: Reader, perTier: boolean): PlaceRoadSpec | null {
   if (obj.road === undefined) return null;
   const road = reader.object(obj.road, "road");
-  reader.onlyKeys(road, "road", ["importance", "links", "wants", "maxLength"]);
+  reader.onlyKeys(road, "road", ["importance", "links", "wants", "maxLength", "condition"]);
   let importance: PlaceRoadSpec["importance"];
   if (perTier) {
     const tiers = reader.object(road.importance, "road.importance");
@@ -1946,6 +1947,7 @@ function readPlaceRoad(obj: RawObject, reader: Reader, perTier: boolean): PlaceR
     links,
     wants: road.wants === undefined ? [] : reader.stringList(road, "wants", "road"),
     maxLength: reader.number(road, "maxLength", "road", { min: 0 }),
+    condition: road.condition === undefined || road.condition === null ? null : (reader.oneOf(road, "condition", "road", ["abandoned"] as const) as "abandoned"),
   };
 }
 

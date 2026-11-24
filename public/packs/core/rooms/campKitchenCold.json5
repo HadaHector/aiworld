@@ -1,0 +1,24 @@
+// An abandoned camp's kitchen: the camp kitchen with a cold fireplace and no stove - nothing burns.
+// A logging camp's kitchen: a stone-flagged floor by the hearth, log walls darkened with smoke, open
+// up to the sooty boards of the roof, round log ties across it.
+{
+  name: "Cold Camp Kitchen",
+  floor: { material: "stoneBricks", tints: [[0.82, 0.8, 0.76], [0.76, 0.74, 0.7]] },
+  walls: { material: "logWall", tints: [[0.72, 0.68, 0.64], [0.68, 0.64, 0.6]] },
+  ceiling: { material: "planks", tints: [[0.48, 0.44, 0.4]] },
+  beams: { material: "roundLog", tints: [[0.6, 0.56, 0.52]] },
+  timber: { material: "timber", tints: [[0.42, 0.36, 0.32]] },
+  stair: "solid",
+  underRoof: true,
+  // The chimney stands against its wall - its hearth.
+  hearth: true,
+  // What it is furnished with, highest priority first (see FURNITURE.md) - a `per` count so many
+  // for each that many tiles of floor.
+  furnish: [
+    { prop: "coldFireplace", at: "hearth", priority: 9 },
+    { prop: "table", at: "centre", priority: 7 },
+    { prop: "barrel", count: [0.6, 1], per: 6, at: "corner", priority: 5 },
+    { prop: "sack", count: [0.6, 1.2], per: 6, at: "corner", priority: 4 },
+    { prop: "crate", chance: 0.6, at: "wall", priority: 3 },
+  ],
+}

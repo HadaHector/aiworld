@@ -806,10 +806,28 @@ generator. What was built:
   required buildings, rotted roofs repeatable and on the rotted material). Seen with `npm run shot --
   buildings/bunkhouseAbandoned` and `buildings/sawShedAbandoned`; the vale places one in some seeds.
 
+**Placed, cold, and its road (the second pass).**
+- **On the map**: odds 0.5 in the autumn wood, 0.4 in the bluebell wood and snowy taiga (the other
+  biomes that roll a logging camp). In the vale over 8 seeds it placed 9 camps (6 seeds with one, never
+  more than 3); the probe prints it (`scripts/probe/abandonedCamp.mjs [seeds]`).
+- **Polygon yard**: `yard: { shape: "polygon", points: [4, 6], radius: [18, 24] }`.
+- **Nothing active**: a house's `cold: true` (HouseSpec) gives no chimney smoke whatever hearth is behind
+  it; the abandoned buildings use cold rooms (`messHallCold`, `campKitchenCold`, `bunkLoftCold`: a
+  `coldFireplace` - ash and black sticks, no light, flame or sound - no stove, sconce, hanging lantern or
+  table lantern) and have no lit windows; the yard has the `coldFire`. The probe checks every building's
+  model (no effects, no non-daylight lights) and every prop of the camp.
+- **The abandoned road**: a place's `road: { condition: "abandoned" }`; every stretch whose routes all
+  lead to such a place gets the `abandoned` road class (`roadConfig.ts`: width 0.4, hardly sunk, a wide
+  unpaved middle - grass through it; never picked by traffic). Its ground is painted by the
+  `abandonedRoad` universal layer with the `overgrownTrack` material (dark damp earth, moss, fallen
+  leaves; it does not clear grass), read from a new terrain input `roadAbandoned` (0-1, faded in over
+  the road's first 25 m like its profile); the road layer gives way to it. A stretch shared with a
+  living road keeps that road's class; the debug map draws it in a mossy colour; roadside features do
+  not treat it as a road.
+
 **Not done (the camp's open list).** Walls do not collapse: only roofs rot (GEOMETRY.md section 11 says a
 ruin's walls, where indoors meets outdoors, are a conversation with the owner; a fallen wall bay would be
-the next piece). The interiors are still furnished and the furniture's lamps still glow through the roof
-holes (a `litWindows: 0` building's furniture needs a "no light" switch). Doors are shut as in the lived-in
+the next piece). The interiors are still furnished (cold furniture). Doors are shut as in the lived-in
 camp (doors are static). Bracken and young birch and rowan over the felling are not planted (the clearing
 only shrinks); a "regrowth" ground feature is the next step. The feature has not been walked in the
 game, only laid out and drawn in the workbench.

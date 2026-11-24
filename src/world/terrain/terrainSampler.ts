@@ -65,6 +65,8 @@ export interface TerrainSample {
   /** How much of a point lies on a road's unpaved middle - between a carriage way's wheel tracks -
    *  0-1 (see RoadProfile.median); 0 off a road, and on a street. */
   roadMiddle: number;
+  /** 0-1: how much the nearest road is an abandoned one (roadConfig's `abandoned` profile), there. */
+  roadAbandoned: number;
   /** The nearest feature in reach (a quarry): its kind's index into WorldContent.featureKinds, or
    *  -1; the distance past its edge (0 inside, Infinity with none); how far it cut or filled the
    *  ground here; and how far plants are cleared, 0-1. See features/featureField.ts. */
@@ -326,6 +328,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     let height = blendedHeight;
     let roadGap = Infinity;
     let roadMiddle = 0;
+    let roadAbandoned = 0;
     if (roadField) {
       const road = roadField.query(worldX, worldZ);
       // A road on a bridge leaves the ground under it be - nor is it painted there.
@@ -342,6 +345,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
         if (road.profile) {
           height += roadProfileOffset(road.profile, road.distance) * road.taper * road.profileWeight;
           roadMiddle = roadMiddleShare(road.profile, road.distance) * road.profileWeight;
+          if (road.profile.abandoned) roadAbandoned = road.profileWeight;
         }
       }
     }
@@ -365,7 +369,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
         height = levelled.height;
         roadGap = Math.min(roadGap, levelled.gap + PAD_PAINT_OFFSET);
         // A pad's own ground is paved all over.
-        if (levelled.gap + PAD_PAINT_OFFSET < ROAD_HALF_WIDTH) roadMiddle = 0;
+        if (levelled.gap + PAD_PAINT_OFFSET < ROAD_HALF_WIDTH) { roadMiddle = 0; roadAbandoned = 0; }
         padGap = levelled.edge;
       }
     }
@@ -377,7 +381,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
         padGap = Math.min(padGap, gap);
         if (gap + MOUTH_PAINT_EDGE < roadGap) {
           roadGap = gap + MOUTH_PAINT_EDGE;
-          if (gap < 0) roadMiddle = 0;
+          if (gap < 0) { roadMiddle = 0; roadAbandoned = 0; }
         }
       }
     }
@@ -397,6 +401,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       riverGap: area.riverGap,
       roadGap,
       roadMiddle,
+      roadAbandoned,
       featureKind: feature ? feature.kind : -1,
       featureGap: feature ? feature.gap : Infinity,
       featureDepth: feature ? feature.depth : 0,

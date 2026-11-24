@@ -158,6 +158,7 @@ export function* mapTileSteps(ground: MapGround, tx: number, tz: number, things?
           riverGap: sample.riverGap,
           roadGap: sample.roadGap,
           roadMiddle: sample.roadMiddle,
+          roadAbandoned: sample.roadAbandoned,
           featureKind: sample.featureKind,
           featureGap: sample.featureGap,
           featureDepth: sample.featureDepth,

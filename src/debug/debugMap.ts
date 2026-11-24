@@ -47,6 +47,7 @@ const ROAD_CASING_COLOR = "rgba(0, 0, 0, 0.55)";
  *  width and its casing's, in screen pixels. Drawn least first, so a highway lies over the tracks
  *  that join it. */
 const ROAD_STYLES: [RoadClassId, string, number, number][] = [
+  ["abandoned", "rgb(150, 160, 120)", 0.7, 1.6],
   ["track", "rgb(205, 190, 160)", 0.9, 2],
   ["road", "rgb(228, 196, 140)", 1.4, 3],
   ["highway", "rgb(245, 214, 120)", 2.4, 4.4],
@@ -319,6 +320,7 @@ export function createDebugMap(
             riverGap: sample.riverGap,
             roadGap: sample.roadGap,
             roadMiddle: sample.roadMiddle,
+            roadAbandoned: sample.roadAbandoned,
             featureKind: sample.featureKind,
             featureGap: sample.featureGap,
             featureDepth: sample.featureDepth,

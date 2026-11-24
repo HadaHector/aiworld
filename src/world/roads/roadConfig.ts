@@ -129,7 +129,7 @@ export const ROAD_EXTRA_LINK_FRACTION = 0.25;
 // routes between towns and villages run together the road they share is a highway. The width is
 // next to a plain road's (1): its level ground, its painted surface and its verge all scale with it
 // (see RoadLine.widthScale).
-export type RoadClassId = "highway" | "road" | "track";
+export type RoadClassId = "highway" | "road" | "track" | "abandoned";
 export interface RoadClass {
   id: RoadClassId;
   minTraffic: number;
@@ -156,6 +156,9 @@ export interface RoadProfile {
   ditch: { at: number; depth: number; width: number } | null;
   sink: number;
   median: number;
+  /** A road nobody keeps: painted with the overgrown track layer (`roadAbandoned`, 0-1) instead of the
+   *  biome's road surface. */
+  abandoned?: boolean;
 }
 
 export const ROAD_CROWN_REACH = 7;
@@ -167,6 +170,10 @@ export const ROAD_CLASSES: readonly RoadClass[] = [
   { id: "road", minTraffic: 1, width: 1, profile: { crown: 0.45, ditch: { at: 10, depth: 1.2, width: 2.2 }, sink: 0, median: 2 } },
   // Worn into the ground, no made edge.
   { id: "track", minTraffic: 0, width: 0.5, profile: { crown: 0, ditch: null, sink: 1.05, median: 0 } },
+  // Never picked by traffic (no traffic reaches Infinity): a stretch is given it when every route over
+  // it leads to a place whose road block says `condition: "abandoned"` (see roadNetwork.ts). A
+  // narrower track, trodden hardly at all, grass through its middle, painted as overgrown.
+  { id: "abandoned", minTraffic: Infinity, width: 0.4, profile: { crown: 0, ditch: null, sink: 0.3, median: 5, abandoned: true } },
 ];
 
 /** How much of a point lies on a road's unpaved middle (see RoadProfile.median), 0-1: all of it

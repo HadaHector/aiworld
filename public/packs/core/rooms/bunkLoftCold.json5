@@ -1,0 +1,20 @@
+// An abandoned camp's bunk loft: the bunk loft with no hanging lantern.
+// A bunkhouse's loft, where the men sleep: log walls, rough boards on the floor, open up to the
+// boarded underside of the roof, round log ties across it at the top of its walls.
+{
+  name: "Cold Bunk Loft",
+  floor: { material: "floorboards", tints: [[0.82, 0.78, 0.74], [0.76, 0.72, 0.68]] },
+  walls: { material: "logWall", tints: [[0.9, 0.86, 0.82], [0.84, 0.8, 0.76]] },
+  ceiling: { material: "planks", tints: [[0.66, 0.6, 0.54]] },
+  beams: { material: "roundLog", tints: [[0.8, 0.76, 0.72]] },
+  timber: { material: "timber", tints: [[0.45, 0.38, 0.34]] },
+  stair: "open",
+  underRoof: true,
+  // What it is furnished with, highest priority first (see FURNITURE.md) - a `per` count so many
+  // for each that many tiles of floor.
+  furnish: [
+    { prop: "bed", count: [1, 1.3], per: 5, at: "wall", priority: 8 },
+    { prop: "chest", count: [0.6, 1], per: 5, at: "wall", priority: 5 },
+    { prop: "sack", chance: 0.5, at: "corner", priority: 3 },
+  ],
+}

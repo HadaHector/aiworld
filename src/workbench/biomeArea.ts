@@ -78,6 +78,7 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
     riverGap: Infinity,
     roadGap: Infinity,
     roadMiddle: 0,
+    roadAbandoned: 0,
     featureKind: -1,
     featureGap: Infinity,
     featureDepth: 0,

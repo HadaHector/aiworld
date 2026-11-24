@@ -77,7 +77,11 @@
       { output: "middleRaw", op: "input", name: "roadMiddle" },
       { output: "middle", op: "scale", input: "middleRaw", factor: 0.95 },
       { output: "unpaved", op: "invert", input: "middle" },
-      { output: "result", op: "multiply", a: "boosted", b: "unpaved" },
+      { output: "paved", op: "multiply", a: "boosted", b: "unpaved" },
+      // An abandoned road (layers/abandonedRoad.json5) is painted by its own layer instead.
+      { output: "abandoned", op: "input", name: "roadAbandoned" },
+      { output: "kept", op: "invert", input: "abandoned" },
+      { output: "result", op: "multiply", a: "paved", b: "kept" },
     ],
   },
 }

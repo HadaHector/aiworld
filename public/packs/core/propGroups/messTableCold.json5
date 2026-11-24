@@ -1,0 +1,9 @@
+// An abandoned camp's mess table: the mess table with no lantern on it.
+{
+  name: "Cold Mess Table",
+  members: [
+    { prop: "table", at: [0, 0] },
+    { prop: "bench", at: [0, -1.45], turn: [-2, 2] },
+    { prop: "bench", at: [0, 1.45], turn: [-2, 2] },
+  ],
+}

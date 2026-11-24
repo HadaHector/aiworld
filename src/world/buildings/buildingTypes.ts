@@ -149,6 +149,9 @@ export interface HouseSpec {
   /** 0-1: the share of its windows with a lamp behind them at night, glowing (their glass's `lit`) -
    *  a house people live in; none for a barn or a shed. */
   litWindows: number;
+  /** Nothing burns here (an abandoned house): its chimneys give no smoke, whatever hearth is behind
+   *  them. The fires, lamps and candles themselves are the rooms' furniture (use cold rooms). */
+  cold: boolean;
   /** What is inside it - a generator and its settings - or null: a house nobody goes into, its doors
    *  shut and nothing behind its walls. */
   interior: InteriorSpec | null;

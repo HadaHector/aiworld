@@ -30,6 +30,8 @@ export interface Place {
   wants: string[];
   /** The longest straight line it is joined across. */
   maxLength: number;
+  /** The state of the roads that lead only to it (PlaceRoadSpec.condition). */
+  condition: "abandoned" | null;
   /**
    * Where its roads must arrive - a quarry has one way in, at its open front - each with its level
    * already set. Null for a place whose gates are found on its rim facing each road, as a
@@ -66,6 +68,7 @@ export function collectPlaces(settlements: SettlementSite[], features: FeatureSi
       links: road?.links ?? [1, Infinity],
       wants: road?.wants ?? [],
       maxLength: road?.maxLength ?? Infinity,
+      condition: road?.condition ?? null,
       fixedGates: null,
       settlement: site,
       feature: null,
@@ -93,6 +96,7 @@ export function collectPlaces(settlements: SettlementSite[], features: FeatureSi
         links: road.links,
         wants: road.wants,
         maxLength: road.maxLength,
+        condition: road.condition,
         fixedGates: null,
         settlement: null,
         feature,
@@ -116,6 +120,7 @@ export function collectPlaces(settlements: SettlementSite[], features: FeatureSi
       links: road.links,
       wants: road.wants,
       maxLength: road.maxLength,
+      condition: road.condition,
       fixedGates: [{ x: entrance.x, z: entrance.z, angle, approachX: entrance.approachX, approachZ: entrance.approachZ, roadHeight: entrance.height }],
       settlement: null,
       feature,

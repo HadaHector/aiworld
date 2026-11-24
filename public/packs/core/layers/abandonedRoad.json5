@@ -1,0 +1,32 @@
+/**
+ * An abandoned road's surface: the overgrown track laid where the road is abandoned (roadConfig's
+ * `abandoned` class, the `roadAbandoned` input). The ordinary road layer gives way there: it is
+ * multiplied by 1 - roadAbandoned (layers/road.json5).
+ *
+ * Same shape as the road layer: the surface out to the running width, a fade past it, cubed then
+ * boosted so it reads as a surface and not a smudge (see road.json5 for why).
+ */
+{
+  material: "overgrownTrack",
+  weight: {
+    noises: [{ name: "edge", type: "fbm", octaves: 2, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "roadGap", op: "input", name: "roadGap" },
+      { output: "abandoned", op: "input", name: "roadAbandoned" },
+      { output: "edgeRaw", op: "sample", noise: "edge" },
+      { output: "edgeShift", op: "scale", input: "edgeRaw", factor: 2.4 },
+      { output: "gap", op: "add", a: "roadGap", b: "edgeShift" },
+      { output: "raw", op: "remap", input: "gap", inMin: 8, inMax: 3, outMin: 0, outMax: 1 },
+      { output: "surface", op: "clamp", input: "raw", min: 0, max: 1 },
+      { output: "square", op: "multiply", a: "surface", b: "surface" },
+      { output: "cube", op: "multiply", a: "square", b: "surface" },
+      { output: "boosted", op: "scale", input: "cube", factor: 4 },
+      // Frayed through its middle: the grass between the two wheel tracks (roadMiddle).
+      { output: "middleRaw", op: "input", name: "roadMiddle" },
+      { output: "middle", op: "scale", input: "middleRaw", factor: 0.85 },
+      { output: "unpaved", op: "invert", input: "middle" },
+      { output: "laid", op: "multiply", a: "boosted", b: "unpaved" },
+      { output: "result", op: "multiply", a: "laid", b: "abandoned" },
+    ],
+  },
+}
