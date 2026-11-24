@@ -97,11 +97,21 @@ for (let i = 0; i < seedsN; i++) {
   const a = roads.filter((st) => st.roadClass === "abandoned").length;
   abandonedStretches += a;
   // The ground on an abandoned stretch's line is painted as one (roadAbandoned), the sound roads' is not.
+  // (Away from its ends, where the paint fades in, and off a bridge, which paints nothing: the point
+  // of the stretch furthest from both that is on the ground.)
   for (const st of roads) {
     if (st.points.length < 5) continue;
-    const mid = st.points[Math.floor(st.points.length / 2)];
-    const sample = w.sampleTerrain(mid.x, mid.z);
-    if (st.roadClass === "abandoned" && st.points.length > 12) { paintedAbandoned++; check(sample.roadAbandoned > 0.3, `an abandoned stretch's middle reads roadAbandoned ${sample.roadAbandoned.toFixed(2)}`); }
+    let total = 0;
+    const arcs = st.points.map((p, k) => (k === 0 ? 0 : (total += Math.hypot(p.x - st.points[k - 1].x, p.z - st.points[k - 1].z))));
+    const bridges = st.bridges ?? [];
+    let best = null, bestFree = 0;
+    st.points.forEach((p, k) => {
+      const free = Math.min(arcs[k], total - arcs[k], ...bridges.map(([s0, s1]) => (arcs[k] >= s0 && arcs[k] <= s1 ? 0 : Math.min(Math.abs(arcs[k] - s0), Math.abs(arcs[k] - s1)))));
+      if (free > bestFree) { bestFree = free; best = p; }
+    });
+    if (!best) continue;
+    const sample = w.sampleTerrain(best.x, best.z);
+    if (st.roadClass === "abandoned" && bestFree >= 40) { paintedAbandoned++; check(sample.roadAbandoned > 0.3, `an abandoned stretch reads roadAbandoned ${sample.roadAbandoned.toFixed(2)} ${Math.round(bestFree)} m from its ends and bridges`); }
     if (st.roadClass !== "abandoned") check(sample.roadAbandoned === 0, `a sound road reads roadAbandoned ${sample.roadAbandoned}`);
   }
   check(n <= 3, `vale seed ${i}: ${n} abandoned camps is too many`);
