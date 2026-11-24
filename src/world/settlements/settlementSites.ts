@@ -42,7 +42,7 @@ const CANDIDATE_RADIUS = CELL_SPACING * 0.42;
 // preferences that decide between the survivors are further down.
 const MIN_SITE_HEIGHT = 2; // world units above sea level - a beach at +0.5 floods
 const MAX_LAKE_FACTOR = 0.05;
-const MAX_RELIEF = 6; // world units of height spread across the footprint
+const MAX_RELIEF = 9; // world units of height spread across the footprint
 
 // Measured around the footprint a village would actually occupy, not at a single point: a point
 // sample says nothing about slope, and the whole question here is whether the ground is level.

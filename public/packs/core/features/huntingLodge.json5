@@ -7,7 +7,7 @@
   name: "Hunting lodge",
   type: "compound",
   compound: {
-    site: { grade: [0, 0.2], cover: [0.4, 0.85], nearWater: 400 },
+    site: { grade: [0, 0.3], cover: [0.4, 0.85], nearWater: 400 },
     // A small, rough clearing, not a circle.
     yard: { shape: "polygon", points: [4, 6], radius: [8, 11] },
     pads: { slope: 0.6, blend: [1.5, 10] },

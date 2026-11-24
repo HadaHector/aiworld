@@ -15,7 +15,7 @@
   name: "Druid grove",
   type: "compound",
   compound: {
-    site: { grade: [0, 0.2], cover: [0.45, 0.95] },
+    site: { grade: [0, 0.3], cover: [0.45, 0.95] },
     // Radius to the oaks' trunks (the ring stands just outside the yard's rim): 16 m, a clearing of
     // about 800 m2 inside; trees 6-7 m through at the foot stand round it.
     yard: { radius: [16, 19] },

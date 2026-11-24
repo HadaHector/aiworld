@@ -13,7 +13,7 @@
   compound: {
     // Gentle ground (rise over run across it), anywhere the road goes - wood or open - at least
     // 500 m past every settlement's edge, the further the better.
-    site: { grade: [0, 0.1], cover: [0, 1], fromSettlements: 500 },
+    site: { grade: [0, 0.18], cover: [0, 1], fromSettlements: 250 },
     // How much room it takes along its road (a roadside one has no yard of its own - see
     // compound.ts's layoutRoadside).
     yard: { radius: [15, 19] },

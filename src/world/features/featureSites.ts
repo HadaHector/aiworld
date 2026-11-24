@@ -44,11 +44,12 @@ export const NO_ROLL = -1;
 const CANDIDATES_PER_CELL = 24;
 const CANDIDATE_RADIUS = CELL_SPACING * 0.4;
 /** Kept this far clear of a settlement's edge, and of each other. */
-const SETTLEMENT_CLEARANCE = 250;
-const MIN_FEATURE_SPACING = 500;
+const SETTLEMENT_CLEARANCE = 150;
+const MIN_FEATURE_SPACING = 300;
 
 const FEATURE_ROLL_SALT = 901;
 const FEATURE_PLACE_SALT = 902;
+const FALLBACK_SALT = 903_000;
 
 function roll(range: [number, number], rng: () => number): number {
   return range[0] + (range[1] - range[0]) * rng();
@@ -121,19 +122,11 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
     return trace.test("featureGap", featureGap, MIN_FEATURE_SPACING, Infinity);
   };
 
-  for (let cell = 0; cell < cellSites.length; cell++) {
-    const index = rolls[cell];
-    if (index === NO_ROLL) continue;
+  /** One kind tried in a cell: the best of its candidates, or null where nothing suits. */
+  const tryKind = (index: number, cell: number, rng: () => number, trace: Trace, begin: () => void): FeatureSite | null => {
     const kind = kinds[index];
     const site = cellSites[cell];
-    const rng = mulberry32(deriveSeed(seed, FEATURE_PLACE_SALT + cell));
-    const trace = traces?.[cell] ?? NO_TRACE;
-    const begin = (): void => traces?.[cell].begin();
-    if (kind.type === "settlement") continue;
-
-    // A roadside one is placed once the roads are laid (placeRoadsideFeatures).
-    if (kind.compound?.arrangement === "roadside") continue;
-    if (kind.type === "compound" && kind.compound) {
+    if (kind.type === "compound" && kind.compound && kind.compound.arrangement !== "roadside") {
       // Everything that decides its size first, so where it lands does not change how big it is.
       const plan = planCompound(kind, seed, rng);
       let best: { x: number; z: number; height: number; areaId: number; score: number } | null = null;
@@ -147,9 +140,8 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
         const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover, trace);
         if (scored && (!best || scored.score > best.score)) best = { x, z, ...scored };
       }
-      if (!best) continue;
-      if (traces) traces[cell].placed = true;
-      features.push({
+      if (!best) return null;
+      return {
         id: 0,
         kindIndex: index,
         kind,
@@ -161,13 +153,11 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
         quarry: null,
         settlement: null,
         compound: { ...plan, x: best.x, z: best.z, height: best.height, roadAngles: [] },
-      });
-      continue;
+      };
     }
 
     const spec = kind.quarry;
-    if (kind.type !== "quarry" || !spec) continue;
-
+    if (kind.type !== "quarry" || !spec) return null;
     // One size per cell, rolled before the search, so where it lands does not change how big it is.
     const size = {
       halfLength: roll(spec.floorLength, rng) / 2,
@@ -186,11 +176,9 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
       const scored = evaluateQuarry(x, z, spec, size, sampleTerrain, trace);
       if (scored && (!best || scored.score > best.score)) best = scored;
     }
-    if (!best) continue;
-    if (traces) traces[cell].placed = true;
-
+    if (!best) return null;
     const shape = best.shape;
-    features.push({
+    return {
       id: 0,
       kindIndex: index,
       kind,
@@ -202,7 +190,38 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
       quarry: shape,
       settlement: null,
       compound: null,
-    });
+    };
+  };
+
+  const kindIndex = new Map(kinds.map((kind, i) => [kind.id, i]));
+  for (let cell = 0; cell < cellSites.length; cell++) {
+    const index = rolls[cell];
+    if (index === NO_ROLL) continue;
+    const kind = kinds[index];
+    // A settlement is sited by its own rules, a cave mouth last, and a roadside one once the roads are
+    // laid (placeRoadsideFeatures): none of them is placed here.
+    if (kind.type === "settlement" || kind.type === "cave" || kind.compound?.arrangement === "roadside") continue;
+    const trace = traces?.[cell] ?? NO_TRACE;
+    let placed = tryKind(index, cell, mulberry32(deriveSeed(seed, FEATURE_PLACE_SALT + cell)), trace, () => traces?.[cell].begin());
+    if (!placed) {
+      // What the ground here does suit: the cell's other kinds that this pass places, drawn by their
+      // odds without putting one back, on a stream of their own so the rolled kind's is untouched.
+      const rng = mulberry32(deriveSeed(seed, FALLBACK_SALT + cell));
+      const chances = sampleTerrain(cellSites[cell].x, cellSites[cell].z).primaryBiome.features.filter((chance) => {
+        const other = kindIndex.get(chance.featureId);
+        return other !== undefined && other !== index && (kinds[other].type === "quarry" || (kinds[other].type === "compound" && kinds[other].compound?.arrangement !== "roadside"));
+      });
+      while (!placed && chances.length > 0) {
+        let pick = rng() * chances.reduce((sum, chance) => sum + chance.odds, 0);
+        const at = Math.max(0, chances.findIndex((chance) => (pick -= chance.odds) < 0));
+        const other = kindIndex.get(chances.splice(at, 1)[0].featureId)!;
+        placed = tryKind(other, cell, mulberry32(deriveSeed(seed, FALLBACK_SALT + cell + other * 1009)), NO_TRACE, () => undefined);
+        if (placed && traces) traces[cell].note = `${kind.id} did not suit; ${kinds[other].id} placed instead`;
+      }
+    }
+    if (!placed) continue;
+    if (traces) traces[cell].placed = true;
+    features.push(placed);
   }
   features.forEach((feature, id) => (feature.id = id));
   return features;

@@ -37,7 +37,7 @@ export const CAVE_MOUTH = {
   odds: 0.6,
   tries: 400,
   /** How far from its cell's middle a mouth may be sited, metres. */
-  cellReach: 220,
+  cellReach: 400,
   /** Its floor this far over the sea at least. */
   aboveSea: 3,
   /** Kept this far from a settlement's middle, a feature, a road (its gap), water. */
@@ -78,7 +78,7 @@ function judge(sample: Sampler, x: number, z: number, t: Trace = NO_TRACE): { y:
   const h = (px: number, pz: number): number => sample(px, pz).height;
   const gx = h(x + 8, z) - h(x - 8, z), gz = h(x, z + 8) - h(x, z - 8);
   const g = Math.hypot(gx, gz);
-  if (!t.test("grade", g / 16, 0.3, Infinity)) return null;
+  if (!t.test("grade", g / 16, 0.15, Infinity)) return null;
   const ux = gx / g, uz = gz / g;
   const sx = -uz, sz = ux;
   const hw = c.width / 2;

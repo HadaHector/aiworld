@@ -889,3 +889,14 @@ points on the circle, not candidates. It costs no terrain sampling of its own - 
 - `npm run probe -- scripts/probe/cellwhy.mjs config=vale|default seeds=60`: totals per kind over many
   seeds - rolled, placed, seeds with one, which conditions stopped the candidates and the nearest
   candidate's median value - and how many cells end empty by a roll of none and by a failure.
+
+### Looser placement for the autumn wood (2026-11-24, from those numbers)
+
+A cell whose rolled compound or quarry finds no ground now tries the cell's other kinds of this pass (compounds,
+quarries; not settlements, caves or roadside ones), drawn by their odds on their own random stream, and keeps the first
+that suits (its record's note says which). Also: spacing between features 500 -> 300 m and from a settlement's edge 250
+-> 150 m; grade up to 0.3 for the logging camp, abandoned camp, hunting lodge and druid grove, 0.2 for the cemetery
+(settlement gap 250 m), 0.18 for the inn (250 m); settlement footprint relief 6 -> 9; cave mouth foot grade 0.3 -> 0.15
+and reach 220 -> 400 m; autumnWood odds: `none` 0.8 -> 0.3, `coachingInn` 0.5 -> 0.15. Vale, 60 seeds: empty cells 52% -> 22%
+(`none` 17% -> 7%); cave mouth in 50 of 60 seeds (was 36), abandoned camp in 51 (was 41). Left alone: settlement spacing (900 m)
+- 700 m shortened the letter quests' walks enough to fail the quests probe's pay check.

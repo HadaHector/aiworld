@@ -15,7 +15,7 @@
   compound: {
     // The logging camp's ground: gentle, trees all round it - a little more cover wanted, it is in
     // the wood's deep - and a river near is in its favour.
-    site: { grade: [0, 0.2], cover: [0.55, 0.95], nearWater: 300 },
+    site: { grade: [0, 0.3], cover: [0.55, 0.95], nearWater: 300 },
     // A polygon, not a round: a yard nobody keeps round (see the sheepfold).
     yard: { shape: "polygon", points: [4, 6], radius: [18, 24] },
     pads: { slope: 0.6, blend: [1.5, 10] },

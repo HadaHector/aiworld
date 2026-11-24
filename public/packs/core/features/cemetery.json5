@@ -8,7 +8,7 @@
   type: "compound",
   compound: {
     // Gentle ground, open or thinly wooded, well out of any settlement.
-    site: { grade: [0, 0.12], cover: [0, 0.7], fromSettlements: 400 },
+    site: { grade: [0, 0.2], cover: [0, 0.7], fromSettlements: 250 },
     // Its yard: `radius` half its length (chapel to crypt), `width` across - near square, the
     // graves' ground. Big enough for the crypt's mausoleum across its foot (DUNGEONS.md).
     yard: { radius: [28, 48], width: [60, 100] },

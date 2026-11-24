@@ -12,7 +12,7 @@
     // are levelled into it), trees all round it - the share of the
     // ground they cover, at least the first, the more the better up to the second - and a river
     // within 300 m in its favour.
-    site: { grade: [0, 0.2], cover: [0.5, 0.9], nearWater: 300 },
+    site: { grade: [0, 0.3], cover: [0.5, 0.9], nearWater: 300 },
     // A round of trodden ground, its radius in metres, rolled per camp - wide enough for a long
     // bunkhouse and a saw shed to stand round it.
     yard: { radius: [18, 24] },

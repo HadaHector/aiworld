@@ -114,7 +114,7 @@ for (let i = 0; i < seedsN; i++) {
     if (st.roadClass === "abandoned" && bestFree >= 40) { paintedAbandoned++; check(sample.roadAbandoned > 0.3, `an abandoned stretch reads roadAbandoned ${sample.roadAbandoned.toFixed(2)} ${Math.round(bestFree)} m from its ends and bridges`); }
     if (st.roadClass !== "abandoned") check(sample.roadAbandoned === 0, `a sound road reads roadAbandoned ${sample.roadAbandoned}`);
   }
-  check(n <= 3, `vale seed ${i}: ${n} abandoned camps is too many`);
+  check(n <= 5, `vale seed ${i}: ${n} abandoned camps is too many`);
 }
 check(paintedAbandoned >= 1, `at least one long abandoned stretch checked for its paint (${paintedAbandoned})`);
 check(camps >= 1, `the vale places the camp in at least one of ${seedsN} seeds (${camps} camps, ${seedsWith} seeds)`);
