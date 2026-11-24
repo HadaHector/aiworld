@@ -863,7 +863,9 @@ and which of its sides are open; a support where it stands. There are seven so f
   dip, nothing at the eaves). Missing shingles are not geometry: the building's roof material does them
   (`core/buildingMaterials/rottedShingles.json5`: warped courses, gaps sunk to black, moss in patches).
   A sound roof draws nothing extra from the rng. See `core/buildingParts/rottedShingleRoof.json5`; a
-  building names it as its `roof` (`core/buildings/bunkhouseAbandoned.json5`).
+  building names it as its `roof` (`core/buildings/bunkhouseAbandoned.json5`). A house's `cold: true` gives its chimneys no
+  smoke. A place's `road: { condition: "abandoned" }` makes the roads leading only to it overgrown tracks
+  (FEATURES.md, *The abandoned camp*).
 - `terrace`, a floor on top of a storey (see `core/buildingParts/timberBalcony.json5` and
   `stoneTerrace.json5`): an `edge` band round it, `height` deep standing `out` from the walls under it,
   and along its open sides a `parapet` `height` high and `thickness` thick - a solid `wall`, or a
