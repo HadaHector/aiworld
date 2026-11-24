@@ -492,7 +492,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   settleOnGround(compoundLayouts, sampleTerrain);
   spillField = createSpillField(compoundLayouts, spillMaterials(content));
   // Last, the caves' mouths: found on the ground as everything else has left it.
-  const caveMouths = timed("Finding cave mouths", () => siteCaveMouths(seed, worldExtent, sampleTerrain, settlements));
+  const caveMouths = timed("Finding cave mouths", () => siteCaveMouths(seed, worldExtent, sampleTerrain, settlements, rolls.flatMap((roll, cell) => (roll !== NO_ROLL && kinds[roll].type === "cave" ? [landCellSites[cell]] : []))));
   mouthClear = caveMouthClearance(caveMouths);
 
   return { sampleTerrain, worldExtent, areaBounds, areaNames, landCellSites, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours, caveMouths, riverProfiles, waters };

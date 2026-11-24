@@ -8,7 +8,8 @@ import type { PropDef, PropGroupDef } from "../props/propTypes";
 /**
  * What stands in a cell besides the land itself: one major feature per cell at most - a settlement,
  * a quarry, a compound (a camp, a farmstead), and in time a mine. Settlements keep their own placement and layout
- * rules (settlements/), but which cells have one is rolled here, like any other feature.
+ * rules (settlements/), but which cells have one is rolled here, like any other feature. A `cave` is a
+ * cave mouth: the cell that rolls it gets one on the best ground that suits (dungeons/caveMouths.ts), sited last.
  *
  * A feature kind is content (a pack's features/ folder); its `type` picks the code that places it
  * and shapes the ground under it. A biome lists which kinds its cells roll, with odds - "none"
@@ -16,7 +17,7 @@ import type { PropDef, PropGroupDef } from "../props/propTypes";
  */
 export const NO_FEATURE = "none";
 
-export const FEATURE_TYPES = ["quarry", "settlement", "compound"] as const;
+export const FEATURE_TYPES = ["quarry", "settlement", "compound", "cave"] as const;
 export type FeatureType = (typeof FEATURE_TYPES)[number];
 
 /** `features: [{ feature, odds }]` in a biome: which kinds its cells roll, and how likely each is -
