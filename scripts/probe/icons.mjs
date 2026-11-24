@@ -40,7 +40,7 @@ loadIconSets(withPack ? sources : [], "/");
 // iron ingot and spell scroll since 4da050b, and the hardened sword's three forms since the material
 // was added (c4bf2d5; not yet in assets_work/comfyUI/icons.json either). A name here that turns up in
 // the pack must be struck off (so the list never goes stale); a name missing that is not here fails.
-const WAITING = new Set(["item-torch", "item-bandage", "item-iron-ingot", "item-spell-scroll", "item-sword-hardened-short", "item-sword-hardened-long", "item-sword-hardened-great"]);
+const WAITING = new Set(["item-sword-hardened-short", "item-sword-hardened-long", "item-sword-hardened-great"]);
 if (withPack) {
   for (const [who, icon] of asked) check(`${who}: icon ${icon} is in the pack`, hasIcon(icon) || WAITING.has(icon));
   for (const icon of WAITING) check(`${icon} is still waiting (else strike it from WAITING)`, !hasIcon(icon));
