@@ -1,0 +1,9 @@
+// A cave mouth: the way into a cave lair (DUNGEONS.md, *Entrances*). The cell that rolls it gets one on the best
+// hillside in it - a slip cut into the slope, a level rock floor at its foot, a high back wall, rock behind, a way
+// in from open ground - or none where the cell has no such ground. Sited last, on the finished ground
+// (dungeons/caveMouths.ts); what stands round it (a camp, huts) is the cave mouth yard, a feature of its own to come.
+{
+  name: "Cave mouth",
+  type: "cave",
+  clearing: [0, 0],
+}

@@ -34,7 +34,9 @@ export const CAVE_MOUTH = {
   /** One cave a cell of this size at most, this share of them; points tried in each. */
   cell: 640,
   odds: 0.6,
-  tries: 36,
+  tries: 400,
+  /** How far from its cell's middle a mouth may be sited, metres. */
+  cellReach: 220,
   /** Its floor this far over the sea at least. */
   aboveSea: 3,
   /** Kept this far from a settlement's middle, a feature, a road (its gap), water. */
@@ -130,33 +132,35 @@ function approachable(sample: Sampler, x: number, z: number, ux: number, uz: num
   return false;
 }
 
-/** Every cave mouth in the world: at most one a cell, where a cell rolled one and has the ground. */
-export function siteCaveMouths(seed: number, worldExtent: number, sample: Sampler, settlements: readonly { x: number; z: number }[]): CaveMouthSite[] {
+/**
+ * The cave mouths of the cells that rolled a `cave` feature (features/caveMouth.json5): one in each, on the
+ * best ground in the cell that suits (`judge`) and that a walker can reach (`approachable`) - a cell with
+ * no such ground gets none, as any feature. A mouth is valid by construction: level foot, a high back wall,
+ * rock behind, dry, off the roads, a way in from open ground.
+ */
+export function siteCaveMouths(seed: number, worldExtent: number, sample: Sampler, settlements: readonly { x: number; z: number }[], cells: readonly { x: number; z: number }[]): CaveMouthSite[] {
   const c = CAVE_MOUTH;
   const out: CaveMouthSite[] = [];
-  const n = Math.ceil(worldExtent / c.cell);
-  for (let gx = -n; gx < n; gx++) {
-    for (let gz = -n; gz < n; gz++) {
-      const random = mulberry32(deriveSeed(seed, 0x6ca7e + (gx + 4096) * 8191 + (gz + 4096)));
-      if (random() >= c.odds) continue;
-      const found: (CaveMouthSite & { score: number })[] = [];
-      for (let t = 0; t < c.tries; t++) {
-        // Inside the cell, a margin off its edges so two never stand close.
-        const x = (gx + 0.12 + random() * 0.76) * c.cell, z = (gz + 0.12 + random() * 0.76) * c.cell;
-        if (Math.abs(x) > worldExtent * 0.95 || Math.abs(z) > worldExtent * 0.95) continue;
-        if (settlements.some((s) => Math.hypot(s.x - x, s.z - z) < c.settlementClear)) continue;
-        const j = judge(sample, x, z);
-        if (!j) continue;
-        found.push({ id: 0, x, y: j.y, z, facing: (Math.atan2(-j.ux, -j.uz) * 180) / Math.PI, ux: j.ux, uz: j.uz, score: j.score });
-      }
-      // The best that a walker can reach; the next best when it cannot, and none if none can.
-      const best = found.sort((a, b) => b.score - a.score).find((m) => approachable(sample, m.x, m.z, m.ux, m.uz)) ?? null;
-      if (best) {
-        const { score: _score, ...site } = best;
-        out.push({ ...site, id: out.length });
-      }
+  cells.forEach((cell, n) => {
+    const random = mulberry32(deriveSeed(seed, 0x6ca7e + n * 8191));
+    const found: (CaveMouthSite & { score: number })[] = [];
+    for (let t = 0; t < c.tries; t++) {
+      // Inside the cell, off its edges so a mouth never stands close to another cell's feature.
+      const a = random() * Math.PI * 2, r = Math.sqrt(random()) * c.cellReach;
+      const x = cell.x + Math.cos(a) * r, z = cell.z + Math.sin(a) * r;
+      if (Math.abs(x) > worldExtent * 0.95 || Math.abs(z) > worldExtent * 0.95) continue;
+      if (settlements.some((s) => Math.hypot(s.x - x, s.z - z) < c.settlementClear)) continue;
+      const j = judge(sample, x, z);
+      if (!j) continue;
+      found.push({ id: 0, x, y: j.y, z, facing: (Math.atan2(-j.ux, -j.uz) * 180) / Math.PI, ux: j.ux, uz: j.uz, score: j.score });
     }
-  }
+    // The best that a walker can reach; the next best when it cannot, and none if none can.
+    const best = found.sort((p, q) => q.score - p.score).find((m) => approachable(sample, m.x, m.z, m.ux, m.uz)) ?? null;
+    if (best) {
+      const { score: _score, ...site } = best;
+      out.push({ ...site, id: out.length });
+    }
+  });
   return out;
 }
 
