@@ -1,6 +1,7 @@
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { QuarrySpec } from "./featureTypes";
 import { lerp, smoothstep } from "../mathUtils";
+import { NO_TRACE, type Trace } from "./placementWhy";
 
 /**
  * A quarry: a level floor cut back into a hillside. Behind it and along its sides the hill is cut
@@ -107,16 +108,20 @@ export function evaluateQuarry(
   spec: QuarrySpec,
   size: { halfLength: number; halfWidth: number; benchHeight: number; benchWidth: number },
   sampleTerrain: TerrainSampler,
+  trace: Trace = NO_TRACE,
 ): { shape: QuarryShape; score: number; areaId: number } | null {
   const here = sampleTerrain(x, z);
-  if (!here.isLand || here.height < MIN_HEIGHT || here.lakeFactor > MAX_LAKE_FACTOR) return null;
-  if (here.riverGap < MIN_RIVER_GAP || here.areaBorderGap < MIN_BORDER_GAP) return null;
+  if (!trace.test("land", here.isLand ? 1 : 0, 1, 1)) return null;
+  if (!trace.test("height", here.height, MIN_HEIGHT, Infinity)) return null;
+  if (!trace.test("lake", here.lakeFactor, -Infinity, MAX_LAKE_FACTOR)) return null;
+  if (!trace.test("riverGap", here.riverGap, MIN_RIVER_GAP, Infinity)) return null;
+  if (!trace.test("borderGap", here.areaBorderGap, MIN_BORDER_GAP, Infinity)) return null;
 
   const h = (px: number, pz: number): number => sampleTerrain(px, pz).height;
   const gx = (h(x + GRADE_STEP, z) - h(x - GRADE_STEP, z)) / (2 * GRADE_STEP);
   const gz = (h(x, z + GRADE_STEP) - h(x, z - GRADE_STEP)) / (2 * GRADE_STEP);
   const grade = Math.hypot(gx, gz);
-  if (grade < spec.grade[0] || grade > spec.grade[1]) return null;
+  if (!trace.test("grade", grade, spec.grade[0], spec.grade[1])) return null;
   const ax = -gx / grade;
   const az = -gz / grade;
   const { halfLength, halfWidth } = size;
@@ -124,15 +129,16 @@ export function evaluateQuarry(
   // Level across the floor: the two sides' heights average to the middle's.
   const left = h(x - az * halfWidth, z + ax * halfWidth);
   const right = h(x + az * halfWidth, z - ax * halfWidth);
-  if (Math.abs(left + right - 2 * here.height) > MAX_ACROSS_BEND) return null;
+  if (!trace.test("acrossBend", Math.abs(left + right - 2 * here.height), -Infinity, MAX_ACROSS_BEND)) return null;
 
   // Still rising behind - a face to cut - and still land, and lower, in front: somewhere to tip the
   // spoil and for a track to come in.
   const behind = h(x - ax * (halfLength + BEHIND), z - az * (halfLength + BEHIND));
   const rising = (behind - here.height) / (halfLength + BEHIND);
-  if (rising < grade * 0.6) return null;
+  if (!trace.test("rising", rising / grade, 0.6, Infinity)) return null;
   const ahead = sampleTerrain(x + ax * (halfLength + AHEAD), z + az * (halfLength + AHEAD));
-  if (!ahead.isLand || ahead.height < MIN_HEIGHT * 0.5 || ahead.height > here.height) return null;
+  if (!trace.test("aheadLand", ahead.isLand ? 1 : 0, 1, 1)) return null;
+  if (!trace.test("aheadHeight", ahead.height - here.height, MIN_HEIGHT * 0.5 - here.height, 0)) return null;
 
   const score = Math.max(0, 1 - Math.abs(grade - spec.idealGrade) / spec.idealGrade) * 0.7 + Math.min(1, rising / grade) * 0.3;
   return {

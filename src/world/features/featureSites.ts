@@ -9,6 +9,7 @@ import { evaluateCompound, planCompound, type CompoundSite } from "./compound";
 import type { TreeCover } from "../foliage/treeScatter";
 import type { RoadStretch } from "../roads/roadGraph";
 import { ROAD_HALF_WIDTH } from "../roads/roadConfig";
+import { CellTrace, NO_TRACE, type Trace } from "./placementWhy";
 
 /** One feature as it stands in the world. */
 export interface FeatureSite {
@@ -82,6 +83,9 @@ export interface FeatureInput {
   settlements: SettlementSite[];
   /** How thick the woods are - what a compound that wants to stand in them reads. */
   treeCover: TreeCover;
+  /** Each cell's record of what it rolled and why it did or did not place (placementWhy.ts), by cell
+   *  - filled in by every stage that places something. Optional: placement is the same without. */
+  traces?: CellTrace[];
 }
 
 /**
@@ -92,7 +96,7 @@ export interface FeatureInput {
  * scatter of points over the cell, and takes the best. A cell where nothing suits is simply empty:
  * the roll is what the cell would like, the ground is what it gets.
  */
-export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, settlements, treeCover }: FeatureInput): FeatureSite[] {
+export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, settlements, treeCover, traces }: FeatureInput): FeatureSite[] {
   const features: FeatureSite[] = settlements.map((settlement) => ({
     id: 0,
     kindIndex: rolls[settlement.cellId],
@@ -107,9 +111,15 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
     compound: null,
   }));
 
-  const clearOfOthers = (x: number, z: number): boolean =>
-    settlements.every((s) => Math.hypot(s.x - x, s.z - z) > s.radius + SETTLEMENT_CLEARANCE) &&
-    features.every((f) => f.settlement !== null || Math.hypot(f.x - x, f.z - z) > MIN_FEATURE_SPACING);
+  // What the nearest settlement's edge and the nearest other feature are away, for the record.
+  const clearOfOthers = (x: number, z: number, trace: Trace): boolean => {
+    let settlementGap = Infinity;
+    for (const s of settlements) settlementGap = Math.min(settlementGap, Math.hypot(s.x - x, s.z - z) - s.radius);
+    if (!trace.test("settlementGap", settlementGap, SETTLEMENT_CLEARANCE, Infinity)) return false;
+    let featureGap = Infinity;
+    for (const f of features) if (f.settlement === null) featureGap = Math.min(featureGap, Math.hypot(f.x - x, f.z - z));
+    return trace.test("featureGap", featureGap, MIN_FEATURE_SPACING, Infinity);
+  };
 
   for (let cell = 0; cell < cellSites.length; cell++) {
     const index = rolls[cell];
@@ -117,6 +127,9 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
     const kind = kinds[index];
     const site = cellSites[cell];
     const rng = mulberry32(deriveSeed(seed, FEATURE_PLACE_SALT + cell));
+    const trace = traces?.[cell] ?? NO_TRACE;
+    const begin = (): void => traces?.[cell].begin();
+    if (kind.type === "settlement") continue;
 
     // A roadside one is placed once the roads are laid (placeRoadsideFeatures).
     if (kind.compound?.arrangement === "roadside") continue;
@@ -129,11 +142,13 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
         const angle = rng() * Math.PI * 2;
         const x = site.x + Math.cos(angle) * radius;
         const z = site.z + Math.sin(angle) * radius;
-        if (!clearOfOthers(x, z)) continue;
-        const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover);
+        begin();
+        if (!clearOfOthers(x, z, trace)) continue;
+        const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover, trace);
         if (scored && (!best || scored.score > best.score)) best = { x, z, ...scored };
       }
       if (!best) continue;
+      if (traces) traces[cell].placed = true;
       features.push({
         id: 0,
         kindIndex: index,
@@ -166,11 +181,13 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
       const angle = rng() * Math.PI * 2;
       const x = site.x + Math.cos(angle) * radius;
       const z = site.z + Math.sin(angle) * radius;
-      if (!clearOfOthers(x, z)) continue;
-      const scored = evaluateQuarry(x, z, spec, size, sampleTerrain);
+      begin();
+      if (!clearOfOthers(x, z, trace)) continue;
+      const scored = evaluateQuarry(x, z, spec, size, sampleTerrain, trace);
       if (scored && (!best || scored.score > best.score)) best = scored;
     }
     if (!best) continue;
+    if (traces) traces[cell].placed = true;
 
     const shape = best.shape;
     features.push({
@@ -204,7 +221,7 @@ const ROADSIDE_MAX_BEND = 0.35;
  * the road allows - past its `fromSettlements` from each at the least. A cell with no such road is
  * left empty. Returned to be added to the features already placed, which they keep clear of.
  */
-export function placeRoadsideFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, settlements, treeCover, features, stretches }: FeatureInput & { features: FeatureSite[]; stretches: RoadStretch[] }): FeatureSite[] {
+export function placeRoadsideFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, settlements, treeCover, features, stretches, traces }: FeatureInput & { features: FeatureSite[]; stretches: RoadStretch[] }): FeatureSite[] {
   const placed: FeatureSite[] = [];
   const roads = stretches.filter((stretch) => stretch.roadClass !== "track" && stretch.roadClass !== "abandoned");
   // Each road's length along it, point by point, to walk it by distance.
@@ -253,15 +270,20 @@ export function placeRoadsideFeatures({ seed, cellSites, sampleTerrain, kinds, r
     let best: { x: number; z: number; height: number; areaId: number; score: number; roadAngles: number[] } | null = null;
     const reach = CANDIDATE_RADIUS + plan.radius + ROAD_HALF_WIDTH;
     const near = boxes.flatMap((box, r) => (box.minX - reach < site.x && box.maxX + reach > site.x && box.minZ - reach < site.z && box.maxZ + reach > site.z ? [r] : []));
+    const trace = traces?.[cell] ?? NO_TRACE;
+    if (traces && near.length === 0) traces[cell].note = "no road through the cell";
     near.forEach((r) => {
       const length = along[r][along[r].length - 1];
       // Its ends are junctions or gates: kept out of the circle.
       for (let s = plan.radius; s <= length - plan.radius; s += ROADSIDE_STEP) {
         const p = pointAt(r, s);
         if (Math.hypot(p.x - site.x, p.z - site.z) > CANDIDATE_RADIUS) continue;
+        traces?.[cell].begin();
         const gap = Math.min(Infinity, ...settlements.map((other) => Math.hypot(other.x - p.x, other.z - p.z) - other.radius));
-        if (gap < away) continue;
-        if (![...features, ...placed].every((f) => f.settlement !== null || Math.hypot(f.x - p.x, f.z - p.z) > Math.max(MIN_FEATURE_SPACING, f.footprint + plan.radius))) continue;
+        if (!trace.test("settlementGap", gap, away, Infinity)) continue;
+        // How far clear of the nearest feature, past what it needs (negative: inside it).
+        const featureSlack = Math.min(Infinity, ...[...features, ...placed].filter((f) => f.settlement === null).map((f) => Math.hypot(f.x - p.x, f.z - p.z) - Math.max(MIN_FEATURE_SPACING, f.footprint + plan.radius)));
+        if (!trace.test("featureGap", featureSlack, 0, Infinity)) continue;
         // Nearly straight across it, both ways out from its middle.
         const back = pointAt(r, s - plan.radius);
         const ahead = pointAt(r, s + plan.radius);
@@ -269,9 +291,10 @@ export function placeRoadsideFeatures({ seed, cellSites, sampleTerrain, kinds, r
         const a2 = Math.atan2(ahead.z - p.z, ahead.x - p.x);
         let bend = Math.abs(a2 - a1) % (Math.PI * 2);
         if (bend > Math.PI) bend = Math.PI * 2 - bend;
-        if (bend > ROADSIDE_MAX_BEND) continue;
-        if (near.some((o) => o !== r && distanceTo(roads[o].points, p.x, p.z) < plan.radius + ROAD_HALF_WIDTH)) continue;
-        const scored = evaluateCompound(p.x, p.z, spec, plan.radius, sampleTerrain, treeCover);
+        if (!trace.test("roadBend", bend, -Infinity, ROADSIDE_MAX_BEND)) continue;
+        const otherRoad = Math.min(Infinity, ...near.filter((o) => o !== r).map((o) => distanceTo(roads[o].points, p.x, p.z) - (plan.radius + ROAD_HALF_WIDTH)));
+        if (!trace.test("otherRoad", otherRoad, 0, Infinity)) continue;
+        const scored = evaluateCompound(p.x, p.z, spec, plan.radius, sampleTerrain, treeCover, trace);
         if (!scored) continue;
         // The further from the towns either way the better - an inn half way between them.
         const score = 0.5 * scored.score + 0.5 * Math.min(1, gap / Math.max(1, away * 2));
@@ -280,7 +303,9 @@ export function placeRoadsideFeatures({ seed, cellSites, sampleTerrain, kinds, r
         }
       }
     });
+    if (!best && traces && traces[cell].candidates === 0 && !traces[cell].note) traces[cell].note = "no road long enough inside the cell's reach";
     if (!best) continue;
+    if (traces) traces[cell].placed = true;
     const { x, z, height, areaId, roadAngles } = best;
     placed.push({
       id: 0,

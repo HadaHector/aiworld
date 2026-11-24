@@ -4,6 +4,7 @@ import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
 import { CELL_SPACING } from "../cells/config";
+import { NO_TRACE, type CellTrace, type Trace } from "../features/placementWhy";
 import { TOWN_MIN_SCORE, VILLAGE_MIN_SCORE, type SettlementStyle, type SettlementTier } from "./settlementConfig";
 
 /**
@@ -114,6 +115,8 @@ export interface SettlementInput {
   cellIds: number[];
   sampleTerrain: TerrainSampler;
   nameFor: (biome: BiomeDefinition, id: number) => string;
+  /** Each land cell's record (features/placementWhy.ts), by cell id: what its candidates measured. */
+  traces?: CellTrace[];
 }
 
 /**
@@ -123,14 +126,14 @@ export interface SettlementInput {
  * the overwhelming majority of candidates die on "under water", "too near a zone border" or "not
  * land at all", and paying nine samples each to learn that would cost nine times what this does.
  */
-function evaluate(x: number, z: number, sampleTerrain: TerrainSampler): Candidate | null {
+function evaluate(x: number, z: number, sampleTerrain: TerrainSampler, trace: Trace = NO_TRACE): Candidate | null {
   const here = sampleTerrain(x, z);
-  if (!here.isLand) return null;
+  if (!trace.test("land", here.isLand ? 1 : 0, 1, 1)) return null;
   // A biome with no settlement style is one nobody settles.
-  if (here.primaryBiome.settlementStyles.length === 0) return null;
-  if (here.height < MIN_SITE_HEIGHT) return null;
-  if (here.lakeFactor > MAX_LAKE_FACTOR) return null;
-  if (here.areaBorderGap < MIN_BORDER_GAP) return null;
+  if (!trace.test("settlementStyles", here.primaryBiome.settlementStyles.length, 1, Infinity)) return null;
+  if (!trace.test("height", here.height, MIN_SITE_HEIGHT, Infinity)) return null;
+  if (!trace.test("lake", here.lakeFactor, -Infinity, MAX_LAKE_FACTOR)) return null;
+  if (!trace.test("borderGap", here.areaBorderGap, MIN_BORDER_GAP, Infinity)) return null;
 
   let lowest = here.height;
   let highest = here.height;
@@ -141,9 +144,10 @@ function evaluate(x: number, z: number, sampleTerrain: TerrainSampler): Candidat
     if (around.height > highest) highest = around.height;
     // The relief found so far can only grow, so a candidate that is already too steep is already
     // rejected - and most of them are, well before the eighth probe.
-    if (highest - lowest > MAX_RELIEF) return null;
+    if (highest - lowest > MAX_RELIEF && !trace.test("relief", highest - lowest, -Infinity, MAX_RELIEF)) return null;
   }
   const relief = highest - lowest;
+  trace.test("relief", relief, -Infinity, MAX_RELIEF);
 
   // Usable ground across the whole footprint. Probes are counted as they come, so a site that
   // already cannot reach MIN_USABLE_FRACTION stops paying for samples.
@@ -160,10 +164,14 @@ function evaluate(x: number, z: number, sampleTerrain: TerrainSampler): Candidat
         at.lakeFactor <= MAX_LAKE_FACTOR &&
         at.riverGap > AREA_RIVER_CLEARANCE &&
         Math.abs(at.height - here.height) / radius <= AREA_MAX_GRADE;
-      if (!usable && ++misses > allowedMisses) return null;
+      if (!usable && ++misses > allowedMisses) {
+        trace.test("usableGround", 1 - misses / totalProbes, MIN_USABLE_FRACTION, Infinity);
+        return null;
+      }
     }
   }
   const usableFraction = 1 - misses / totalProbes;
+  trace.test("usableGround", usableFraction, MIN_USABLE_FRACTION, Infinity);
 
   // Mostly how much usable ground there is; a little for how level the centre (the square) is.
   const flatness = 0.25 * (1 - relief / MAX_RELIEF) + 0.75 * usableFraction;
@@ -214,7 +222,7 @@ function tierFor(score: number): SettlementTier {
  * MIN_SETTLEMENT_SPACING. Claiming globally rather than per cell is what stops two towns ending up
  * on opposite sides of one cell border, which a per-cell pass cannot see.
  */
-export function generateSettlementSites({ seed, cellSites, cellIds, sampleTerrain, nameFor }: SettlementInput): SettlementSite[] {
+export function generateSettlementSites({ seed, cellSites, cellIds, sampleTerrain, nameFor, traces }: SettlementInput): SettlementSite[] {
   const candidates: Candidate[] = [];
 
   for (let cell = 0; cell < cellSites.length; cell++) {
@@ -225,7 +233,8 @@ export function generateSettlementSites({ seed, cellSites, cellIds, sampleTerrai
       // centre and barely sample the cell edges, which are often the flattest ground it has.
       const radius = Math.sqrt(rng()) * CANDIDATE_RADIUS;
       const angle = rng() * Math.PI * 2;
-      const scored = evaluate(site.x + Math.cos(angle) * radius, site.z + Math.sin(angle) * radius, sampleTerrain);
+      traces?.[cellIds[cell]].begin();
+      const scored = evaluate(site.x + Math.cos(angle) * radius, site.z + Math.sin(angle) * radius, sampleTerrain, traces?.[cellIds[cell]]);
       if (scored) candidates.push({ ...scored, cellId: cellIds[cell] });
     }
   }
@@ -256,7 +265,10 @@ export function generateSettlementSites({ seed, cellSites, cellIds, sampleTerrai
         }
       }
     }
+    // (Every candidate that got here passed the ground; the spacing is judged in the claiming order.)
+    traces?.[candidate.cellId!].test("settlementSpacing", blocked ? 0 : 1, 1, 1);
     if (blocked) continue;
+    if (traces) traces[candidate.cellId!].placed = true;
 
     const { style, tier } = styleFor(candidate.biome.settlementStyles, tierFor(candidate.score), deriveSeed(seed, STYLE_SALT + sites.length));
     const site: SettlementSite = {

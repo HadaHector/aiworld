@@ -13,6 +13,7 @@ import { layoutCompounds, settleProps, settleOnGround, type CompoundLayout } fro
 import { createSpillField, spillMaterials, type SpillField } from "../features/spill";
 import { createTreeCover } from "../foliage/treeScatter";
 import { PAD_PAINT_OFFSET } from "../settlements/settlementConfig";
+import { CellTrace, type CellPlacement } from "../features/placementWhy";
 import { NO_ROLL, placeFeatures, placeRoadsideFeatures, rollCellFeatures, type FeatureSite } from "../features/featureSites";
 import { createFeatureField, type FeatureField } from "../features/featureField";
 import {
@@ -123,6 +124,8 @@ export interface TerrainWorld {
   areaNeighbours: Map<number, number[]>;
   /** Where natural caves open on steep hillsides - see dungeons/caveMouths.ts. */
   caveMouths: CaveMouthSite[];
+  /** What each land cell rolled and why it did or did not place it, by cell - features/placementWhy.ts. */
+  cellPlacements: CellPlacement[];
   /** Each river's water at its own level, mouth first - empty unless the world asks for `riverLevels`. */
   riverProfiles: RiverProfile[];
   /** The flat bodies of water (ponds, pools) features add as they are placed - see water.ts. */
@@ -421,6 +424,8 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // far above the water, how near a river.
   const kinds = content.featureKinds;
   const rolls = timed("Rolling each cell's feature", () => rollCellFeatures(seed, landCellSites, sampleTerrain, kinds));
+  // What each cell rolled and why it did or did not place (features/placementWhy.ts).
+  const traces = rolls.map((roll, cell) => new CellTrace(cell, roll === NO_ROLL ? "none" : kinds[roll].id));
   // The settlements first, in the cells that rolled one: they choose their ground by their own rules,
   // and everything else keeps clear of them.
   const settledCells = rolls.flatMap((roll, cell) => (roll !== NO_ROLL && kinds[roll].type === "settlement" ? [cell] : []));
@@ -431,12 +436,13 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       cellIds: settledCells,
       sampleTerrain,
       nameFor: (biome, id) => nameGenerator.settlementNameFor(biome.voiceId, id),
+      traces,
     }),
   );
 
   // Then every other cell's feature, and their ground edits bound.
   const treeCover = createTreeCover(seed, content);
-  let features = timed("Placing features", () => placeFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements, treeCover }));
+  let features = timed("Placing features", () => placeFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements, treeCover, traces }));
   featureField = createFeatureField(features);
 
   // Roads need the settlements to connect and the finished terrain to route over, so they come
@@ -460,6 +466,15 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     roads.places.filter((place) => place.feature?.compound && !roads.links.some((link) => link.from === place.id || link.to === place.id)).map((place) => place.feature!),
   );
   if (roadless.size > 0) {
+    // (Its cell is the one it rolled it in: the nearest site to where it stood.)
+    for (const feature of roadless) {
+      let cell = 0;
+      landCellSites.forEach((site, i) => {
+        if (Math.hypot(site.x - feature.x, site.z - feature.z) < Math.hypot(landCellSites[cell].x - feature.x, landCellSites[cell].z - feature.z)) cell = i;
+      });
+      traces[cell].placed = false;
+      traces[cell].note = "placed, then dropped: no road could reach it";
+    }
     const kept = features.filter((feature) => !roadless.has(feature));
     const newId = new Map(kept.map((feature, id) => [feature.id, id]));
     for (const link of roads.links) if (link.featureId !== undefined) link.featureId = newId.get(link.featureId);
@@ -468,7 +483,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     featureField = createFeatureField(features);
   }
   // Then the compounds that stand on a road already laid (a coaching inn): placed now, on it.
-  const roadside = timed("Placing roadside features", () => placeRoadsideFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements, treeCover, features, stretches: roads.stretches }));
+  const roadside = timed("Placing roadside features", () => placeRoadsideFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements, treeCover, features, stretches: roads.stretches, traces }));
   if (roadside.length > 0) {
     features = [...features, ...roadside];
     features.forEach((feature, id) => (feature.id = id));
@@ -492,8 +507,11 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   settleOnGround(compoundLayouts, sampleTerrain);
   spillField = createSpillField(compoundLayouts, spillMaterials(content));
   // Last, the caves' mouths: found on the ground as everything else has left it.
-  const caveMouths = timed("Finding cave mouths", () => siteCaveMouths(seed, worldExtent, sampleTerrain, settlements, rolls.flatMap((roll, cell) => (roll !== NO_ROLL && kinds[roll].type === "cave" ? [landCellSites[cell]] : []))));
+  const caveMouths = timed("Finding cave mouths", () => {
+    const caveCells = rolls.flatMap((roll, cell) => (roll !== NO_ROLL && kinds[roll].type === "cave" ? [cell] : []));
+    return siteCaveMouths(seed, worldExtent, sampleTerrain, settlements, caveCells.map((cell) => landCellSites[cell]), caveCells.map((cell) => traces[cell]));
+  });
   mouthClear = caveMouthClearance(caveMouths);
 
-  return { sampleTerrain, worldExtent, areaBounds, areaNames, landCellSites, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours, caveMouths, riverProfiles, waters };
+  return { sampleTerrain, worldExtent, areaBounds, areaNames, landCellSites, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours, caveMouths, riverProfiles, waters, cellPlacements: traces.map((trace) => trace.record()) };
 }

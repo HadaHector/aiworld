@@ -867,3 +867,25 @@ acorn, a spiral rubbing).
   the cell plan, W14, and a marker on the map are left); the giant, the grove's reward and its quest plot (E4 c) belong to their
   own tasks. A proper `trees:` block in the compound spec (not a marker prop) would be cleaner but means editing `compound.ts`
   and `featureTypes.ts`, which the abandoned-camp session owns.
+
+## Why a cell is empty, as built (2026-11-24)
+
+Placement keeps a plain record per land cell (`features/placementWhy.ts`, `CellPlacement`, in
+`world.cellPlacements`, by cell index): what the cell rolled (kind id, or `none`), whether it was placed,
+how many candidate points were tried, a note (`no road through the cell`, `placed, then dropped: no road
+could reach it`, ...) and one `CheckRecord` per site condition: candidates that reached it, candidates it
+stopped, and the measured value of the candidate that came nearest to passing it next to the range
+required. Each placement tests its conditions in a fixed order and stops at the first failure, so a
+check's `failed` counts the candidates stopped *there* (a condition later in the order is only measured on
+those that passed the ones before it); the ring conditions (`ringLand`, `ringHeight`, `ringLake`) count
+points on the circle, not candidates. It costs no terrain sampling of its own - `evaluateCompound`,
+`evaluateQuarry`, the settlements' `evaluate`, the cave mouths' `judge` and the roadside search take a
+`Trace` (default `NO_TRACE`) and report each condition through `trace.test(name, value, lo, hi)`.
+
+- Debug map (Shift+M, Zone view): each cell's tag shows `#n`, what it holds (or `empty`), `rolled: <kind>`
+  and, for a cell that rolled a kind and did not place it, its main reason (the condition that stopped the
+  most candidates, e.g. `cover 0.31 < 0.5`, or the note). The tooltip has every condition, `stopped n of m`.
+  A cave mouth, which is not in the features list, now shows as its cell's content.
+- `npm run probe -- scripts/probe/cellwhy.mjs config=vale|default seeds=60`: totals per kind over many
+  seeds - rolled, placed, seeds with one, which conditions stopped the candidates and the nearest
+  candidate's median value - and how many cells end empty by a roll of none and by a failure.

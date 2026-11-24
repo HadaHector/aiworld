@@ -21,6 +21,7 @@ import type { ModelLight } from "./buildings/buildingTypes";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import type { CompoundLayout } from "./features/compound";
 import type { CaveMouthSite } from "./dungeons/caveMouths";
+import type { CellPlacement } from "./features/placementWhy";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
 import { AROUND_REACH, createPlayerLights, type PlayerLights } from "./lighting/playerLights";
 import { createSkyDome } from "./sky/skyDome";
@@ -72,6 +73,8 @@ export interface World {
   compoundLayouts: CompoundLayout[];
   /** Where caves open on steep hillsides - dungeons/caveMouths.ts. */
   caveMouths: CaveMouthSite[];
+  /** What each land cell rolled and why it did or did not place it - features/placementWhy.ts. */
+  cellPlacements: CellPlacement[];
   /** The building whose footprint (x, y, z) stands in, with a key unique to that one building. */
   buildingAt: (x: number, y: number, z: number) => { id: string; key: number } | undefined;
   /** The water surface and depth at a point (WATER.md). */
@@ -449,6 +452,7 @@ export async function createWorld(
     roads,
     compoundLayouts,
     caveMouths: data.caveMouths,
+    cellPlacements: data.cellPlacements,
     settlementLayouts,
     materialLibrary,
     trees,

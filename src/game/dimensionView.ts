@@ -216,7 +216,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
 
   // Keyed by the seed and everything the packs say, so a change to either never shows an old tile.
   const mapTiles = createMapTileCache(`${seed}-${hashString(JSON.stringify(content)).toString(36)}`, content.dimension.id, world.buildMapTile);
-  const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.landCellSites, world.roads, content.dimension.links, starts, (x, z) => teleport(x, z), options.travel);
+  const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.landCellSites, world.cellPlacements, world.roads, content.dimension.links, starts, (x, z) => teleport(x, z), options.travel);
   // The player's graphics options, in the options window...
   const graphicsPanel: SettingsPanel = createSettingsPanel({
     min: MIN_DRAW_DISTANCE,

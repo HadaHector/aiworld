@@ -5,6 +5,7 @@ import { GROWTH_RADIUS_SAFETY_FACTOR } from "../world/cells/config";
 import type { MaterialLibrary } from "../world/materials/materialLibrary";
 import type { SettlementSite } from "../world/settlements/settlementSites";
 import type { FeatureSite } from "../world/features/featureSites";
+import { describeCheck, mainReason, type CellPlacement } from "../world/features/placementWhy";
 import type { DimensionLink } from "../world/content/dimensions";
 import type { RoadClassId } from "../world/roads/roadConfig";
 import type { RoadNetwork } from "../world/roads/roadNetwork";
@@ -103,6 +104,8 @@ export function createDebugMap(
   features: FeatureSite[],
   /** The land cells' sites (a cell is everything nearest its site): the Zone view draws them. */
   cellSites: readonly { x: number; z: number }[],
+  /** What each of those cells rolled and why it did or did not place it (features/placementWhy.ts). */
+  cellPlacements: readonly CellPlacement[],
   roads: RoadNetwork,
   /** Where this dimension's links stand - drawn always, and clicking one travels by it. */
   links: readonly DimensionLink[],
@@ -536,14 +539,25 @@ export function createDebugMap(
         const { x, y } = worldToPixel(site.x, site.z);
         if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
         const found = contents.get(site.index);
+        const why = cellPlacements[site.index];
+        const rolled = why ? why.rolled : "?";
+        // A cave mouth is not a feature of the list: the cell that rolled one and sited it holds it.
+        const held = found ?? (why?.placed && rolled !== "none" ? [rolled] : undefined);
+        const reason = why && !held && rolled !== "none" ? mainReason(why) : null;
+        const shortReason = reason ? `${rolled}: ${describeCheck(reason)}` : why?.note ? `${rolled}: ${why.note}` : "";
+        const lines = [`<b>#${site.index}</b> ${held ? held.join("<br>") : "<i>empty</i>"}`, `rolled: ${rolled}`];
+        if (!held && shortReason && rolled !== "none") lines.push(shortReason.slice(rolled.length + 2));
+        const detail = why ? why.checks.map((c) => `  ${describeCheck(c)}  (stopped ${c.failed} of ${c.reached})`).join("\n") : "";
         const tag = document.createElement("div");
-        tag.title = `Cell #${site.index}: ${found ? found.join(", ") : "no feature"}`;
-        tag.innerHTML = `<b>#${site.index}</b> ${found ? found.join("<br>") : "<i>empty</i>"}`;
+        tag.title =
+          `Cell #${site.index}: ${held ? held.join(", ") : "no feature"}\nrolled: ${rolled}` +
+          (why && rolled !== "none" ? `\n${why.placed ? "placed" : "not placed"}, ${why.candidates} candidates tried${why.note ? `; ${why.note}` : ""}\n${detail}` : "");
+        tag.innerHTML = lines.join("<br>");
         tag.style.cssText = `
           position: absolute; left: ${(x / SAMPLE_RESOLUTION) * 100}%; top: ${(y / SAMPLE_RESOLUTION) * 100}%;
           transform: translate(-50%, -50%); text-align: center; font-family: sans-serif; font-size: 11px; line-height: 1.15;
           color: rgb(255, 255, 255); text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 2px #000; white-space: nowrap;
-          opacity: ${found ? 1 : 0.6};
+          opacity: ${held ? 1 : 0.7};
         `;
         markerLayer.appendChild(tag);
       }

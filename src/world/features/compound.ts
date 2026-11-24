@@ -11,6 +11,7 @@ import { smoothstep } from "../mathUtils";
 import { deriveSeed, mulberry32 } from "../rng";
 import type { BoundaryOpeningSpec, CompoundDoor, CompoundPlace, CompoundSpec, FeatureKindDef, TrailDestination } from "./featureTypes";
 import type { FeatureSite } from "./featureSites";
+import { NO_TRACE, type Trace } from "./placementWhy";
 import type { RoadNetwork } from "../roads/roadNetwork";
 import { ROAD_HALF_WIDTH } from "../roads/roadConfig";
 import { arrangeGroup, arrangeProp, setDown, type Arranged, type PlacedProp } from "../props/propGroups";
@@ -297,12 +298,17 @@ export function evaluateCompound(
   radius: number,
   sampleTerrain: TerrainSampler,
   treeCover: TreeCover,
+  trace: Trace = NO_TRACE,
 ): { height: number; areaId: number; score: number } | null {
   const here = sampleTerrain(x, z);
-  if (!here.isLand || here.height < MIN_HEIGHT || here.lakeFactor > MAX_LAKE_FACTOR) return null;
-  if (here.riverGap < radius + RIVER_CLEARANCE || here.areaBorderGap < radius + BORDER_CLEARANCE) return null;
+  if (!trace.test("land", here.isLand ? 1 : 0, 1, 1)) return null;
+  if (!trace.test("height", here.height, MIN_HEIGHT, Infinity)) return null;
+  if (!trace.test("lake", here.lakeFactor, -Infinity, MAX_LAKE_FACTOR)) return null;
+  if (!trace.test("riverGap", here.riverGap, radius + RIVER_CLEARANCE, Infinity)) return null;
+  if (!trace.test("borderGap", here.areaBorderGap, radius + BORDER_CLEARANCE, Infinity)) return null;
 
   // The ground across its circle: its grade (the plane through it) and how far it stands off that.
+  // Every point of it must be dry land (stopping at the first that is not).
   const ring: { dx: number; dz: number; h: number }[] = [];
   for (const share of [0.5, 1]) {
     for (let k = 0; k < 8; k++) {
@@ -310,7 +316,9 @@ export function evaluateCompound(
       const dx = Math.cos(a) * radius * share;
       const dz = Math.sin(a) * radius * share;
       const sample = sampleTerrain(x + dx, z + dz);
-      if (!sample.isLand || sample.height < MIN_HEIGHT || sample.lakeFactor > MAX_LAKE_FACTOR) return null;
+      if (!trace.test("ringLand", sample.isLand ? 1 : 0, 1, 1)) return null;
+      if (!trace.test("ringHeight", sample.height, MIN_HEIGHT, Infinity)) return null;
+      if (!trace.test("ringLake", sample.lakeFactor, -Infinity, MAX_LAKE_FACTOR)) return null;
       ring.push({ dx, dz, h: sample.height });
     }
   }
@@ -318,10 +326,10 @@ export function evaluateCompound(
   const gx = (outer[0].h - outer[4].h) / (2 * radius);
   const gz = (outer[2].h - outer[6].h) / (2 * radius);
   const grade = Math.hypot(gx, gz);
-  if (grade < spec.site.grade[0] || grade > spec.site.grade[1]) return null;
+  if (!trace.test("grade", grade, spec.site.grade[0], spec.site.grade[1])) return null;
   const unevenness = Math.max(...ring.map((p) => Math.abs(p.h - (here.height + gx * p.dx + gz * p.dz))));
   const maxUnevenness = MAX_UNEVENNESS * radius;
-  if (unevenness > maxUnevenness) return null;
+  if (!trace.test("unevenness", unevenness, -Infinity, maxUnevenness)) return null;
 
   // The wood round it.
   const slope = grade / Math.sqrt(1 + grade * grade);
@@ -333,7 +341,7 @@ export function evaluateCompound(
     const sample = sampleTerrain(px, pz);
     cover += treeCover(px, pz, { height: sample.height, surfaceHeight: sample.height, slope, sample }) / 8;
   }
-  if (cover < spec.site.cover[0]) return null;
+  if (!trace.test("cover", cover, spec.site.cover[0], Infinity)) return null;
 
   const level = 1 - unevenness / maxUnevenness;
   const wooded = spec.site.cover[1] > spec.site.cover[0] ? Math.min(1, (cover - spec.site.cover[0]) / (spec.site.cover[1] - spec.site.cover[0])) : 1;
