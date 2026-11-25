@@ -510,13 +510,14 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // each is levelled to it.
   settleProps(compoundLayouts, sampleTerrain);
   padField = createPadField([...propPads(compoundLayouts), ...settlementPads(settlementLayouts), ...compoundPads(compoundLayouts)]);
-  // A mine's rails run from its yard into its adit (laid on the ground, as a wall is).
+  // A mine's rails run from its yard's middle out to its adit (laid on the ground, as a wall is) -
+  // the line its layout kept its buildings and props off and stood its carts on.
   const adits = features.flatMap((feature) => (feature.compound?.adit ? [{ feature, mouth: feature.compound.adit }] : []));
   const propById2 = new Map(content.props.map((prop) => [prop.id, prop]));
-  for (const { feature, mouth } of adits) {
+  for (const { feature } of adits) {
     const layout = compoundLayouts.find((l) => l.featureId === feature.id);
     const rails = propById2.get("railTrack");
-    if (layout && rails) layout.walls.push({ prop: rails, variant: 0, points: [{ x: feature.x, z: feature.z }, { x: mouth.x - mouth.ux, z: mouth.z - mouth.uz }], heights: [], ends: ["free", "join"], breach: false });
+    if (layout?.rails && rails) layout.walls.push({ prop: rails, variant: 0, points: layout.rails, heights: [], ends: ["free", "join"], breach: false });
   }
   settleOnGround(compoundLayouts, sampleTerrain);
   // Its timber portal, after the ground is settled: it stands at the adit's own floor, not on a pad.

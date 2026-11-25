@@ -922,3 +922,20 @@ and reach 220 -> 400 m; autumnWood odds: `none` 0.8 -> 0.3, `coachingInn` 0.5 ->
 ## Mine (as built)
 
 A compound with an `adit` (a dungeon style): sited on a hillside, its yard before a cut in the slope, a road, a tool shed, carts, spoil and a windlass; the adit opens the lair. See DUNGEONS.md, *The mine in the world*.
+
+The owner's notes on a mine seen in the game (2026-11-25), as built:
+
+- **Yard and mouth on one level.** The yard is levelled to the adit's floor (the mouth's `y`), not to the
+  ground's mean, and its level ground reaches on out along the track to the mouth, 3 m either side of it
+  (`RAIL_APRON`): the yard, the track and the mouth are one terrace, banked down to the slope round it.
+  Siting is as before (the yard's middle the yard's radius plus 24 m from the mouth, its ground within 9 m
+  of the floor), so as many mines place; where the ground stood lower, the terrace is fill, like a spoil tip.
+- **One track, carts on it.** The track (`CompoundLayout.rails`) runs from the yard's middle to a metre short
+  of the mouth, laid out with the yard: no building stands across its way out of the rim, and the carts
+  (`at: "rails"`) are parked on it, along it, 5 m back from the portal at least. A cart has no stub of
+  track of its own any more (`oreCart` and `mineCart` say `track: 0`; the mine lair's carts already stood
+  on its tunnels' track).
+- **Nothing else on the track.** Every other prop keeps 1.8 m from its middle (`RAIL_PROP_CLEARANCE`).
+- The adit's timber portal (`timberSet`) is the feature's: terrainSampler stands it 1.5 m into the slip from
+  the mouth's foot, at the floor's level. The workbench's mine preview has a stand-in adit at that distance
+  (on its level patch, no hill), so its track, carts and portal show there.

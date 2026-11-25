@@ -1,8 +1,8 @@
-// A mine cart on a stub of track: boards on four iron wheels, iron bands round it - an empty.
+// A mine cart (no track of its own: it stands on a way's track - a mine yard's, a tunnel's): boards on four iron wheels, iron bands round it - an empty.
 {
   name: "Mine cart",
   type: "mineCart",
-  mineCart: { load: 0 },
+  mineCart: { load: 0, track: 0 },
   parts: {
     timber: { material: "timber", tints: [[0.6, 0.5, 0.4], [0.52, 0.44, 0.36]] },
     iron: { material: "iron", tints: [[1, 1, 1]] },

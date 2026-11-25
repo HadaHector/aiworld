@@ -52,7 +52,7 @@ export function reach(sampleTerrain, layout) {
     for (let a = -b.width / 2; a <= b.width / 2; a += GRID / 2) for (let d = -b.depth / 2; d <= b.depth / 2; d += GRID / 2) mark(b.x + ux * a + b.frontX * d, b.z + uz * a + b.frontZ * d);
   }
   for (const run of layout.walls) {
-    if (run.width !== undefined || run.breach) continue; // A bridge, or a breach (fallen wall, rubble): walked over.
+    if (run.width !== undefined || run.breach || run.prop.collide === false) continue; // A bridge, a breach (fallen wall, rubble), a mine's track: walked over.
     for (let k = 1; k < run.points.length; k++) {
       const p = run.points[k - 1], q = run.points[k], len = Math.hypot(q.x - p.x, q.z - p.z), steps = Math.max(1, Math.ceil(len / (GRID / 2)));
       for (let s = 0; s <= steps; s++) mark(p.x + ((q.x - p.x) * s) / steps, p.z + ((q.z - p.z) * s) / steps);

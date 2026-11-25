@@ -52,7 +52,7 @@ const MIN_FEATURE_SPACING = 300;
  *  yard's middle lies past the yard's radius, and how far the yard's ground may stand off its floor. */
 const ADIT_CANDIDATES = 600;
 const ADIT_REACH = 380;
-const ADIT_GAP = 24;
+export const ADIT_GAP = 24;
 const ADIT_STEP = 9;
 
 const FEATURE_ROLL_SALT = 901;

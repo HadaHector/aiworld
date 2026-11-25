@@ -102,9 +102,11 @@ export interface CompoundBuildingSpec {
  * - `gate`: across a lane's mouth, between the buildings, facing out along it (a gate) - one to a
  *   lane at most, so `count` is how many of its lanes get one;
  * - `road`: beside a road leading away from it, `distance` metres out along the road (a wayside
- *   sign) - one to a way at most, as a gate is.
+ *   sign) - one to a way at most, as a gate is;
+ * - `rails`: on a mine's track (CompoundLayout.rails), along it, in the yard - its carts. Every other
+ *   prop keeps off the track.
  */
-export const PROP_ANCHORS = ["yard", "yardEdge", "byBuilding", "front", "trail", "gate", "road"] as const;
+export const PROP_ANCHORS = ["yard", "yardEdge", "byBuilding", "front", "trail", "gate", "road", "rails"] as const;
 export type PropAnchor = (typeof PROP_ANCHORS)[number];
 
 /** A prop, or a group of them, a compound sets down: `count` of it (rolled), each with `chance`,
