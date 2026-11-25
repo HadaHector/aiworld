@@ -74,6 +74,17 @@ const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
 const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "propGroups", "features", "races", "outfits", "gear", "beasts", "weapons", "gearMaterials", "dungeonParts", "dungeonStyles", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
+/** The asset list's tabs, each a group of folders. A folder in none (a new one) goes under the last tab. */
+const ASSET_TABS: { id: string; label: string; folders: string[] }[] = [
+  { id: "terrain", label: "Terrain", folders: ["materials", "layers", "biomes", "borderHills", "rocks", "weathers", "dimensions"] },
+  { id: "vegetation", label: "Vegetation", folders: ["trees", "bushes", "grass"] },
+  { id: "features", label: "Features", folders: ["features", "camps", "settlements", "voices", "buildings", "buildingParts", "buildingMaterials", "rooms", "props", "propGroups", "dungeonParts", "dungeonStyles"] },
+  { id: "characters", label: "Characters", folders: ["races", "outfits", "gear", "weapons", "gearMaterials", "beasts", "animations", "creatures", "creatureTraits", "entities", "factions", "npcRoles", "npcRelations", "barks", "commands"] },
+  { id: "effects", label: "Effects & UI", folders: ["sounds", "cues", "particles", "particleTextures", "mapMarkers", "icons"] },
+  { id: "rules", label: "Game rules", folders: [] },
+];
+const tabOf = (folder: string): string => ASSET_TABS.find((tab) => tab.folders.includes(folder))?.id ?? "rules";
+
 interface ViewDef {
   id: string;
   label: string;
@@ -233,6 +244,7 @@ function element<T extends HTMLElement>(id: string): T {
 
 const assetFilter = element<HTMLInputElement>("assetFilter");
 const assetList = element<HTMLElement>("assetList");
+const assetTabs = element<HTMLElement>("assetTabs");
 const fileName = element<HTMLElement>("fileName");
 const editedBadge = element<HTMLElement>("editedBadge");
 const revertButton = element<HTMLButtonElement>("revertButton");
@@ -376,6 +388,51 @@ try {
   // No storage: every category starts closed.
 }
 
+/** The asset list's tab - kept across reloads. */
+const TAB_KEY = "aiworld.workbench.tab";
+let assetTab = "terrain";
+try {
+  const saved = localStorage.getItem(TAB_KEY);
+  if (saved && ASSET_TABS.some((tab) => tab.id === saved)) assetTab = saved;
+} catch {
+  // No storage: the first tab.
+}
+
+function selectTab(id: string): void {
+  assetTab = id;
+  try {
+    localStorage.setItem(TAB_KEY, id);
+  } catch {
+    // As above.
+  }
+  renderAssetList();
+}
+
+/** The tabs over the list, each with how many assets it holds (that match, while filtering). */
+function renderAssetTabs(shown: Asset[], filtering: boolean): void {
+  assetTabs.replaceChildren();
+  for (const tab of ASSET_TABS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "assetTab";
+    button.setAttribute("role", "tab");
+    // While filtering, the list shows matches from every tab: none is picked out.
+    const selected = !filtering && tab.id === assetTab;
+    button.setAttribute("aria-selected", String(selected));
+    const count = shown.filter((asset) => tabOf(asset.folder) === tab.id).length;
+    button.textContent = tab.label;
+    const small = document.createElement("small");
+    small.textContent = ` ${count}`;
+    button.append(small);
+    if (current && tabOf(current.folder) === tab.id && !selected) button.classList.add("hasCurrent");
+    button.addEventListener("click", () => {
+      if (filtering) assetFilter.value = "";
+      selectTab(tab.id);
+    });
+    assetTabs.append(button);
+  }
+}
+
 function toggleGroup(folder: string): void {
   if (expanded.has(folder)) expanded.delete(folder);
   else expanded.add(folder);
@@ -389,7 +446,10 @@ function toggleGroup(folder: string): void {
 
 function renderAssetList(): void {
   const filter = assetFilter.value.trim().toLowerCase();
-  const shown = assets.filter((asset) => !filter || asset.key.toLowerCase().includes(filter));
+  const matching = assets.filter((asset) => !filter || asset.key.toLowerCase().includes(filter));
+  renderAssetTabs(matching, filter !== "");
+  // While filtering, matches from every tab, so a search finds things wherever they are.
+  const shown = filter ? matching : matching.filter((asset) => tabOf(asset.folder) === assetTab);
   assetList.replaceChildren();
   let group = "\u0000";
   for (const asset of shown) {
@@ -1807,6 +1867,8 @@ async function start(): Promise<void> {
   }
   const first = assets.find((asset) => asset.key === wanted) ?? assets.find((asset) => asset.folder === "materials") ?? assets[0];
   setStatus("");
+  // An asset the URL names shows its own tab; otherwise the tab last used.
+  if (first && first.key === wanted) assetTab = tabOf(first.folder);
   if (first) selectAsset(first, true);
 }
 
