@@ -8,6 +8,7 @@ import { readWorldConfig } from "../../src/world/content/worldConfig.ts";
 import { resolveContent } from "../../src/world/content/resolveContent.ts";
 import { createWorldData } from "../../src/world/worldData.ts";
 import { WATER_SURFACE } from "../../src/world/water.ts";
+import { ROAD_RIVER_CORRIDOR } from "../../src/world/roads/roadConfig.ts";
 
 let failures = 0, checks = 0;
 const check = (what, ok, detail = "") => { checks++; if (!ok) { failures++; console.log(`FAIL ${what}${detail ? `: ${detail}` : ""}`); } };
@@ -16,6 +17,9 @@ const quiet = (run) => { console.log = (...a) => (String(a[0]).startsWith("[") ?
 
 /** Ground this near a feature's level pad is the feature's own shaping. */
 const PAD_NEAR = 4;
+/** A junction stands at least this far past a river's road corridor; two bridges' ends at least this far apart. */
+const JUNCTION_MARGIN = 15;
+const BRIDGES_APART = 20;
 
 const contentFor = (world) => {
   const config = readWorldConfig("probe", JSON.stringify({ world, content: { only: { biomes: ["autumnWood"] } } }));
@@ -102,10 +106,29 @@ for (const seed of seeds.length ? seeds : [1338, 7, 4242, 90210]) {
     const wet = b.points.map((q, i) => ({ q, deck: b.heights[i], w: world.waterAt(q.x, q.z) })).filter((e) => e.w.depth > 0);
     const m = b.points[Math.floor(b.points.length / 2)];
     check(`${tag}: under a bridge is water`, wet.length > 0, `${m.x.toFixed(0)},${m.z.toFixed(0)}`);
-    // (At its two ends a deck comes down to its bank: over the water is enough there, a metre over everywhere else.)
-    const ends = [b.points[0], b.points[b.points.length - 1]];
-    for (const e of wet) check(`${tag}: a bridge's deck is over the water`, e.deck > e.w.surface + (ends.includes(e.q) ? 0.5 : 1), `deck ${e.deck.toFixed(1)} over ${e.w.surface.toFixed(1)} at ${e.q.x.toFixed(0)},${e.q.z.toFixed(0)}`);
+    for (const e of wet) check(`${tag}: a bridge's deck is over the water`, e.deck > e.w.surface + 1, `deck ${e.deck.toFixed(1)} over ${e.w.surface.toFixed(1)} at ${e.q.x.toFixed(0)},${e.q.z.toFixed(0)}`);
   }
+  // A crossing is one bridge, bank to bank: no road meets another by a river (ROAD_JUNCTION_RIVER_CLEARANCE,
+  // judged at the lattice; a junction as laid may stand a little nearer, never in the river's corridor),
+  // so no two bridges meet end to end over the water.
+  const stretchEnds = new Map();
+  for (const s of world.roads.stretches) for (const p of [s.points[0], s.points[s.points.length - 1]]) {
+    const k = `${Math.round(p.x / 2)},${Math.round(p.z / 2)}`;
+    stretchEnds.set(k, { p, n: (stretchEnds.get(k)?.n ?? 0) + 1 });
+  }
+  let nearestJunction = Infinity;
+  for (const { p, n } of stretchEnds.values()) {
+    if (n < 2) continue;
+    const gap = world.sampleTerrain(p.x, p.z).riverGap;
+    nearestJunction = Math.min(nearestJunction, gap);
+    check(`${tag}: no road junction by a river`, gap > ROAD_RIVER_CORRIDOR + JUNCTION_MARGIN, `${gap.toFixed(0)} m from a river at ${p.x.toFixed(0)},${p.z.toFixed(0)}`);
+  }
+  const bridgeEnds = world.bridges.map((b) => [b.points[0], b.points[b.points.length - 1]]);
+  for (let a = 0; a < bridgeEnds.length; a++) for (let c = a + 1; c < bridgeEnds.length; c++) {
+    const touching = bridgeEnds[a].find((p) => bridgeEnds[c].some((q) => Math.hypot(p.x - q.x, p.z - q.z) < BRIDGES_APART));
+    check(`${tag}: no two bridges meet end to end`, !touching, touching ? `at ${touching.x.toFixed(0)},${touching.z.toFixed(0)}` : "");
+  }
+  log(`${tag}: nearest road junction ${nearestJunction.toFixed(0)} m from a river`);
   // No road through deep water off a bridge (a ford is shallow: wading, under 0.35 m).
   let roadWet = 0, fordCrossings = 0, wetAt = "";
   for (const stretch of world.roads.stretches) for (const p of stretch.points) {
