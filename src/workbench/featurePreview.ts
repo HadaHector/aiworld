@@ -11,10 +11,11 @@ import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
 import { plantedTrees } from "../world/foliage/featureTrees";
 import { createTreeCover, createTreeScatter, type TreeGround, type TreePlacement } from "../world/foliage/treeScatter";
-import { compoundGap, layoutCompound, planCompound, settleProps, settleOnGround, wallStretches, type CompoundLayout } from "../world/features/compound";
+import { compoundGap, layoutCompound, planCompound, settleProps, settleOnGround, wallStretches, type CompoundLayout, type CompoundSite } from "../world/features/compound";
+import { ADIT_GAP } from "../world/features/featureSites";
 import { compoundPads, createPadField, propPads, type Pad, type PadField } from "../world/settlements/padField";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
-import { generateProp } from "../world/props/propGenerator";
+import { generateProp, measureProp } from "../world/props/propGenerator";
 import { deriveSeed, mulberry32 } from "../world/rng";
 import { smoothstep } from "../world/mathUtils";
 
@@ -74,7 +75,16 @@ export function buildFeaturePreview(
   // A roadside one stands on a road running straight through it, across the patch.
   const roadside = kind.compound.arrangement === "roadside";
   const through = rng() * Math.PI;
-  const site = { ...planned, x: 0, z: 0, height: baseHeight(0, 0), roadAngles: roadside ? [through, through + Math.PI] : [] };
+  const site: CompoundSite = { ...planned, x: 0, z: 0, height: baseHeight(0, 0), roadAngles: roadside ? [through, through + Math.PI] : [] };
+  // A mine: its adit's mouth where the world sites it from its yard (featureSites.ts), at a rolled
+  // angle, on the patch's level - no hill, but its track, its carts and its portal where they go.
+  if (kind.compound.adit) {
+    const angle = rng() * Math.PI * 2;
+    const away = site.yardRadius + ADIT_GAP;
+    const ux = Math.cos(angle);
+    const uz = Math.sin(angle);
+    site.adit = { id: 0, x: ux * away, y: site.height, z: uz * away, facing: (Math.atan2(-ux, -uz) * 180) / Math.PI, ux, uz, style: kind.compound.adit };
+  }
   // Out past its clearing, where the wood stands as thick as it grows, and a margin of that.
   const size = Math.ceil((Math.max(site.radius, site.yardReach + kind.clearing[1]) + WOOD_MARGIN) * 2 / 10) * 10;
   const half = size / 2;
@@ -116,7 +126,16 @@ export function buildFeaturePreview(
   settleProps([layout], sampleTerrain);
   const padList = [...propPads([layout]), ...compoundPads([layout])];
   pads = createPadField(padList);
+  // A mine's track and portal, as the world lays them (terrainSampler.ts).
+  const mouth = site.adit;
+  const railTrack = content.props.find((prop) => prop.id === "railTrack");
+  if (layout.rails && railTrack) layout.walls.push({ prop: railTrack, variant: 0, points: layout.rails, heights: [], ends: ["free", "join"], breach: false });
   settleOnGround([layout], sampleTerrain);
+  const frame = content.props.find((prop) => prop.id === "timberSet");
+  if (mouth && frame) {
+    const { halfWidth, halfDepth } = measureProp(frame, seed, 0);
+    layout.props.push({ prop: frame, variant: 0, x: mouth.x + mouth.ux * 1.5, z: mouth.z + mouth.uz * 1.5, y: mouth.y, frontX: -mouth.ux, frontZ: -mouth.uz, on: null, lift: 0, reach: Math.hypot(halfWidth, halfDepth), halfWidth, halfDepth, group: -1, up: [0, 1, 0] });
+  }
 
   const placed: FeaturePreview["placed"] = [
     ...layout.buildings.map((house) => ({ x: house.x, y: house.y, z: house.z, frontX: house.frontX, frontZ: house.frontZ, model: generateBuilding(house.building, seed, house.variant, far) })),

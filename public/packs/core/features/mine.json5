@@ -7,7 +7,7 @@
   compound: {
     // The adit's dungeon style.
     adit: "mine",
-    // The yard before it: steeper ground than a camp takes (it is levelled to the adit's floor), any cover.
+    // The yard before it, close under the adit and levelled to its floor: steeper ground than a camp takes, any cover.
     site: { grade: [0, 0.45], cover: [0, 1] },
     yard: { shape: "polygon", points: [5, 6], radius: [10, 13] },
     pads: { slope: 0.7, blend: [2, 12] },
@@ -19,8 +19,9 @@
     ],
     props: [
       { prop: "windlass", count: [1, 1], at: "yard" },
-      { prop: "oreCart", count: [1, 2], at: "yard" },
-      { prop: "mineCart", count: [1, 1], at: "yard", chance: 0.6 },
+      // Its carts on its track, in the yard; nothing else is set on the track.
+      { prop: "oreCart", count: [1, 2], at: "rails" },
+      { prop: "mineCart", count: [1, 1], at: "rails", chance: 0.6 },
       { prop: "orePile", count: [3, 5], at: "yardEdge" },
       { prop: "oreSack", count: [2, 4], at: "yard" },
       { prop: "barrel", count: [1, 2], at: "yardEdge" },

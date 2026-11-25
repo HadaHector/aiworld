@@ -112,6 +112,10 @@ export interface CompoundLayout {
   padSpill: Spill | null;
   /** Its boundary's runs, between its buildings and openings (see WallRun) - none without one. */
   walls: WallRun[];
+  /** A mine's track (CompoundSite.adit): from the yard's middle out to just before its adit's mouth.
+   *  Laid as a line prop once the ground is final; its carts stand on it (`at: "rails"`) and every
+   *  other prop keeps off it. */
+  rails?: CellPoint[];
 }
 
 /**
@@ -420,13 +424,15 @@ export function layoutCompound(
   const { x, z, yardRadius } = site;
   const rim = yardRadius + SETBACK;
 
-  // The yard's level: the ground's mean over it.
+  // The yard's level: the ground's mean over it - a mine's, its adit's floor (site.height), so the
+  // yard and the mouth are one level and its track runs out to it flat.
   let sum = sampleTerrain(x, z).height;
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2;
     sum += sampleTerrain(x + Math.cos(a) * yardRadius * 0.7, z + Math.sin(a) * yardRadius * 0.7).height;
   }
-  const y = sum / 9;
+  const y = site.adit ? site.height : sum / 9;
+  const rails = railsOf(site);
   const rimPoint = (angle: number, r: number): CellPoint => ({ x: x + Math.cos(angle) * r, z: z + Math.sin(angle) * r });
 
   // The gates' lanes.
@@ -441,6 +447,9 @@ export function layoutCompound(
     const inner = rimPoint(angle, yardRadius);
     lanes.push({ points: [{ x: gate.x, z: gate.z }, inner], heights: [gate.roadHeight ?? sampleTerrain(gate.x, gate.z).height, y], widthScale: LANE_WIDTH, taperEnds: false });
   }
+  // A mine's track leaves the yard toward its adit: no building across it.
+  if (rails) taken.push([Math.atan2(rails[1].z - z, rails[1].x - x), laneHalf]);
+
   // Buildings round the rim.
   const buildings: House[] = [];
   let dropped = 0;
@@ -543,8 +552,8 @@ export function layoutCompound(
   }
 
   const boundary = kind.compound!.boundary ? layoutBoundary(kind.compound!.boundary, worldSeed, rng, buildings, lanes, trails, sampleTerrain, circleOutline(x, z, rim + GATE_SET_BACK)) : { walls: [], gates: [] };
-  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim }, boundary);
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] }, padSpill: kind.compound!.pads.spill, walls: boundary.walls };
+  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim }, boundary, rails);
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] }, padSpill: kind.compound!.pads.spill, walls: boundary.walls, rails };
 }
 
 /** A building keeps this far from a lane's middle - a polygon yard's buildings are found by where
@@ -575,13 +584,15 @@ function layoutPolygonRing(
   const gateRel = offsetPolygon(yardRel, SETBACK + GATE_SET_BACK);
   const total = perimeter(rimRel);
 
-  // The yard's level: the ground's mean over it.
+  // The yard's level: the ground's mean over it - a mine's, its adit's floor (site.height), so the
+  // yard and the mouth are one level and its track runs out to it flat.
   let sum = sampleTerrain(x, z).height;
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2;
     sum += sampleTerrain(x + Math.cos(a) * yardRadius * 0.7, z + Math.sin(a) * yardRadius * 0.7).height;
   }
-  const y = sum / 9;
+  const y = site.adit ? site.height : sum / 9;
+  const rails = railsOf(site);
   const rimPoint = (angle: number, r: number): CellPoint => ({ x: x + Math.cos(angle) * r, z: z + Math.sin(angle) * r });
 
   // The gates' lanes, in to the yard's edge. `taken` is metres round the rim.
@@ -595,6 +606,8 @@ function layoutPolygonRing(
     const inner = rimPoint(angle, rayHit(yardRel, angle).distance);
     lanes.push({ points: [{ x: gate.x, z: gate.z }, inner], heights: [gate.roadHeight ?? sampleTerrain(gate.x, gate.z).height, y], widthScale: LANE_WIDTH, taperEnds: false });
   }
+  // A mine's track leaves the yard toward its adit: no building across it.
+  if (rails) taken.push([rayHit(rimRel, Math.atan2(rails[1].z - z, rails[1].x - x)).s, LANE_CLEARANCE]);
 
   // Buildings against the rim's edges.
   const buildings: House[] = [];
@@ -665,6 +678,15 @@ function layoutPolygonRing(
     const uz = house.frontX;
     for (const side of [-1, 1]) levelPoints.push({ x: front.x + ux * side * (house.width / 2 + LEVEL_UNDER_FRONTS) - house.frontX * LEVEL_UNDER_FRONTS, z: front.z + uz * side * (house.width / 2 + LEVEL_UNDER_FRONTS) - house.frontZ * LEVEL_UNDER_FRONTS });
   }
+  // A mine's: on out along its track to its adit's mouth, as wide as RAIL_APRON there, so the yard
+  // and the mouth are one level ground.
+  if (rails) {
+    const [a, b] = rails;
+    const length = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    const nx = -(b.z - a.z) / length;
+    const nz = (b.x - a.x) / length;
+    for (const side of [-1, 1]) levelPoints.push({ x: b.x - x + nx * side * RAIL_APRON, z: b.z - z + nz * side * RAIL_APRON });
+  }
   const levelRel = convexHull(levelPoints);
 
   // Then the trails, out through the rim the gates and the buildings leave.
@@ -705,7 +727,7 @@ function layoutPolygonRing(
   }
 
   const boundary = kind.compound!.boundary ? layoutBoundary(kind.compound!.boundary, worldSeed, rng, buildings, lanes, trails, sampleTerrain, translated(gateRel, x, z)) : { walls: [], gates: [] };
-  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius: site.yardReach, rim: reachOf(rimRel), shape: { yard: yardRel, rim: rimRel, gate: gateRel } }, boundary);
+  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius: site.yardReach, rim: reachOf(rimRel), shape: { yard: yardRel, rim: rimRel, gate: gateRel } }, boundary, rails);
   return {
     featureId, kindId: kind.id, x, z,
     yard: { x, z, y, radius: site.yardReach, level: reachOf(levelRel), outline: translated(yardRel, x, z), levelOutline: translated(levelRel, x, z) },
@@ -713,6 +735,7 @@ function layoutPolygonRing(
     padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] },
     padSpill: kind.compound!.pads.spill,
     walls: boundary.walls,
+    rails,
   };
 }
 
@@ -1313,6 +1336,22 @@ const YARD_PATH_CLEARANCE = 2.5;
 const YARD_STEP = 2.5;
 /** A lane's gate stands this far out past the yard's rim - back among the buildings' sides. */
 const GATE_SET_BACK = 3;
+/** A mine's track: every prop but its carts keeps this far from its middle (its sleepers reach
+ *  1.2 m either side); its carts are tried this far apart along it. */
+const RAIL_PROP_CLEARANCE = 1.8;
+const RAIL_CART_STEP = 0.5;
+/** And stand this far back from the track's end at the mouth, clear of the adit's portal. */
+const RAIL_CART_MOUTH_GAP = 5;
+/** A mine's level ground reaches out along its track to its adit's mouth this wide either side. */
+const RAIL_APRON = 3;
+
+/** A mine's track (see CompoundLayout.rails): from the yard's middle to a metre short of its adit's
+ *  mouth, or none. */
+function railsOf(site: CompoundSite): CellPoint[] | undefined {
+  const mouth = site.adit;
+  return mouth ? [{ x: site.x, z: site.z }, { x: mouth.x - mouth.ux, z: mouth.z - mouth.uz }] : undefined;
+}
+
 /** A prop by a road stands this far from its middle (times its width), past its painted surface. */
 const ROADSIDE_PROP_OFFSET = 6;
 
@@ -1390,6 +1429,7 @@ function placeProps(
   sampleTerrain: TerrainSampler,
   at: { x: number; z: number; yardRadius: number; rim: number; shape?: { yard: CellPoint[]; rim: CellPoint[]; gate: CellPoint[] } },
   boundary: { walls: WallRun[]; gates: PlacedProp[] } = { walls: [], gates: [] },
+  rails?: CellPoint[],
 ): { props: PlacedProp[]; droppedProps: string[] } {
   // The boundary's gates are down already, and its wall in the way.
   const props: PlacedProp[] = [...boundary.gates];
@@ -1423,7 +1463,9 @@ function placeProps(
   };
   // A gate stands across its lane: only the other ways are kept clear of it.
   // One set before a building's front stands on its apron, off the path to its door.
-  const fits = (box: Box, limit: number | CellPoint[] | null, onTrail: RoadLine | null, acrossLane: RoadLine | null = null, onApron = false): boolean => {
+  // A mine's track is kept clear but by its carts, which stand on it.
+  const fits = (box: Box, limit: number | CellPoint[] | null, onTrail: RoadLine | null, acrossLane: RoadLine | null = null, onApron = false, onRails = false): boolean => {
+    if (rails && !onRails && lineToBox(rails, box) < RAIL_PROP_CLEARANCE) return false;
     // Within a round of this radius, or - a polygon yard - inside that polygon.
     if (limit !== null && corners(box).some((p) => (typeof limit === "number" ? Math.hypot(p.x - at.x, p.z - at.z) > limit : polygonGap(limit, p.x - at.x, p.z - at.z) > 0))) return false;
     if (!acrossLane && paths.some((path) => lineToBox(path, box) < YARD_PATH_CLEARANCE)) return false;
@@ -1450,7 +1492,7 @@ function placeProps(
       const r = arranged.reach;
       /** Candidates: where, which way it faces, the trail it lies by, and how far from the middle it
        *  may reach (null: no matter). */
-      const candidates: { x: number; z: number; fx: number; fz: number; trail: RoadLine | null; limit: number | CellPoint[] | null; lane?: RoadLine; way?: WayOut; front?: boolean }[] = [];
+      const candidates: { x: number; z: number; fx: number; fz: number; trail: RoadLine | null; limit: number | CellPoint[] | null; lane?: RoadLine; way?: WayOut; front?: boolean; rails?: boolean }[] = [];
       /** Where its footprint lies, set down as a candidate says. */
       const boxAt = (c: (typeof candidates)[number]): Box => {
         const length = Math.hypot(c.fx, c.fz) || 1;
@@ -1475,6 +1517,16 @@ function placeProps(
               candidates.push({ x: p.x - p.dz * side * off, z: p.z + p.dx * side * off, fx: Math.sin(turn), fz: Math.cos(turn), trail: null, limit: null });
             }
           }
+        }
+      } else if (entry.at === "rails") {
+        // On a mine's track, along it (its level ground reaches out to the mouth with it): from just
+        // short of the mouth's portal in.
+        if (rails) {
+          const [a, b] = rails;
+          const length = Math.hypot(b.x - a.x, b.z - a.z);
+          const dx = (b.x - a.x) / length;
+          const dz = (b.z - a.z) / length;
+          for (let t = length - RAIL_CART_MOUTH_GAP; t >= 0; t -= RAIL_CART_STEP) candidates.push({ x: a.x + dx * t, z: a.z + dz * t, fx: dx, fz: dz, trail: null, limit: null, rails: true });
         }
       } else if (entry.at === "yard") {
         // Anywhere in the yard, on rings out from its middle, turned freely.
@@ -1595,7 +1647,7 @@ function placeProps(
       let bestSpread = -Infinity;
       for (const c of candidates) {
         const box = boxAt(c);
-        if (!(c.way ? fitsByRoad(box, c.way.line) : fits(box, c.limit, c.trail, c.lane ?? null, c.front === true))) continue;
+        if (!(c.way ? fitsByRoad(box, c.way.line) : fits(box, c.limit, c.trail, c.lane ?? null, c.front === true, c.rails === true))) continue;
         const score = spread(box) + rng() * 2;
         if (score > bestSpread) {
           bestSpread = score;
