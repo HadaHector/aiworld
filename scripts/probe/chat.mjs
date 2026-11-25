@@ -151,6 +151,11 @@ async function run(w, p, line, channel) {
   await run(w, a, "heal");
   check("heal: revived", me.combat?.dead === false);
 
+  const [fx, fz] = [me.x, me.z];
+  w.server.debug.skills.kill(me);
+  await run(w, a, "revive");
+  check("revive: alive where you fell", me.combat?.dead === false && Math.hypot(me.x - fx, me.z - fz) < 1, `${me.x},${me.z} vs ${fx},${fz}`);
+
   const x0 = me.x;
   const reply = await run(w, a, "tp 40 -25");
   check("tp: coordinates", Math.abs(me.x - 40) < 1 && Math.abs(me.z + 25) < 1 && reply[0]?.startsWith("Taken to"), `${me.x},${me.z} ${JSON.stringify(reply)}`);

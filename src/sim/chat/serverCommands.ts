@@ -284,11 +284,12 @@ export function createServerCommands(packs: readonly CommandPackDef[] = []): Ret
   add({
     id: "revive",
     usage: "",
-    summary: "Brings your target, or you, back to life.",
+    summary: "Brings you back to life where you fell (no trip to the spawn); alive, it brings back your dead target.",
     dev: true,
     args: [],
     run({ entity, host, reply }) {
-      const id = entity.combat?.target ?? 0;
+      // Dead, you come back where you fell: the target you still hold is most likely your killer.
+      const id = entity.combat?.dead ? 0 : (entity.combat?.target ?? 0);
       const target = (id && host.dimension(entity)?.entities.get(id)) || entity;
       host.skills.revive(target);
       reply("{name} is alive.", { name: target.name });
