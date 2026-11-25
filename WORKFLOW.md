@@ -5,7 +5,10 @@ How development sessions, worktrees, checks, browsers and merges are organised (
 
 ## Sessions
 
-- **At most 3 code sessions at a time.** More work waits in a queue until one finishes and is merged.
+- **A small standing team.** A handful of thematic sessions, each like an employee with a field of their
+  own (the lanes below), **never more than 7 sessions in all**. New work goes to the team member whose
+  field it is; a new session only for a field nobody covers, and only within the 7.
+- **At most 3 of them working at a time.** More work waits in a queue until one finishes and is merged.
 - **One lane each.** A lane is an area with its own files (world shaping, features, dungeons, gameplay
   and rules, UI and front end, art and assets). Two running sessions never own the same files; a brief
   names the files it owns and the ones it must not touch.
