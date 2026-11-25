@@ -251,6 +251,15 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   probe worlds (10): junctions within 120 m of a river 26 of 50 -> 1 of 28 (an anchor off its node, at
   114 m), bridges meeting end to end 8 -> 0, low bridge ends 2 -> 0, bridges 25 -> 26, road 40.0 -> 41.4 km;
   every settlement and feature still has its road, though more candidate links find no route (6 against 2).
+- **A bridge's approach banks down like any road** (2026-11-25). The ground is graded to the nearest road
+  *off* a bridge (`RoadQuery.groundDistance`, `roadField.ts`), not to the nearest road: where the deck
+  became the nearest, grading stopped, and an approach filled above the ground beside it ended in a wall
+  along that line (seed 7 with the polygon logging camp, by 865, 192: 6.4 to 2.8 m in a metre). Past an
+  approach's end at a bridge its level ground stops at the deck's start and the bank fans out from there
+  at `ROAD_SIDE_SLOPE`. And an approach between a deck and its stretch's end (a gate, a junction) comes
+  down to that end's level, steeper than `BRIDGE_APPROACH_GRADE` where it must, instead of lifting the
+  end over the street it meets (seed 1338, by 1604, 1051: 2.2 m). Steepest 1 m step within 30 m of a
+  bridge end over the 10 probe worlds, water and pads aside: 6.23 -> 2.35 m.
 - **Not done.** Where a river meets the sea there is a visible seam: the two surfaces are different
   shaders (the ocean draws reflection and glint only, its colour from the terrain's tint; the river its own
   body colour, its ripples in its own frame). Agreed with the user to leave for later; the way to do it:
