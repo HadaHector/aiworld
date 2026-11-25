@@ -759,5 +759,6 @@ Not started; to be sized and put into sessions.
   from 2 of its 4 sides, and seed 4242's camp has 3 (cf590c2). Pads now bank back to the ground at
   slope 0.2 instead of 0.6, the new default (1e603ac; owner's call). The probes were pruned and run by
   category (`npm run probes -- all`, 27 probes in about 2.5 min).
-- **Next:** the logging camp's yard becomes a polygon like the abandoned camp's (features session);
-  a first try gave a 3 m ground step near a river at seed 7, being looked into.
+- **The logging camp's yard is a polygon** of 5 to 7 corners (cf34bbf). Rerouting its road showed two road
+  walls, a bridge approach and a lifted gate, now banked down at the side slope (8c97b5b).
+- **The workbench's asset list is in 6 tabs** grouping its categories (9301f27, 173d684; owner's ask).
