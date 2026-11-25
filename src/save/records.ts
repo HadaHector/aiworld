@@ -63,6 +63,10 @@ export interface CharacterRecord {
     dimension: string;
     x: number;
     z: number;
+    /** Feet height, kept only in a lair (below): elsewhere a body stands on what is at x, z. */
+    y?: number;
+    /** The lair (DUNGEONS.md) it was left in, to lay out again on entering; left out: none. */
+    lair?: SavedLair;
     /** Radians. */
     facing: number;
     home: { dimension: string; x: number; z: number };
@@ -76,6 +80,17 @@ export interface CharacterRecord {
   quests?: SavedQuests;
   /** Standing with factions that keep reputation, by faction id (NPCS.md, *Factions*). Left out: none earned. */
   standing?: Record<string, number>;
+}
+
+/** A lair a character was left in: what lays it out again the same (its id, style, size, seed and
+ *  site), and whether a mouth opened it (walked into) or a command did. */
+export interface SavedLair {
+  id: string;
+  style: string;
+  size: string;
+  seed: number;
+  site: { x: number; y: number; z: number; facing: number; mouth?: boolean };
+  mouth: boolean;
 }
 
 /** A new world, before anything has been played in it. */
