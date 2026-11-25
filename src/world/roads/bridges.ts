@@ -134,11 +134,20 @@ export function planBridges(stretches: RoadStretch[], sampleTerrain: TerrainSamp
       points.push(p);
       heights.push(h);
     };
+    // A stretch's two ends are a gate's or a junction's level, which the road beyond them keeps: the
+    // approach between a deck and an end comes down to it, steeper than the approach grade where it
+    // must, rather than lift the end above the street or road it meets (seed 1338, by 1604, 1051: a
+    // gate 19 m past a deck, lifted 2.2 m over its street).
+    const last = stretch.points.length - 1;
+    const startGrade = Math.max(BRIDGE_APPROACH_GRADE, spans[0].s0 > 0 ? (spans[0].h0 - stretch.heights[0]) / spans[0].s0 : 0);
+    const final = spans[spans.length - 1];
+    const endGrade = Math.max(BRIDGE_APPROACH_GRADE, total > final.s1 ? (final.h1 - stretch.heights[last]) / (total - final.s1) : 0);
     let k = 0;
     for (const span of spans) {
+      const grade = span === spans[0] ? startGrade : BRIDGE_APPROACH_GRADE;
       while (k < stretch.points.length && lengths[k] < span.s0 - 1e-6) {
         // Up to the deck no steeper than the approach grade.
-        push(stretch.points[k], Math.max(stretch.heights[k], span.h0 - (span.s0 - lengths[k]) * BRIDGE_APPROACH_GRADE));
+        push(stretch.points[k], Math.max(stretch.heights[k], span.h0 - (span.s0 - lengths[k]) * grade));
         k++;
       }
       let start = 0;
@@ -162,8 +171,9 @@ export function planBridges(stretches: RoadStretch[], sampleTerrain: TerrainSamp
       if (prop) bridges.push({ prop, points: deckPoints, heights: deckHeights, width: DECK_WIDTH * stretch.widthScale, variant: index * 64 + bridges.length });
       // After it, down from the deck no steeper than the approach grade - until the next bridge's.
       const next = spans[spans.indexOf(span) + 1];
+      const down = next ? BRIDGE_APPROACH_GRADE : endGrade;
       for (let j = k; j < stretch.points.length && (!next || lengths[j] < next.s0); j++) {
-        stretch.heights[j] = Math.max(stretch.heights[j], span.h1 - (lengths[j] - span.s1) * BRIDGE_APPROACH_GRADE);
+        stretch.heights[j] = Math.max(stretch.heights[j], span.h1 - (lengths[j] - span.s1) * down);
       }
     }
     while (k < stretch.points.length) {

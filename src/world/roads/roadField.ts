@@ -1,4 +1,4 @@
-import { ROAD_CLASSES, type RoadClassId, type RoadProfile } from "./roadConfig";
+import { ROAD_CLASSES, ROAD_HALF_WIDTH, type RoadClassId, type RoadProfile } from "./roadConfig";
 import type { CellPoint } from "../cells/cellGrid";
 
 /** Anything the ground is graded to and painted as road: countryside roads and settlement streets. */
@@ -39,12 +39,21 @@ export interface RoadQuery {
   profileWeight: number;
   /** Whether the nearest road is on a bridge there. */
   bridged: boolean;
+  /** The road the ground is graded to: the nearest one NOT on a bridge, so the ground beside a
+   *  bridge's start still banks down from its approach - its distance, surface height and taper.
+   *  Past the end of an approach at a bridge its level ground stops at the bridge's start and the
+   *  bank begins there (the abutment), so the ground under the deck's end runs down at the side
+   *  slope instead of standing as a wall where the deck takes over as the nearest road. Infinity
+   *  when none is in reach. */
+  groundDistance: number;
+  groundHeight: number;
+  groundTaper: number;
 }
 
 /** A road's cross-section fades in over this far from either of its ends. */
 const ROAD_PROFILE_END_FADE = 25;
 
-const MISS: RoadQuery = { distance: Infinity, height: 0, taper: 0, profile: null, profileWeight: 0, bridged: false };
+const MISS: RoadQuery = { distance: Infinity, height: 0, taper: 0, profile: null, profileWeight: 0, bridged: false, groundDistance: Infinity, groundHeight: 0, groundTaper: 0 };
 
 
 interface Segment {
@@ -68,6 +77,9 @@ interface Segment {
   bridged: boolean;
   /** Its road's bridges, by arc length - its cross-section fades out toward their ends too. */
   bridges: [number, number][];
+  /** Its start (end) is a bridge's end: past it the level ground stops and the bank begins. */
+  abutsStart: boolean;
+  abutsEnd: boolean;
 }
 
 /**
@@ -144,7 +156,13 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
         profile: link.roadClass ? (ROAD_CLASSES.find((c) => c.id === link.roadClass)?.profile ?? null) : null,
         bridged: (link.bridges ?? []).some(([s0, s1]) => travelled >= s0 - 1e-3 && travelled + lengths[i] <= s1 + 1e-3),
         bridges: link.bridges ?? [],
+        abutsStart: false,
+        abutsEnd: false,
       };
+      if (!segment.bridged) {
+        segment.abutsStart = segment.bridges.some(([, s1]) => Math.abs(segment.a0 - s1) < 1e-3);
+        segment.abutsEnd = segment.bridges.some(([s0]) => Math.abs(segment.a1 - s0) < 1e-3);
+      }
       travelled += lengths[i];
       if (lengthSq <= 0) continue;
       segmentCount++;
@@ -173,10 +191,14 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
     let bestDistSq = Infinity;
     let best: Segment | null = null;
     let bestU = 0;
+    let groundDistSq = Infinity;
+    let ground: Segment | null = null;
+    let groundU = 0;
     for (const segment of bucket) {
       const px = x - segment.x0;
       const pz = z - segment.z0;
-      const u = Math.min(1, Math.max(0, (px * segment.dx + pz * segment.dz) / segment.lengthSq));
+      const along = (px * segment.dx + pz * segment.dz) / segment.lengthSq;
+      const u = Math.min(1, Math.max(0, along));
       const ox = px - u * segment.dx;
       const oz = pz - u * segment.dz;
       // Nearest in scaled units, so a wide road beside a narrow street still owns the ground its
@@ -188,8 +210,30 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
         best = segment;
         bestU = u;
       }
+      if (segment.bridged) continue;
+      // The abutment: past an approach's end at a bridge, the distance is to the edge of its level
+      // ground, measured on from the bridge's start - so the bank starts there, not a half-width on.
+      let groundSq = distSq;
+      if ((along > 1 && segment.abutsEnd) || (along < 0 && segment.abutsStart)) {
+        const length = Math.sqrt(segment.lengthSq);
+        const beyond = ((along > 1 ? along - 1 : -along) * length) / width;
+        const across = Math.abs(px * segment.dz - pz * segment.dx) / length / width;
+        const reach = ROAD_HALF_WIDTH + Math.hypot(Math.max(0, across - ROAD_HALF_WIDTH), beyond);
+        groundSq = reach * reach;
+      }
+      if (groundSq < groundDistSq) {
+        groundDistSq = groundSq;
+        ground = segment;
+        groundU = u;
+      }
     }
     if (!best || bestDistSq > searchRadiusSq) return MISS;
+    const taperAt = (segment: Segment, u: number): number => {
+      const arc = segment.a0 + (segment.a1 - segment.a0) * u;
+      const t = segment.taperEnds ? Math.min(1, Math.max(0, Math.min(arc, segment.total - arc) / endTaper)) : 1;
+      return t * t * (3 - 2 * t);
+    };
+    const groundHit = ground !== null && groundDistSq <= searchRadiusSq;
 
     const arc = best.a0 + (best.a1 - best.a0) * bestU;
     const fromEnds = Math.min(arc, best.total - arc);
@@ -202,6 +246,9 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
       // (And toward a bridge's ends, where the deck takes over from the ground.)
       profileWeight: Math.min(1, Math.min(fromEnds, ...best.bridges.map(([s0, s1]) => Math.max(0, s0 - arc, arc - s1))) / ROAD_PROFILE_END_FADE),
       bridged: best.bridged,
+      groundDistance: groundHit ? Math.sqrt(groundDistSq) : Infinity,
+      groundHeight: groundHit ? ground!.h0 + (ground!.h1 - ground!.h0) * groundU : 0,
+      groundTaper: groundHit ? taperAt(ground!, groundU) : 0,
     };
   }
 

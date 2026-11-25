@@ -337,14 +337,19 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       const road = roadField.query(worldX, worldZ);
       // A road on a bridge leaves the ground under it be - nor is it painted there.
       roadGap = road.bridged ? Infinity : road.distance;
-      if (!road.bridged && road.distance < ROAD_QUERY_RADIUS) {
+      // Graded to the nearest road off a bridge, even where a deck is nearer: an approach's bank runs
+      // on round its end at the bridge, or its fill stood as a wall where the deck took over as the
+      // nearest road (seed 7, by 865, 192: 6.4 to 2.8 m in a metre, with the polygon logging camp).
+      if (road.groundDistance < ROAD_QUERY_RADIUS) {
         // The shoulder is as wide as it has to be to get from the road's level back to the
         // ground's at ROAD_SIDE_SLOPE, so its gradient is the constant and its width follows.
         // A fixed width would be a wall wherever the cut or fill happened to be deep.
-        const drop = Math.abs(blendedHeight - road.height);
+        const drop = Math.abs(blendedHeight - road.groundHeight);
         const shoulder = Math.min(ROAD_SHOULDER_MAX, Math.max(ROAD_SHOULDER_MIN, drop / ROAD_SIDE_SLOPE));
-        const blend = (1 - smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + shoulder, road.distance)) * road.taper;
-        height = lerp(blendedHeight, road.height, blend);
+        const blend = (1 - smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + shoulder, road.groundDistance)) * road.groundTaper;
+        height = lerp(blendedHeight, road.groundHeight, blend);
+      }
+      if (!road.bridged && road.distance < ROAD_QUERY_RADIUS) {
         // Its cross-section on top: a crown, ditches, a track worn down into the ground.
         if (road.profile) {
           height += roadProfileOffset(road.profile, road.distance) * road.taper * road.profileWeight;
