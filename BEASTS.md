@@ -403,7 +403,7 @@ corpses; instancing with thin instances if skinning allows it; a lower detail fa
   `beasts.html` and `src/beastsPage/main.ts` (the line-up page: every plan at several seeds);
   `src/workbench/beastPreview.ts` (the workbench's **beasts** folder: Model - one or a herd of seeds -
   On the ground, Every beast, and Atlas, with Variant, Play, Speed, Path, Atlas size and Bones menus;
-  editing a plan's json5 there rebuilds it); probes `beast.mjs` and `beastGaits.mjs`.
+  editing a plan's json5 there rebuilds it); probe `beast.mjs` (its gaits check was `beastGaits.mjs`).
   Shared files touched, a few lines each: `resolveContent.ts` (the `beasts` folder), `gameRules.ts`
   (`look.beast`), `entityMeshes.ts` (a beast factory beside the humanoid one), `session.ts` (the kit),
   `vite.config.ts` (the page).
@@ -418,7 +418,7 @@ corpses; instancing with thin instances if skinning allows it; a lower detail fa
   yawed about the vertical for what its plane cannot reach, then solved in its plane (two bones
   analytically, more by CCD whose pull toward the rest shape fades). The last bone of a leg of three
   or more keeps its angle, curled in the swing. The phase advances by exactly the baked stride, so a
-  planted foot stays put: `beastGaits.mjs` measures under 2 cm of slide for every plan and gait.
+  planted foot stays put: `beast.mjs` (once `beastGaits.mjs`) measures under 2 cm of slide for every plan and gait.
 - **Patterns** from rank (front to back) and side: lateral-sequence walk, trot, pace, bound, a
   rotary gallop, tripod, alternating tetrapods, a wave and a metachronal ripple.
 - **Variety**: a kind's individuals fold onto 6 seeds (`VARIETY` in `beastBody.ts`), so a camp shares

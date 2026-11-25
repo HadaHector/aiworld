@@ -858,7 +858,7 @@ acorn, a spiral rubbing).
   `world.ts` (the chunk manager's context and the map maker), `terrain/chunkBuild.worker.ts`, `sim/dimension.ts` (the collision
   streamer and trunk field), and the workbench's feature preview (which plants and clears itself). A caller that does not pass it
   draws no oaks - the trees the server collides with are then not the ones drawn, so a new caller must.
-- **Checks**: `npm run probe -- scripts/probe/grove.mjs` (7-10 groves in 4-8 vale seeds; 5-6 oaks evenly round at 26-31 m; the
+- **Checks**: `npm run probe -- scripts/probe/vale.mjs`, which holds the grove checks once in `grove.mjs` (7-10 groves in 4-8 vale seeds; 5-6 oaks evenly round at 26-31 m; the
   stone at the middle; the scatter returns the ring and nothing of its own at their feet or in the clearing; the same every
   time). Looked at in the workbench (`npm run shot -- features/druidGrove`, `props/menhir`, `trees/ancientOak`) and in the game
   with the odds raised for one run (ring, clearing, stones and the hermit all there, the oaks autumn-coloured).
@@ -886,7 +886,7 @@ points on the circle, not candidates. It costs no terrain sampling of its own - 
   and, for a cell that rolled a kind and did not place it, its main reason (the condition that stopped the
   most candidates, e.g. `cover 0.31 < 0.5`, or the note). The tooltip has every condition, `stopped n of m`.
   A cave mouth, which is not in the features list, now shows as its cell's content.
-- `npm run probe -- scripts/probe/cellwhy.mjs config=vale|default seeds=60`: totals per kind over many
+- `npm run probe -- scripts/tools/cellwhy.mjs config=vale|default seeds=60`: totals per kind over many
   seeds - rolled, placed, seeds with one, which conditions stopped the candidates and the nearest
   candidate's median value - and how many cells end empty by a roll of none and by a failure.
 

@@ -1,5 +1,5 @@
 // Composes a song and prints its patterns as tracker text, without audio.
-// Usage: npm run probe -- scripts/probe/music.mjs [placeSeed] [visitSeed] [patterns]
+// Usage: npm run probe -- scripts/tools/music.mjs [placeSeed] [visitSeed] [patterns]
 const { composeSong } = await import("../../src/music/composer.ts");
 const { FOREST } = await import("../../src/music/styles.ts");
 const { patternText } = await import("../../src/music/format.ts");

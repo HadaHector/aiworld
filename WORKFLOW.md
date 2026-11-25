@@ -36,10 +36,13 @@ How development sessions, worktrees, checks, browsers and merges are organised (
 
 ## Checks
 
-- **A session runs:** the typecheck (`npx tsc --noEmit -p .`) and the probes of its own area
-  (`npm run probe -- scripts/probe/<x>.mjs`), headless.
-- **The main session runs:** `npm run probe:quick` once on master after merging a batch.
-- **One heavy probe run at a time.** `probe:quick` takes a lock (`aiworld-probe-quick.lock` in the
+- **Probes run by category**, and the categories are the team's fields: `npm run probes -- <field> [...]`
+  (`npm run probes -- --list` shows them: features, placement, dungeons, terrain-water, gameplay, rules, art).
+- **A session runs:** the typecheck (`npx tsc --noEmit -p .`) and its own field's probes
+  (`npm run probes -- dungeons`; a single one with `npm run probe -- scripts/probe/<x>.mjs`), headless.
+- **The main session runs:** after merging a batch, the probes of the merged branches' fields on master
+  (`npm run probes -- rules gameplay`), or `npm run probes -- all` (about 3.5 minutes) when a batch touches many.
+- **One heavy probe run at a time.** `npm run probes` takes a lock (`aiworld-probe-quick.lock` in the
   system temp folder, shared by every worktree); a second run waits for the first. Long single probes (the full dungeons run, bots) are not run while another heavy
   run is going.
 - Full mode (`--full`, `PROBE_FULL=1`) on request only.
@@ -56,7 +59,7 @@ How development sessions, worktrees, checks, browsers and merges are organised (
 
 ## Merging and pushing
 
-- Only the main session merges, in batches: merge, typecheck, `npm run probe:quick` on master.
+- Only the main session merges, in batches: merge, typecheck, the merged fields' probes on master.
 - **When that is green, master is pushed** straight away. When it is not, the branch's session fixes it
   first.
 

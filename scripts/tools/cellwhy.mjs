@@ -1,6 +1,6 @@
 // Why cells are empty (FEATURES.md, *Why a cell is empty*): builds worlds for many seeds and totals, per
 // kind, how often it was rolled and placed and which condition stopped its candidates.
-//   npm run probe -- scripts/probe/cellwhy.mjs [config=vale|default] [seeds=20] [first=1000]
+//   npm run probe -- scripts/tools/cellwhy.mjs [config=vale|default] [seeds=20] [first=1000]
 // "Stopped" counts candidates (a roadside kind: points along the road) stopped at that condition; "cells" counts
 // cells whose most-stopping condition it was.
 import { loadContentFromDisk } from "../diskContent.mjs";

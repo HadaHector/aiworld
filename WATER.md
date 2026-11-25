@@ -78,7 +78,7 @@ waterAt(x, z): { surface: number; depth: number }   // depth 0 on dry ground
    the water, and was not bridged because bridges are planned on the ground without roads. Roads
    are now graded after the blend, from the ground as it then lies (`terrainSampler.ts`), so the
    level the roads were routed and bridged against is the level they get. At (8..75, 304..313) in
-   world 475982993 the road is now 7-10 m up instead of -1 m. `scripts/probe/roadWater.mjs`
+   world 475982993 the road is now 7-10 m up instead of -1 m. `scripts/probe/water.mjs` (then `roadWater.mjs`)
    samples every road point against the waterline over 14 worlds (tiny and small, 7 seeds): none
    under water, bridged ones excepted. Terrain near coasts with roads changed for every seed.
 
@@ -213,7 +213,7 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   bananas by the water, the desert's shore, "no snow under the water", the boulders at the waterline -
   and the foliage scatter's graphs get it too. Rules about altitude (snow lines, treelines, terraces, the
   ice peaks' glacier on the valley floors) stay on `height`. The rule for a new one: about the water,
-  `aboveWater`; about how high the land is, `height`. `scripts/probe/aboveWaterRewire.mjs` did the
+  `aboveWater`; about how high the land is, `height`. `scripts/probe/aboveWaterRewire.mjs` (deleted 2026-11-25; in git history) did the
   switch (a height read only by masks within 8 m of 0 switched; one read both ways split).
 - **Drawn** (`terrain/riverWater.ts`): a ribbon per river at its stations' levels, stepping down with them,
   as wide as the ground scanned across each station says the water is (1.5 m past it, so the bank draws
@@ -237,7 +237,7 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   tributary meets its trunk's level, no ground step across a river worse than the legacy world's (worst
   2.05 m in a metre against 2.9), water under every bridge and its deck above it, no road through water
   deeper than a ford off a bridge, no water standing over a pit (ground more than 1 m under the river's own
-  bed), no levels without the flag. `water.mjs` and `roadWater.mjs` still
+  bed), no levels without the flag. `water.mjs` (with roadWater's checks) still
   pass. In the page (`?play&config=rivers&seed=4242`, `public/configs/rivers.json5`): a river at 22 m
   over the sea, drawn and on the minimap.
 - **Not done.** Where a river meets the sea there is a visible seam: the two surfaces are different

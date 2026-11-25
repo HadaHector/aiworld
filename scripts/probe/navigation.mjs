@@ -126,7 +126,9 @@ for (let n = 0; n < COUNT; n++) {
 check("a way to every room", found === rooms, `${found}/${rooms}`);
 check("the motor walks nine ways in ten to the boss", walked >= tried * 0.9, `${walked}/${tried}`);
 check("a way from every spawn spot", offFound === offLine, `${offFound}/${offLine}`);
-check("searches are quick (mean under 2 ms, none over 20 ms)", searchMs / searches < 2 && slowest < 20, `mean ${(searchMs / searches).toFixed(2)} ms, slowest ${slowest.toFixed(1)} ms`);
+// Run beside other probes (`npm run probes`, PROBE_JOBS > 1) one search can wait on the CPU: the slowest is then let to 60 ms.
+const slowLimit = Number(process.env.PROBE_JOBS ?? 1) > 1 ? 60 : 20;
+check(`searches are quick (mean under 2 ms, none over ${slowLimit} ms)`, searchMs / searches < 2 && slowest < slowLimit, `mean ${(searchMs / searches).toFixed(2)} ms, slowest ${slowest.toFixed(1)} ms`);
 console.log(`${built} layouts: graph ${(buildMs / built).toFixed(1)} ms and ${Math.round(nodes / built)} nodes each; ${searches} searches, mean ${(searchMs / searches).toFixed(2)} ms and ${Math.round(rays / searches)} rays (${((searchMs * 1000) / Math.max(1, rays)).toFixed(1)} µs a ray), slowest ${slowest.toFixed(1)} ms`);
 console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${offLine}, none into the rock ${unreachableOk}, walked by the motor ${walked}/${tried}`);
 

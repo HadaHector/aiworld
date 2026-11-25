@@ -1,7 +1,9 @@
 // The abandoned camp (SLICE.md W3): the content is there and wired (the feature, its biome odds, its
 // quest tags, its buildings and props), it lays out over many seeds with its two required buildings,
 // and its roofs are really rotted - holes, a deeper sag, a fallen-in place - while a sound roof is not.
-// npm run probe -- scripts/probe/abandonedCamp.mjs
+// Quick: 2 layout seeds (12 layouts) and 3 vale worlds; --full: 5 seeds (30 layouts) and 8 worlds.
+// npm run probe -- scripts/probe/abandonedCamp.mjs [worlds] [--full]
+const { pick } = await import("./mode.mjs");
 const { loadContent } = await import("./loadContent.mjs");
 const { buildFeaturePreview } = await import("../../src/workbench/featurePreview.ts");
 const { generateBuilding } = await import("../../src/world/buildings/buildingGenerator.ts");
@@ -22,7 +24,7 @@ check((kind?.compound?.buildings ?? []).filter((b) => b.required).length === 2, 
 
 // Layouts over seeds and variants.
 let placed = 0, bunk = 0, shed = 0, props = 0, droppedRequired = 0;
-for (const seed of [1338, 77, 4242, 9001, 31337]) {
+for (const seed of [1338, 77, 4242, 9001, 31337].slice(0, pick(2, 5))) {
   for (let variant = 0; variant < 6; variant++) {
     const f = buildFeaturePreview(kind, content, seed, variant, false, () => 30);
     check(!!f, `seed ${seed} variant ${variant} laid out`);
@@ -87,7 +89,7 @@ const { createWorldData } = await import("../../src/world/worldData.ts");
 const quiet = (run) => { const l = console.log; console.log = (...a) => (String(a[0]).startsWith("[") ? undefined : l(...a)); try { return run(); } finally { console.log = l; } };
 const vale = loadContentFromDisk("vale").content;
 let paintedAbandoned = 0, camps = 0, abandonedStretches = 0, seedsWith = 0;
-const seedsN = Number(process.argv[2]) || 8;
+const seedsN = Number(process.argv[2]) || pick(3, 8);
 for (let i = 0; i < seedsN; i++) {
   const w = quiet(() => createWorldData(1000 + i * 7919, vale));
   const n = (w.features ?? []).filter((f) => (f.kind?.id ?? f.kindId) === "abandonedCamp").length;
