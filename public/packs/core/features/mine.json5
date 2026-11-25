@@ -10,7 +10,7 @@
     // The yard before it, close under the adit and levelled to its floor: steeper ground than a camp takes, any cover.
     site: { grade: [0, 0.45], cover: [0, 1] },
     yard: { shape: "polygon", points: [5, 6], radius: [10, 13] },
-    pads: { slope: 0.7, blend: [2, 12] },
+    pads: { slope: 0.2, blend: [2, 12] },
     arrangement: "ring",
     trails: [],
     buildings: [
