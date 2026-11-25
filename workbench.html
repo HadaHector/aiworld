@@ -84,6 +84,29 @@
         border-bottom: 1px solid var(--line);
       }
 
+      #assetTabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+        padding: 6px 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .assetTab {
+        padding: 4px 8px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: none;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .assetTab:hover { color: var(--text); background: var(--panel-2); }
+      .assetTab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent-strong); }
+      .assetTab.hasCurrent { color: var(--accent-strong); }
+      .assetTab small { opacity: 0.7; }
+
       .assetGroup {
         display: block;
         width: 100%;
@@ -365,6 +388,7 @@
           <input id="assetFilter" type="search" placeholder="Filter assets" />
           <a href="/" title="Back to the world">World ↗</a>
         </div>
+        <div id="assetTabs" role="tablist" aria-label="Asset groups"></div>
         <nav id="assetList" aria-label="Pack assets"></nav>
         <div id="fileBar">
           <span id="fileName">-</span>
