@@ -1,4 +1,4 @@
-import type { CaveMouthSite } from "../dungeons/caveMouths";
+import { CAVE_MOUTH, type CaveMouthSite } from "../dungeons/caveMouths";
 import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { TreeCover } from "../foliage/treeScatter";
@@ -16,6 +16,7 @@ import { NO_TRACE, type Trace } from "./placementWhy";
 import type { RoadNetwork } from "../roads/roadNetwork";
 import { ROAD_HALF_WIDTH } from "../roads/roadConfig";
 import { arrangeGroup, arrangeProp, setDown, type Arranged, type PlacedProp } from "../props/propGroups";
+import { measureProp } from "../props/propGenerator";
 import type { PropDef, Spill } from "../props/propTypes";
 import { generateLine, type LineEnd, type LineRun } from "../props/propGenerator";
 import type { BuildingModel } from "../buildings/buildingTypes";
@@ -1757,6 +1758,36 @@ export function settleProps(layouts: CompoundLayout[], sampleTerrain: TerrainSam
       else if (prop.prop.ground === "level") prop.y = mean(levels.get(prop.group)!);
     }
   }
+}
+
+/** A mine's timber portal stands this far in from its adit's slip's foot: at the slip's back wall,
+ *  where the hill closes over it and the lair's tunnel opens (dungeonParts/caveMouth.json5: the
+ *  tunnel is cut from 17 m in, the lair's own first set stands 2.5 m past the slip). */
+export const ADIT_PORTAL_IN = CAVE_MOUTH.length - 0.5;
+
+/**
+ * A mine's adit's fixtures, once the ground is final: its timber portal framing the mouth at the
+ * slip's back wall, and its track on along the slip's floor from the yard's track (which ends at the
+ * slip's foot) in under the portal - both at the slip's floor level, which the ground under the slip
+ * (taken out, not lowered) does not know.
+ */
+export function aditFixtures(mouth: CaveMouthSite, frame: PropDef | undefined, railTrack: PropDef | undefined, seed: number): { props: PlacedProp[]; walls: WallRun[] } {
+  const props: PlacedProp[] = [];
+  const walls: WallRun[] = [];
+  if (frame) {
+    const { halfWidth, halfDepth } = measureProp(frame, seed, 0);
+    props.push({ prop: frame, variant: 0, x: mouth.x + mouth.ux * ADIT_PORTAL_IN, z: mouth.z + mouth.uz * ADIT_PORTAL_IN, y: mouth.y, frontX: -mouth.ux, frontZ: -mouth.uz, on: null, lift: 0, reach: Math.hypot(halfWidth, halfDepth), halfWidth, halfDepth, group: -1, up: [0, 1, 0] });
+  }
+  if (railTrack) {
+    const points: CellPoint[] = [];
+    const steps = Math.ceil((ADIT_PORTAL_IN + 1) / 1.5);
+    for (let i = 0; i <= steps; i++) {
+      const along = -1 + ((ADIT_PORTAL_IN + 1) * i) / steps;
+      points.push({ x: mouth.x + mouth.ux * along, z: mouth.z + mouth.uz * along });
+    }
+    walls.push({ prop: railTrack, variant: 0, points, heights: points.map(() => mouth.y), ends: ["join", "free"], breach: false });
+  }
+  return { props, walls };
 }
 
 /** A boundary run is drawn (and comes into the collision world) in stretches no longer than this. */

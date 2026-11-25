@@ -1,4 +1,3 @@
-import { measureProp } from "../props/propGenerator";
 import { sampleCounter, timed } from "../loadTimings";
 import { deriveSeed } from "../rng";
 import { smoothstep, lerp } from "../mathUtils";
@@ -10,7 +9,7 @@ import { createRoadField, type RoadField } from "../roads/roadField";
 import { planBridges, type Bridge } from "../roads/bridges";
 import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
 import { compoundPads, createPadField, propPads, settlementPads, type PadField } from "../settlements/padField";
-import { layoutCompounds, settleProps, settleOnGround, type CompoundLayout } from "../features/compound";
+import { aditFixtures, layoutCompounds, settleProps, settleOnGround, type CompoundLayout } from "../features/compound";
 import { createSpillField, spillMaterials, type SpillField } from "../features/spill";
 import { createTreeCover } from "../foliage/treeScatter";
 import { PAD_PAINT_OFFSET } from "../settlements/settlementConfig";
@@ -520,13 +519,14 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     if (layout?.rails && rails) layout.walls.push({ prop: rails, variant: 0, points: layout.rails, heights: [], ends: ["free", "join"], breach: false });
   }
   settleOnGround(compoundLayouts, sampleTerrain);
-  // Its timber portal, after the ground is settled: it stands at the adit's own floor, not on a pad.
+  // Its timber portal at the slip's back wall and its track on along the slip's floor, after the
+  // ground is settled: at the adit's own floor, not on the ground.
   for (const { feature, mouth } of adits) {
     const layout = compoundLayouts.find((l) => l.featureId === feature.id);
-    const frame = propById2.get("timberSet");
-    if (!layout || !frame) continue;
-    const { halfWidth, halfDepth } = measureProp(frame, seed, 0);
-    layout.props.push({ prop: frame, variant: 0, x: mouth.x + mouth.ux * 1.5, z: mouth.z + mouth.uz * 1.5, y: mouth.y, frontX: -mouth.ux, frontZ: -mouth.uz, on: null, lift: 0, reach: Math.hypot(halfWidth, halfDepth), halfWidth, halfDepth, group: -1, up: [0, 1, 0] });
+    if (!layout) continue;
+    const fixtures = aditFixtures(mouth, propById2.get("timberSet"), propById2.get("railTrack"), seed);
+    layout.props.push(...fixtures.props);
+    layout.walls.push(...fixtures.walls);
   }
   spillField = createSpillField(compoundLayouts, spillMaterials(content));
   // Last, the caves' mouths: found on the ground as everything else has left it.
