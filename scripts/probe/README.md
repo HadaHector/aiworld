@@ -59,7 +59,7 @@ times) can allow for the shared CPU.
 
 | category | probes |
 |---|---|
-| features | abandonedCamp, yardShape, vale |
+| features | abandonedCamp, yardShape, featureReach, vale |
 | placement | vale, starts, abandonedCamp |
 | dungeons | dungeons, navigation; worklists caves, caveMouths |
 | terrain-water | water, riverLevels, mapTiles, swim, vale |
@@ -99,6 +99,7 @@ All 26 pass; `all` takes 213 s, about as long as quests does beside the others.
 | chat | 5 | 10 | all pass | chat parser, commands, range, rate limit |
 | saves | 5 | 9 | 55 | saves, stores, restart finds the character |
 | yardShape | 5 | 8 | "no faults" | polygon-yard layouts |
+| featureReach | 10 | - | 40 | every compound walked to from 2 of 4 directions (4 river worlds, 3 vale quick; 8 vale full) |
 | body | 4 | 6 | - | race bodies: manifold, winding, weights |
 | icons | 3 | 5 | - | icon names core uses exist in the pack (seven listed as waiting for generation) |
 | balance | 3 | 5 | 431 | balance curves, role stats, prices |

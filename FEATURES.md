@@ -512,6 +512,24 @@ The feature field still reports, from the site:
 - `featureGap` (0 inside the yard), so the `ground` material layer paints it;
 - `featureClear`, from the clearing radius.
 
+#### Reachable from two sides
+
+A compound does not have to be reachable from every side (the owner's ruling, 2026-11-25): a camp under
+a bank or a mine in a slope may have a wall of ground on one or two sides, and a steep pad edge (where a
+prop's firm pad stands above the yard, say) is not a fault by itself. Of its 4 approach directions
+(north, east, south, west) at least 2 must be clear. The `featureReach` probe (features category) walks
+each direction on its own: a flood over a 1 m grid out from the yard, kept within 67.5 degrees of the
+direction (beyond the levelled ground), to the rim of a disc 15 m past the pad's widest blend in that
+direction's quarter. Each step rises no more than the motor's walk limit allows over a metre
+(`DEFAULT_MOTOR.maxSlope`, 52 degrees: 1.28 m; its 0.75 m step-up is less), and water over 1 m deep, the
+buildings and the boundary's standing runs block it (its gates, gaps and breaches are open). Over the 4
+riverLevels worlds and 3 vale worlds (39 compounds, 2026-11-25) none has fewer than 3 clear; only
+boundaries close a direction there, never the ground. Seed 4242's logging camp at (761, 1049), whose pad
+steps 3.4 m by a prop's pad, is clear from north, east and west.
+
+The riverLevels probe's "no cliff across a river" check still passes over ground within 4 m of a pad:
+a step there is the feature's, and this check is what judges it.
+
 #### Drawing and collision
 
 **Done:** `settlementRenderer.ts` became `buildings/buildingRenderer.ts`, a general renderer for
