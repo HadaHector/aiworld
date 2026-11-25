@@ -754,3 +754,10 @@ Not started; to be sized and put into sessions.
   - *The bridges are a road-maker bug.* Three bridges came together because roads met over the river. The
     road maker keeps away from rivers today, but not by enough: junctions (and roads in general) should
     keep a wider distance from rivers, so roads never meet over water.
+- **Both fixed and merged** (2026-11-25): roads keep their junctions 120 m from a river, so a crossing is
+  one bridge (f2d4d87; the seed-7 skip is gone); a new `featureReach` probe passes a compound walked to
+  from 2 of its 4 sides, and seed 4242's camp has 3 (cf590c2). Pads now bank back to the ground at
+  slope 0.2 instead of 0.6, the new default (1e603ac; owner's call). The probes were pruned and run by
+  category (`npm run probes -- all`, 27 probes in about 2.5 min).
+- **Next:** the logging camp's yard becomes a polygon like the abandoned camp's (features session);
+  a first try gave a 3 m ground step near a river at seed 7, being looked into.
