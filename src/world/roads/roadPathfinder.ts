@@ -11,6 +11,7 @@ import {
   ROAD_ALONGSIDE_PENALTY,
   ROAD_RIVER_CORRIDOR,
   ROAD_RIVER_CROSSING_WEIGHT,
+  ROAD_JUNCTION_RIVER_CLEARANCE,
   ROAD_OFF_ZONE_PENALTY,
   ROAD_MAX_DETOUR_FACTOR,
   ROAD_MAX_EXPANSIONS,
@@ -58,6 +59,8 @@ interface GroundNode {
    *  or no road could ever cross one). */
   blocked: boolean;
   inRiver: boolean;
+  /** Distance to the nearest river's centreline - see ROAD_JUNCTION_RIVER_CLEARANCE. */
+  riverGap: number;
 }
 
 /** Minimal binary heap over (key, priority). A sorted array would be O(n) per insert, and the open
@@ -166,6 +169,8 @@ export interface RoadPathfinder {
   /** Which zone a routed node stands in, so a caller can allow straightening exactly the zones its
    *  own route already passed through. */
   zoneOfNode(key: number): number;
+  /** Whether a road may meet another at this node: it is ROAD_JUNCTION_RIVER_CLEARANCE from any river. */
+  clearOfRivers(key: number): boolean;
   /** How many distinct grid nodes have been sampled so far - the real cost of the whole pass. */
   sampleCount(): number;
 }
@@ -193,6 +198,7 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
       height: sample.height,
       areaId: sample.primaryAreaId,
       inRiver,
+      riverGap: sample.riverGap,
       blocked:
         !sample.isLand ||
         sample.lakeFactor > ROAD_MAX_LAKE_FACTOR ||
@@ -265,6 +271,7 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
       height: sample.height,
       areaId: sample.primaryAreaId,
       inRiver,
+      riverGap: sample.riverGap,
       blocked: !sample.isLand || sample.lakeFactor > ROAD_MAX_LAKE_FACTOR || (sample.height < ROAD_MIN_HEIGHT && !inRiver),
     };
     fine.set(key, node);
@@ -351,6 +358,15 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
     return chordGroundIsClear(from, to);
   }
 
+  function nearRiver(current: number, next: number, dx: number, dz: number, roadNodes: Set<number>, fromGround: GroundNode, toGround: GroundNode): boolean {
+    const clear = (node: GroundNode): boolean => node.riverGap >= ROAD_JUNCTION_RIVER_CLEARANCE;
+    if (roadNodes.has(current) !== roadNodes.has(next)) return !clear(fromGround) || !clear(toGround);
+    if (dx === 0 || dz === 0) return false;
+    const a = nodeKey(keyToGx(current) + dx, keyToGz(current));
+    const b = nodeKey(keyToGx(current), keyToGz(current) + dz);
+    return roadNodes.has(a) && roadNodes.has(b) && (!clear(groundAt(a)) || !clear(groundAt(b)) || !clear(fromGround) || !clear(toGround));
+  }
+
   function findPath({ from, to, zones, roadNodes, detourFactor, avoid = [] }: PathRequest): PathResult {
     const startKey = nodeKey(Math.round(from.x / ROAD_GRID), Math.round(from.z / ROAD_GRID));
     const goalKey = nodeKey(Math.round(to.x / ROAD_GRID), Math.round(to.z / ROAD_GRID));
@@ -409,6 +425,10 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
         const distance = dx !== 0 && dz !== 0 ? ROAD_GRID * Math.SQRT2 : ROAD_GRID;
         // Both ends, not the destination alone - see ROAD_REUSE_DISCOUNT.
         const onRoad = roadNodes.has(current) && roadNodes.has(nextKey);
+        // Near a river a route keeps to itself: it neither joins nor leaves a road there (a step
+        // with one end on the network), nor cuts across one between nodes (a diagonal past two of
+        // its nodes) - each would be a junction by the water. See ROAD_JUNCTION_RIVER_CLEARANCE.
+        if (!onRoad && nearRiver(current, nextKey, dx, dz, roadNodes, fromGround, toGround)) continue;
         const alongside = !onRoad && besideRoad(current, roadNodes) && besideRoad(nextKey, roadNodes);
         const from = nodePoint(current);
         const middle = fineGroundAt((from.x + next.x) / 2, (from.z + next.z) / 2);
@@ -432,6 +452,7 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
     chordIsClear,
     riverLengthAlong,
     zoneOfNode: (key) => groundAt(key).areaId,
+    clearOfRivers: (key) => groundAt(key).riverGap >= ROAD_JUNCTION_RIVER_CLEARANCE,
     sampleCount: () => ground.size + fine.size,
   };
 }

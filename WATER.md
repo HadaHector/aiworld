@@ -237,9 +237,20 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   tributary meets its trunk's level, no ground step across a river worse than the legacy world's (worst
   2.05 m in a metre against 2.9), water under every bridge and its deck above it, no road through water
   deeper than a ford off a bridge, no water standing over a pit (ground more than 1 m under the river's own
-  bed), no levels without the flag. `water.mjs` (with roadWater's checks) still
+  bed), no road junction within 90 m of a river (its 75 m road corridor and a margin), no two bridges
+  meeting end to end, no levels without the flag. `water.mjs` (with roadWater's checks) still
   pass. In the page (`?play&config=rivers&seed=4242`, `public/configs/rivers.json5`): a river at 22 m
   over the sea, drawn and on the minimap.
+- **Crossings are one bridge** (2026-11-25, the owner's ruling: roads meeting over a river is a road-maker
+  bug). Bridges are planned per road stretch (`bridges.ts`), so a junction in a river had every stretch
+  meeting there bridged on its own, the decks meeting low over the water (seed 7, at -143, 117: three
+  bridges, their ends 0.98 m over it). The road search (`roadPathfinder.ts`) now never joins, leaves or
+  cuts across a road on a lattice node within `ROAD_JUNCTION_RIVER_CLEARANCE` (120 m) of a river's
+  centreline, and a track to the nearest road never ends on one (`roadNetwork.ts`): a road crossing a
+  river runs on its own, bank to bank, and meets the others away from it. Over the riverLevels and vale
+  probe worlds (10): junctions within 120 m of a river 26 of 50 -> 1 of 28 (an anchor off its node, at
+  114 m), bridges meeting end to end 8 -> 0, low bridge ends 2 -> 0, bridges 25 -> 26, road 40.0 -> 41.4 km;
+  every settlement and feature still has its road, though more candidate links find no route (6 against 2).
 - **Not done.** Where a river meets the sea there is a visible seam: the two surfaces are different
   shaders (the ocean draws reflection and glint only, its colour from the terrain's tint; the river its own
   body colour, its ripples in its own frame). Agreed with the user to leave for later; the way to do it:

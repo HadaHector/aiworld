@@ -1037,6 +1037,8 @@ export function generateRoadNetwork(
     let target = -1;
     let targetDistance = Infinity;
     for (const key of roadNodes) {
+      // Where the track meets the road is a junction: not by a river.
+      if (!pathfinder.clearOfRivers(key)) continue;
       const point = nodePoint(key);
       const distance = Math.hypot(point.x - approach.x, point.z - approach.z);
       if (distance < targetDistance) {

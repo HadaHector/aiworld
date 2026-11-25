@@ -42,6 +42,17 @@ export const ROAD_MAX_LAKE_FACTOR = 0.15;
 export const ROAD_RIVER_CORRIDOR = 75;
 export const ROAD_RIVER_CROSSING_WEIGHT = 14;
 
+// No road joins, leaves or crosses another this near a river's centreline. A crossing is then one
+// stretch - one bridge, landing on firm bank - never a junction over the water, where each stretch
+// meeting there was bridged on its own and the decks met low over the river (seed 7, -143, 117: three
+// bridges meeting at a junction 2 m off the centreline, their ends 0.98 m over the water). The
+// corridor, plus a bridge's reach past the water (bridges.ts BRIDGE_REACH, 30) and its approach and
+// the junction's level blend. Judged at the lattice nodes, so a junction's anchor (the road as laid)
+// can stand a little nearer - but never inside the corridor. Over the riverLevels and vale probe
+// worlds (10) it took junctions within 120 of a river from 26 of 50 (the nearest 2 off the
+// centreline) to 1 of 28 (at 114), bridges meeting end to end from 8 to 0, for 3.5% more road.
+export const ROAD_JUNCTION_RIVER_CLEARANCE = 120;
+
 // Inside the corridor the grade limit is suspended. River banks are cut at RIVER_BANK_SLOPE (0.25)
 // - exactly ROAD_MAX_GRADE - so enforcing it would make every river in the world impassable. The
 // crossing is the one place the terrain is expected to be reshaped for the road, which is stage 2.
