@@ -13,6 +13,11 @@ How development sessions, worktrees, checks, browsers and merges are organised (
   already knows the area, even when its context is long (it compacts by itself): one standing session
   per lane, sent the next task with a message. A new session only for a lane nobody has worked in, or
   when the old one is clearly lost.
+- **Standing lane sessions** (keep their worktree; after a merge they bring master into their branch
+  before the next task): features and compounds `slice-camp`; feature placement and cells `cell-why`;
+  dungeons, caves and the mine `slice-cavecheck`; terrain, water and coast `slice-water`; gameplay, combat
+  and the HUD `cobweb-battle`; rules and balance curves `slice-balance`; the workbench
+  `workbench-improve`.
 - **Models.** Design and code: Opus. Mechanical or read-only work: Sonnet.
 - **No ending a turn to wait.** A session that waits for a long probe or a generation run waits inside a
   background command that wakes it when it ends. It reports once, with the result.
