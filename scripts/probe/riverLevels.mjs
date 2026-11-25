@@ -87,7 +87,8 @@ for (const seed of seeds.length ? seeds : [1338, 7, 4242, 90210]) {
       for (let s = -150; s <= 150; s += 1) {
         const x = p.x[i] - (dz / n) * s, z = p.z[i] + (dx / n) * s, h = w.heightAt(x, z);
         // (A step at a feature's levelled pad is the feature's, not the river's: which features stand near a river
-        // is the seed's roll, so those are passed over - in both worlds.)
+        // is the seed's roll, so those are passed over - in both worlds. A pad edge is judged by whether the
+        // feature can be walked to from 2 of 4 sides: featureReach.mjs, FEATURES.md *Reachable from two sides*.)
         const onPad = () => [[x, z], [x + dz / n, z - dx / n]].some(([px, pz]) => w.sampleTerrain(px, pz).padGap < PAD_NEAR);
         if (prev !== null && Math.abs(h - prev) > worst && !onPad()) { worst = Math.abs(h - prev); at = `(${x.toFixed(0)}, ${z.toFixed(0)}) ${s} m off the line`; }
         prev = h;

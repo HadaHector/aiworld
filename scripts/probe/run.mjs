@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const CATEGORIES = {
-  features: ["abandonedCamp", "yardShape", "vale"],
+  features: ["abandonedCamp", "yardShape", "featureReach", "vale"],
   placement: ["vale", "starts", "abandonedCamp"],
   dungeons: ["dungeons", "navigation"],
   "terrain-water": ["water", "riverLevels", "mapTiles", "swim", "vale"],
