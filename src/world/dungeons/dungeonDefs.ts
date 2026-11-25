@@ -309,16 +309,17 @@ export interface DungeonLight {
  * A mine's dressing (caveFixtures.ts): timber `sets` stood across every tunnel `every` metres, each
  * cut to the way's width and roof there; `lagging` boards behind their posts between two sets (that
  * share of the bays); `shoring` against a chamber's walls (that many stretches), cut to the wall;
- * `track` laid along every tunnel and through every chamber to its middle (a `turnplate` where they
- * meet), on to its work face, a cart (one of `carts`) parked at the end that share of the time; and
+ * a `lantern` hung from that share of the sets' caps (`lanterns`); `track` laid through `share` of its
+ * ways, in whole runs from its entrance (caveFixtures.ts, railedParts) - along their tunnels and
+ * through their chambers to the middle (a `turnplate` where they meet), on to the work face, a cart (one of `carts`) parked at the end that share of the time; and
  * at every dead end and one wall of each chamber a work `face`, each prop of it `at` the face itself,
  * `beside` it on the wall, at its `foot` or `near` it on the floor; `extras` free on a chamber's floor.
  */
 export interface MineDressing {
-  sets?: { prop: string; every: number };
+  sets?: { prop: string; every: number; lantern?: string; lanterns: number };
   lagging?: { prop: string; chance: number };
   shoring?: { prop: string; count: [number, number] };
-  track?: { prop: string; turnplate?: string; carts: string[]; cart: number };
+  track?: { prop: string; turnplate?: string; carts: string[]; cart: number; share: number };
   face: { prop: string; at: "face" | "beside" | "foot" | "near"; chance: number }[];
   extras: { prop: string; chance: number }[];
 }
@@ -993,10 +994,10 @@ function readDressing(reader: Reader, raw: RawObject): MineDressing {
     reader.onlyKeys(r, `${at}.${key}`, keys);
     return r;
   };
-  const sets = part("sets", ["prop", "every"]);
+  const sets = part("sets", ["prop", "every", "lantern", "lanterns"]);
   const lagging = part("lagging", ["prop", "chance"]);
   const shoring = part("shoring", ["prop", "count"]);
-  const track = part("track", ["prop", "turnplate", "carts", "cart"]);
+  const track = part("track", ["prop", "turnplate", "carts", "cart", "share"]);
   const list = (key: string, keys: string[]): { r: RawObject; path: string }[] =>
     raw[key] === undefined ? [] : reader.array(raw, key, at).map((v, i) => {
       const path = `${at}.${key}[${i}]`;
@@ -1005,7 +1006,12 @@ function readDressing(reader: Reader, raw: RawObject): MineDressing {
       return { r, path };
     });
   return {
-    sets: sets && { prop: reader.string(sets, "prop", `${at}.sets`), every: reader.optionalNumber(sets, "every", `${at}.sets`, 6, { min: 2 }) },
+    sets: sets && {
+      prop: reader.string(sets, "prop", `${at}.sets`),
+      every: reader.optionalNumber(sets, "every", `${at}.sets`, 6, { min: 2 }),
+      lantern: reader.optionalString(sets, "lantern", `${at}.sets`),
+      lanterns: reader.optionalNumber(sets, "lanterns", `${at}.sets`, 0, { min: 0, max: 1 }),
+    },
     lagging: lagging && { prop: reader.string(lagging, "prop", `${at}.lagging`), chance: reader.optionalNumber(lagging, "chance", `${at}.lagging`, 0.5, { min: 0, max: 1 }) },
     shoring: shoring && { prop: reader.string(shoring, "prop", `${at}.shoring`), count: shoring.count === undefined ? [1, 2] : reader.range(shoring, "count", `${at}.shoring`, { allowEqual: true }) },
     track: track && {
@@ -1013,6 +1019,7 @@ function readDressing(reader: Reader, raw: RawObject): MineDressing {
       turnplate: reader.optionalString(track, "turnplate", `${at}.track`),
       carts: track.carts === undefined ? [] : reader.stringList(track, "carts", `${at}.track`),
       cart: reader.optionalNumber(track, "cart", `${at}.track`, 0.7, { min: 0, max: 1 }),
+      share: reader.optionalNumber(track, "share", `${at}.track`, 1, { min: 0, max: 1 }),
     },
     face: list("face", ["prop", "at", "chance"]).map(({ r, path }) => ({ prop: reader.string(r, "prop", path), at: reader.oneOf(r, "at", path, ["face", "beside", "foot", "near"] as const), chance: reader.optionalNumber(r, "chance", path, 1, { min: 0, max: 1 }) })),
     extras: list("extras", ["prop", "chance"]).map(({ r, path }) => ({ prop: reader.string(r, "prop", path), chance: reader.optionalNumber(r, "chance", path, 1, { min: 0, max: 1 }) })),

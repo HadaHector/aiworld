@@ -8,7 +8,7 @@ import { generateLine, generateProp } from "../props/propGenerator";
 import type { PropDef } from "../props/propTypes";
 import { deriveSeed, mulberry32 } from "../rng";
 import type { DungeonStyleDef } from "./dungeonDefs";
-import { placedSpots, toWorld, type DungeonLayout } from "./layout";
+import { placedSpots, toWorld, type DungeonLayout, type PlacedPart } from "./layout";
 import type { CaveField } from "./caveField";
 
 export interface CaveFixtures {
@@ -40,26 +40,33 @@ function floorUnder(field: CaveField, x: number, y: number, z: number): number |
   return null;
 }
 
-/** The nearest rock round a point, level with it, looked for in 16 ways: where, and which way out of it. */
-function nearestWall(field: CaveField, x: number, y: number, z: number, start: number): { x: number; z: number; out: [number, number]; distance: number } | null {
-  let best: { x: number; z: number; out: [number, number]; distance: number } | null = null;
+/** The rock round a point, level with it, looked for in 16 ways - the nearest first: where, and which way out of it. */
+function wallsAround(field: CaveField, x: number, y: number, z: number, start: number): { x: number; z: number; out: [number, number]; distance: number }[] {
+  const hits: { x: number; z: number; out: [number, number]; distance: number }[] = [];
   for (let k = 0; k < 16; k++) {
     const a = start + (k * Math.PI) / 8;
     const dx = Math.sin(a), dz = Math.cos(a);
     for (let t = 0.5; t < WALL_REACH; t += 0.25) {
       if (field.rock(x + dx * t, y, z + dz * t) <= 0) continue;
-      if (!best || t < best.distance) best = { x: x + dx * t, z: z + dz * t, out: [-dx, -dz], distance: t };
+      hits.push({ x: x + dx * t, z: z + dz * t, out: [-dx, -dz], distance: t });
       break;
     }
   }
-  if (!best) return null;
+  hits.sort((a, b) => a.distance - b.distance);
   // Out of the rock along its gradient, level.
   const e = 0.3;
-  const gx = field.rock(best.x + e, y, best.z) - field.rock(best.x - e, y, best.z);
-  const gz = field.rock(best.x, y, best.z + e) - field.rock(best.x, y, best.z - e);
-  const l = Math.hypot(gx, gz);
-  if (l > 1e-6) best.out = [-gx / l, -gz / l];
-  return best;
+  for (const h of hits) {
+    const gx = field.rock(h.x + e, y, h.z) - field.rock(h.x - e, y, h.z);
+    const gz = field.rock(h.x, y, h.z + e) - field.rock(h.x, y, h.z - e);
+    const l = Math.hypot(gx, gz);
+    if (l > 1e-6) h.out = [-gx / l, -gz / l];
+  }
+  return hits;
+}
+
+/** The nearest rock round a point, level with it: where, and which way out of it. */
+function nearestWall(field: CaveField, x: number, y: number, z: number, start: number): { x: number; z: number; out: [number, number]; distance: number } | null {
+  return wallsAround(field, x, y, z, start)[0] ?? null;
 }
 
 // --- A mine's dressing (DUNGEONS.md, *The mine*) ------------------------------------------------
@@ -194,17 +201,172 @@ function clearOf(field: CaveField, x: number, floor: number, z: number, r: numbe
   return true;
 }
 
+/** How far round its tunnels' ends a part's socket is looked for; how near a line's corner must be to
+ *  another line's end to be where they meet. */
+const SOCKET_NEAR = 2.5;
+const JUNCTION_NEAR = 1.5;
+/** A mouth's sets start this far past its slip (the ring of boulders round the way in): never in the open. */
+const MOUTH_IN = 2.5;
+/** A hung lantern: its body's height and its chain, and so how far its top is over its foot (furniture.ts, lantern). */
+const LANTERN_BODY = 0.55;
+const LANTERN_CHAIN = 0.7;
+const LANTERN_TOP = LANTERN_BODY * 1.3 + 0.06 + 0.06 + LANTERN_CHAIN;
+/** How far what stands on the floor keeps from the track. */
+const RAIL_CLEAR = 1.8;
+
+/** A part's ways' length - its tunnels', or from its ways in to a chamber's middle - for sharing out track. */
+function passageLength(p: PlacedPart): number {
+  const shapes = p.part.field ?? [];
+  let length = 0;
+  for (const t of shapes) if (t.kind === "tunnel") length += lineLength(t.points);
+  const chamber = shapes.find((t) => t.kind === "chamber");
+  if (chamber) for (const so of p.part.sockets) if (so.type !== "surface") length += Math.hypot(so.at.x - chamber.at.x, so.at.z - chamber.at.z);
+  return shapes.length === 0 ? length + 8 : length;
+}
+
 /**
- * A mine's dressing (`light.dressing`, MineDressing), laid by its ways rather than at its light spots:
- * along every tunnel a timber set every so far, cut to its width and roof, lagging behind their posts
- * between them; a track along every tunnel, on through each chamber to its middle - a turnplate there
- * - and on to its work face; at every dead end and one wall of each chamber that face, its vein, its
- * tools and ore, a cart at the end of its track; shoring against a chamber's walls, and its extras
- * free on its floor. Their models appended to `b`; they light nothing.
+ * The parts a mine's track runs through (MineDressing `track.share`): whole runs, never pieces - from
+ * its entrance along its main line (towards its boss), and then branches off what is railed already,
+ * each followed down its longest way, until about that share of its ways' length has track (a part
+ * is railed whole, so a little more).
  */
-function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, field: CaveField, props: (id: string) => PropDef | undefined): number {
+export function railedParts(layout: DungeonLayout, share: number, random: () => number): Set<number> {
+  const n = layout.parts.length;
+  const weight = layout.parts.map(passageLength);
+  const total = weight.reduce((s, w) => s + w, 0);
+  const up = new Array<number>(n).fill(-1);
+  const down: number[][] = layout.parts.map(() => []);
+  for (const j of layout.joins) {
+    if (j.loop || up[j.b] >= 0) continue;
+    up[j.b] = j.a;
+    down[j.a].push(j.b);
+  }
+  // How long the longest way on from each part is.
+  const deep = new Array<number>(n).fill(-1);
+  const deepOf = (i: number): number => {
+    if (deep[i] >= 0) return deep[i];
+    deep[i] = 0;
+    return (deep[i] = weight[i] + Math.max(0, ...down[i].map(deepOf)));
+  };
+  const railed = new Set<number>();
+  let length = 0;
+  const add = (i: number): void => {
+    if (railed.has(i)) return;
+    railed.add(i);
+    length += weight[i];
+  };
+  const root = Math.max(0, layout.parts.findIndex((p) => p.role === "entrance"));
+  if (share <= 0) return railed;
+  // The main line: the entrance down to the boss (else down its longest way).
+  const main: number[] = [];
+  for (let i = layout.boss; i >= 0 && main.length <= n; i = up[i]) main.unshift(i);
+  if (main[0] !== root) {
+    main.length = 0;
+    for (let i = root; i >= 0; ) {
+      main.push(i);
+      const next = down[i].slice().sort((a, b) => deepOf(b) - deepOf(a))[0];
+      i = next ?? -1;
+    }
+  }
+  // Along it from the entrance as far as the share reaches (a small lair's main line is most of it).
+  const target = total * share;
+  for (const i of main) {
+    add(i);
+    if (length >= target) break;
+  }
+  // Then branches off what is railed, each taken down its longest way, until there is enough.
+  while (length < target) {
+    const options = [...railed].flatMap((i) => down[i].filter((c) => !railed.has(c)));
+    if (options.length === 0) break;
+    let at = options[Math.floor(random() * options.length)];
+    for (;;) {
+      add(at);
+      if (length >= target) break;
+      const next = down[at].filter((c) => !railed.has(c)).sort((a, b) => deepOf(b) - deepOf(a))[0];
+      if (next === undefined) break;
+      at = next;
+    }
+  }
+  return railed;
+}
+
+/** One of a part's tunnels' track: the line, and how each of its ends is left. */
+interface TrackLine {
+  line: Pt[];
+  ends: ["free" | "join", "free" | "join"];
+}
+
+/**
+ * A railed part's tunnels' track. Each tunnel's end is at one of its ways (a socket) - railed on past
+ * it, or not - or inside the part (where it meets another tunnel), or in a mouth's slip (railed on
+ * out to the yard). A tunnel running out to a way left unrailed is cut back to where it meets another,
+ * if it does; one with no railed end is left without. A free end gets a buffer stop.
+ */
+function tunnelTrack(lines: Pt[][], sockets: { at: Pt; railed: boolean }[], mouth: boolean): TrackLine[] {
+  type End = "railed" | "unrailed" | "inside" | "slip";
+  const endOf = (q: Pt, first: boolean): End => {
+    let best: { d: number; railed: boolean } | null = null;
+    for (const so of sockets) {
+      const d = Math.hypot(so.at.x - q.x, so.at.z - q.z);
+      if (d < SOCKET_NEAR && (!best || d < best.d)) best = { d, railed: so.railed };
+    }
+    if (best) return best.railed ? "railed" : "unrailed";
+    return mouth && first ? "slip" : "inside";
+  };
+  const near = (a: Pt, b: Pt): boolean => Math.hypot(a.x - b.x, a.z - b.z) < JUNCTION_NEAR;
+  const kept: { line: Pt[]; ends: [End, End] }[] = [];
+  lines.forEach((line, i) => {
+    let pts = line.slice();
+    const ends: [End, End] = [endOf(pts[0], true), endOf(pts[pts.length - 1], false)];
+    // Where the other tunnels' ends meet it, along it.
+    const meets = (k: number): boolean => lines.some((other, o) => o !== i && (near(other[0], pts[k]) || near(other[other.length - 1], pts[k])));
+    if (ends[1] === "unrailed") {
+      for (let k = pts.length - 2; k > 0; k--) {
+        if (!meets(k)) continue;
+        pts = pts.slice(0, k + 1);
+        ends[1] = "inside";
+        break;
+      }
+    }
+    if (ends[0] === "unrailed") {
+      for (let k = 1; k < pts.length - 1; k++) {
+        if (!meets(k)) continue;
+        pts = pts.slice(k);
+        ends[0] = "inside";
+        break;
+      }
+    }
+    if (!ends.some((e) => e === "railed" || e === "slip")) return;
+    kept.push({ line: pts, ends });
+  });
+  return kept.map(({ line, ends }, i) => {
+    const touched = (q: Pt): boolean => kept.some((o, k) => k !== i && o.line.some((r) => near(r, q)));
+    const leave = (e: End, q: Pt): "free" | "join" => (e === "unrailed" || (e === "inside" && !touched(q)) ? "free" : "join");
+    return { line, ends: [leave(ends[0], line[0]), leave(ends[1], line[line.length - 1])] };
+  });
+}
+
+/** What a mine's dressing laid: how many props, and where its track and carts lie. */
+interface Dressed {
+  placed: number;
+  railed: Pt[];
+}
+
+/**
+ * A mine's dressing (`light.dressing`, MineDressing), laid by its ways rather than at its light spots.
+ * First its track, through the parts `railedParts` picks (about `track.share` of its ways, in whole
+ * runs from its entrance): down the middle of their tunnels, in a chamber from each railed way in to a
+ * turnplate in its middle and on to its work face, in a dead end up to its face - a cart parked at the
+ * buffer stop before a face. Then the rest, clear of the track: along every tunnel a timber set every
+ * so far, cut to its width and roof (and never out in a mouth's slip), a share of them with a lantern
+ * hung from the cap, lagging behind their posts between them; at every dead end and one wall of each
+ * chamber its work face, its vein, its tools and ore; shoring against a chamber's walls, and its
+ * extras free on its floor. Their models appended to `b`.
+ */
+function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, field: CaveField, props: (id: string) => PropDef | undefined): Dressed {
   const d = style.light.dressing;
-  if (!d) return 0;
+  const railed: Pt[] = [];
+  if (!d) return { placed: 0, railed };
   const get = (id: string | undefined): PropDef | undefined => {
     if (!id) return undefined;
     const def = props(id);
@@ -212,6 +374,7 @@ function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, f
     return def;
   };
   const setDef = get(d.sets?.prop), laggingDef = get(d.lagging?.prop), shoringDef = get(d.shoring?.prop);
+  const lanternDef = get(d.sets?.lantern);
   const trackDef = get(d.track?.prop), plateDef = get(d.track?.turnplate);
   const carts = (d.track?.carts ?? []).map(get).filter((c): c is PropDef => !!c);
   const face = d.face.map((f) => ({ ...f, def: get(f.prop) })).filter((f): f is typeof f & { def: PropDef } => !!f.def);
@@ -228,8 +391,6 @@ function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, f
     b.appendFurniture(m, x, y, z, fx, fz);
     placed++;
   };
-  /** Where track lies (kept clear of what stands free). */
-  const railed: Pt[] = [];
   const nearRail = (x: number, z: number, r: number): boolean => railed.some((q) => Math.hypot(q.x - x, q.z - z) < r);
 
   /** Track along a line on the floor, its ends free (a buffer stop) or running on. */
@@ -278,11 +439,11 @@ function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, f
   };
 
   /** A work face on the wall reached going (dx, dz) from a point: its vein, tools and ore round it. */
-  const workFace = (x: number, y: number, z: number, dx: number, dz: number, random: () => number, seed: number): { x: number; z: number; distance: number } | null => {
+  const workFace = (x: number, y: number, z: number, dx: number, dz: number, random: () => number, seed: number): void => {
     const f0 = floorUnder(field, x, y + 2.5, z);
-    if (f0 === null) return null;
+    if (f0 === null) return;
     const r = reachTo(field, x, f0 + 2, z, dx, dz, 40);
-    if (r === null || r < TRACK_SHORT + 3) return null;
+    if (r === null || r < TRACK_SHORT + 3) return;
     const wx = x + dx * r, wz = z + dz * r;
     const nx = -dx, nz = -dz;
     const tx = dz, tz = -dx;
@@ -311,141 +472,186 @@ function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, f
         const along = e.at === "foot" ? -side * (1.9 + random() * 0.6) : (random() < 0.5 ? 1 : -1) * (2.9 + random() * 1.6);
         const px = wx + nx * out + tx * along, pz = wz + nz * out + tz * along;
         const f = floorAt(px, pz);
-        if (f === null || !clearOf(field, px, f, pz, 0.9) || taken.some(([a, c]) => Math.hypot(a - px, c - pz) < 2.2) || nearRail(px, pz, 1.6)) continue;
+        if (f === null || !clearOf(field, px, f, pz, 0.9) || taken.some(([a, c]) => Math.hypot(a - px, c - pz) < 2.2) || nearRail(px, pz, RAIL_CLEAR)) continue;
         taken.push([px, pz]);
         const turn = random() * Math.PI * 2;
         put(m, px, f - 0.03, pz, Math.sin(turn), Math.cos(turn));
         break;
       }
     });
-    return { x: wx, z: wz, distance: r };
   };
 
-  layout.parts.forEach((p, index) => {
+  const onRails = railedParts(layout, d.track?.share ?? 1, mulberry32(deriveSeed(layout.seed, 0x7a11)));
+  const railedSocket = (i: number, k: number): boolean => {
+    const j = layout.joins.find((q) => (q.a === i && q.socketA === k) || (q.b === i && q.socketB === k));
+    return !!j && onRails.has(i) && onRails.has(j.a === i ? j.b : j.a);
+  };
+
+  // Each part's ways, measured once: its sockets, tunnels, chamber, and where its work face is.
+  const parts = layout.parts.map((p, index) => {
     const random = mulberry32(deriveSeed(layout.seed, index * 6271 + 41));
     const seed = deriveSeed(layout.seed, index * 131 + 7);
     const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
     const turn = (x: number, z: number): [number, number] => [x * c + z * s, -x * s + z * c];
-    const sockets = p.part.sockets.filter((so) => so.type !== "surface").map((so) => {
+    const sockets = p.part.sockets.flatMap((so, k) => {
+      if (so.type === "surface") return [];
       const f = (so.facing * Math.PI) / 180;
       const [ox, oz] = turn(Math.sin(f), Math.cos(f));
-      return { at: toWorld(p, so.at), out: [ox, oz] as [number, number] };
+      return [{ at: toWorld(p, so.at), out: [ox, oz] as [number, number], railed: railedSocket(index, k) }];
     });
-    const field0 = p.part.field ?? [];
-    const tunnels = field0.flatMap((t) => (t.kind === "tunnel" ? [t.points.map((q) => toWorld(p, q))] : []));
-    const chamber = field0.find((t) => t.kind === "chamber");
-
-    // Tunnels: sets along them, lagging between, track down the middle.
-    for (const line of tunnels) {
-      const length = lineLength(line);
-      if (setDef && length > SET_IN * 2 + 1) {
-        const every = d.sets!.every;
-        const count = Math.max(1, Math.round((length - SET_IN * 2) / every)) + 1;
-        const spacing = (length - SET_IN * 2) / (count - 1);
-        const sets = stepsAlong(line, spacing, SET_IN, length - SET_IN + 0.01).map((q) => ({ q, fit: fitSet(field, q.x, q.y, q.z, q.ux, q.uz) }));
-        sets.forEach(({ q, fit }, n) => {
-          if (!fit) return;
-          const w = Math.round((fit.half - SET_T / 2 - 0.03) * 2 * 10) / 10;
-          const h = Math.round((fit.roof - fit.foot - SET_OVER - 0.04) * 10) / 10;
-          if (h < 2.5) return;
-          const reach = Math.round(spacing * 0.42 * 10) / 10;
-          const v = n % 3;
-          put(model(`set:${w}:${h}:${reach}:${v}`, () => generateProp(fixed(setDef, { width: w, height: h, thickness: SET_T, reach }), seed, v)), fit.x, fit.foot - 0.05, fit.z, q.ux, q.uz);
-        });
-        // Lagging behind the posts, between two sets, up the walls.
-        if (laggingDef) {
-          for (let n = 0; n + 1 < sets.length; n++) {
-            const a = sets[n].fit, e = sets[n + 1].fit;
-            if (!a || !e) continue;
-            for (const sd of [-1, 1]) {
-              if (random() >= d.lagging!.chance) continue;
-              const mx = (a.x + sd * a.ax * a.half + e.x + sd * e.ax * e.half) / 2, mz = (a.z + sd * a.az * a.half + e.z + sd * e.az * e.half) / 2;
-              const ux = e.x - a.x, uz = e.z - a.z, ul = Math.hypot(ux, uz);
-              if (ul < 1) continue;
-              const height = Math.round(Math.min(a.roof - a.foot, e.roof - e.foot) * (0.55 + random() * 0.2) * 10) / 10;
-              const width = Math.round((ul - SET_T * 1.2) * 10) / 10;
-              const f = floorUnder(field, mx - sd * a.ax * 0.8, Math.max(a.foot, e.foot) + 2, mz - sd * a.az * 0.8);
-              if (f === null || width < 1) continue;
-              put(model(`lag:${width}:${height}`, () => generateProp(fixed(laggingDef, { width, height, props: 0 }), seed, 0)), mx, f - 0.05, mz, -sd * a.ax, -sd * a.az);
-            }
+    const shapes = p.part.field ?? [];
+    const tunnels = shapes.flatMap((t) => (t.kind === "tunnel" ? [t.points.map((q) => toWorld(p, q))] : []));
+    const chamber = shapes.find((t) => t.kind === "chamber");
+    /** How far into a mouth's part a point is, from its slip's foot (Infinity: no mouth). */
+    const intoMouth = (x: number, z: number): number => (p.part.mouth ? (x - p.x) * s + (z - p.z) * c - p.part.mouth.length : Infinity);
+    // A chamber's face: on the stretch of its walls furthest from its ways in (square to the wall, so
+    // what stands there stands flat on it), its track from the middle bending in square to it. The
+    // rest of the stretches, in that order, for shoring.
+    let room: null | {
+      hub: Pt;
+      hubFloor: number;
+      stretches: { inside: Pt; dx: number; dz: number }[];
+      face: { line: Pt[]; stop: Pt; bend: Pt; dx: number; dz: number } | null;
+    } = null;
+    if (chamber && chamber.kind === "chamber") {
+      const hub = toWorld(p, chamber.at);
+      const hubFloor = floorUnder(field, hub.x, hub.y + 2.5, hub.z);
+      if (hubFloor !== null) {
+        const [rx, rz] = chamber.radius;
+        const local = p.part.sockets.filter((so) => so.type !== "surface").map((so) => so.at);
+        const stretches = [[1, 0], [-1, 0], [0, 1], [0, -1]].flatMap(([nx, nz]) =>
+          [-0.5, 0.5].map((off) => {
+            const r = nx !== 0 ? rx : rz, across = nx !== 0 ? rz : rx;
+            const lx = chamber.at.x + nx * r + nz * off * across, lz = chamber.at.z + nz * r + nx * off * across;
+            const score = Math.min(...local.map((q) => Math.hypot(q.x - lx, q.z - lz)), Infinity);
+            const inside = toWorld(p, { x: lx - nx * r * 0.5, y: chamber.at.y, z: lz - nz * r * 0.5 });
+            const [dx, dz] = turn(nx, nz);
+            return { inside, dx, dz, score: score + random() * 2 };
+          }),
+        ).sort((a, b) => b.score - a.score);
+        let faceAt: { line: Pt[]; stop: Pt; bend: Pt; dx: number; dz: number } | null = null;
+        const first = stretches.shift();
+        if (first) {
+          const { inside, dx, dz } = first;
+          const f = floorUnder(field, inside.x, hubFloor + 3, inside.z);
+          const wall = f === null ? null : reachTo(field, inside.x, f + 2, inside.z, dx, dz, 30);
+          if (wall !== null) {
+            const wx = inside.x + dx * wall, wz = inside.z + dz * wall;
+            const stop = { x: wx - dx * TRACK_SHORT, y: hub.y, z: wz - dz * TRACK_SHORT };
+            const bend = { x: wx - dx * (TRACK_SHORT + 6), y: hub.y, z: wz - dz * (TRACK_SHORT + 6) };
+            faceAt = { line: Math.hypot(bend.x - hub.x, bend.z - hub.z) > 3 ? [hub, bend, stop] : [hub, stop], stop, bend, dx, dz };
           }
         }
+        room = { hub, hubFloor, stretches, face: faceAt };
       }
-      lay(line, ["join", "join"], deriveSeed(seed, tunnels.indexOf(line)));
     }
-
-    // A dead end (a socket's stub and nothing more): sets in it, its track up to a face at its end.
-    if (field0.length === 0 && sockets.length === 1) {
+    // A dead end (a socket's stub and nothing more): how deep it runs to its face.
+    let deadEnd: null | { at: Pt; ix: number; iz: number; depth: number } = null;
+    if (shapes.length === 0 && sockets.length === 1) {
       const { at, out } = sockets[0];
       const ix = -out[0], iz = -out[1];
       const f = floorUnder(field, at.x, at.y + 2.5, at.z);
       const depth = f === null ? null : reachTo(field, at.x + ix, f + 2, at.z + iz, ix, iz, 30);
-      if (f !== null && depth !== null) {
-        if (setDef) {
-          for (const k of depth > 9 ? [SET_IN, SET_IN + 4.5] : [SET_IN]) {
-            const fit = fitSet(field, at.x + ix * k, at.y, at.z + iz * k, ix, iz);
-            if (!fit) continue;
-            const w = Math.round((fit.half - SET_T / 2 - 0.03) * 2 * 10) / 10;
-            const h = Math.round((fit.roof - fit.foot - SET_OVER - 0.04) * 10) / 10;
-            if (h < 2.5) continue;
-            put(model(`set:${w}:${h}:2.3:0`, () => generateProp(fixed(setDef, { width: w, height: h, thickness: SET_T, reach: 2.3 }), seed, 0)), fit.x, fit.foot - 0.05, fit.z, ix, iz);
-          }
-        }
-        const wall = 1 + depth;
-        const stop = wall - TRACK_SHORT;
-        if (stop > 1.5) {
-          lay([at, { x: at.x + ix * stop, y: at.y, z: at.z + iz * stop }], ["join", "free"], seed);
-          const cart = stop - CART_OUT;
-          if (cart > 1.5) park(at.x + ix * cart, at.y, at.z + iz * cart, ix, iz, random, seed);
-        }
-        workFace(at.x, at.y, at.z, ix, iz, random, seed);
+      if (depth !== null) deadEnd = { at, ix, iz, depth };
+    }
+    return { p, index, seed, sockets, tunnels, room, deadEnd, intoMouth, railed: onRails.has(index) };
+  });
+
+  // First the track, so all that stands on the floor keeps clear of it.
+  for (const q of parts) {
+    if (!q.railed) continue;
+    const random = mulberry32(deriveSeed(layout.seed, q.index * 6271 + 42));
+    tunnelTrack(q.tunnels, q.sockets, !!q.p.part.mouth).forEach((t, k) => lay(t.line, t.ends, deriveSeed(q.seed, k)));
+    if (q.deadEnd) {
+      const { at, ix, iz, depth } = q.deadEnd;
+      const stop = 1 + depth - TRACK_SHORT;
+      if (stop > 1.5) {
+        lay([at, { x: at.x + ix * stop, y: at.y, z: at.z + iz * stop }], ["join", "free"], q.seed);
+        const cart = stop - CART_OUT;
+        if (cart > 1.5) park(at.x + ix * cart, at.y, at.z + iz * cart, ix, iz, random, q.seed);
       }
-      return;
+    }
+    if (q.room) {
+      const { hub, hubFloor, face: f } = q.room;
+      q.sockets.forEach(({ at, railed: r }, k) => r && lay([at, hub], ["join", "join"], deriveSeed(q.seed, 100 + k)));
+      if (plateDef) put(model(`plate:${plateDef.id}`, () => generateProp(plateDef, q.seed, 0)), hub.x, hubFloor - 0.02, hub.z, 1, 0);
+      if (f) {
+        lay(f.line, ["join", "free"], deriveSeed(q.seed, 99));
+        park(f.stop.x - f.dx * CART_OUT, hub.y, f.stop.z - f.dz * CART_OUT, f.dx, f.dz, random, q.seed);
+      }
+    }
+  }
+
+  // Then what stands by the ways.
+  for (const { p, index, seed, tunnels, room, deadEnd, intoMouth } of parts) {
+    const random = mulberry32(deriveSeed(layout.seed, index * 6271 + 43));
+    /** A timber set where it was fitted along (ux, uz) - and now and then a lantern hung from its cap. */
+    const stand = (fit: Fitted, ux: number, uz: number, reach: number, v: number): boolean => {
+      if (!setDef || intoMouth(fit.x, fit.z) < MOUTH_IN) return false;
+      const w = Math.round((fit.half - SET_T / 2 - 0.03) * 2 * 10) / 10;
+      const h = Math.round((fit.roof - fit.foot - SET_OVER - 0.04) * 10) / 10;
+      if (h < 2.5) return false;
+      put(model(`set:${w}:${h}:${reach}:${v}`, () => generateProp(fixed(setDef, { width: w, height: h, thickness: SET_T, reach }), seed, v)), fit.x, fit.foot - 0.05, fit.z, ux, uz);
+      if (lanternDef && random() < (d.sets?.lanterns ?? 0)) {
+        // Off to one side of the cap, clear of the post and its brace, over the walk by the track.
+        const across = (random() < 0.5 ? 1 : -1) * Math.max(0, w / 2 - 1.3);
+        const top = fit.foot - 0.05 + h;
+        put(model(`lantern:${lanternDef.id}`, () => generateProp(fixed(lanternDef, { chain: LANTERN_CHAIN, height: LANTERN_BODY }), seed, 0)), fit.x + fit.ax * across, top - LANTERN_TOP, fit.z + fit.az * across, ux, uz);
+      }
+      return true;
+    };
+    // Tunnels: sets along them, lagging between.
+    for (const line of tunnels) {
+      const length = lineLength(line);
+      if (!setDef || length <= SET_IN * 2 + 1) continue;
+      const every = d.sets!.every;
+      const count = Math.max(1, Math.round((length - SET_IN * 2) / every)) + 1;
+      const spacing = (length - SET_IN * 2) / (count - 1);
+      const reach = Math.round(spacing * 0.42 * 10) / 10;
+      const sets = stepsAlong(line, spacing, SET_IN, length - SET_IN + 0.01).map((q, n) => {
+        const fit = fitSet(field, q.x, q.y, q.z, q.ux, q.uz);
+        return fit && stand(fit, q.ux, q.uz, reach, n % 3) ? fit : null;
+      });
+      // Lagging behind the posts, between two sets, up the walls.
+      if (!laggingDef) continue;
+      for (let n = 0; n + 1 < sets.length; n++) {
+        const a = sets[n], e = sets[n + 1];
+        if (!a || !e) continue;
+        for (const sd of [-1, 1]) {
+          if (random() >= d.lagging!.chance) continue;
+          const mx = (a.x + sd * a.ax * a.half + e.x + sd * e.ax * e.half) / 2, mz = (a.z + sd * a.az * a.half + e.z + sd * e.az * e.half) / 2;
+          const ux = e.x - a.x, uz = e.z - a.z, ul = Math.hypot(ux, uz);
+          if (ul < 1) continue;
+          const height = Math.round(Math.min(a.roof - a.foot, e.roof - e.foot) * (0.55 + random() * 0.2) * 10) / 10;
+          const width = Math.round((ul - SET_T * 1.2) * 10) / 10;
+          const f = floorUnder(field, mx - sd * a.ax * 0.8, Math.max(a.foot, e.foot) + 2, mz - sd * a.az * 0.8);
+          if (f === null || width < 1) continue;
+          put(model(`lag:${width}:${height}`, () => generateProp(fixed(laggingDef, { width, height, props: 0 }), seed, 0)), mx, f - 0.05, mz, -sd * a.ax, -sd * a.az);
+        }
+      }
     }
 
-    if (!chamber || chamber.kind !== "chamber") return;
-    // A chamber: track in from every way to a turnplate in its middle, and on to its work face.
-    const hub = toWorld(p, chamber.at);
-    const hubFloor = floorUnder(field, hub.x, hub.y + 2.5, hub.z);
-    if (hubFloor === null) return;
-    sockets.forEach(({ at }, k) => lay([at, hub], ["join", "join"], deriveSeed(seed, 100 + k)));
-    if (plateDef) put(model(`plate:${plateDef.id}`, () => generateProp(plateDef, seed, 0)), hub.x, hubFloor - 0.02, hub.z, 1, 0);
-    // Stretches of its walls: on each of its four sides, either side of the middle - square to the
-    // wall, so what stands there stands flat on it. Furthest from its ways in first.
-    const [rx, rz] = chamber.radius;
-    const local = p.part.sockets.filter((so) => so.type !== "surface").map((so) => so.at);
-    const stretches = [[1, 0], [-1, 0], [0, 1], [0, -1]].flatMap(([nx, nz]) =>
-      [-0.5, 0.5].map((off) => {
-        const r = nx !== 0 ? rx : rz, across = nx !== 0 ? rz : rx;
-        const lx = chamber.at.x + nx * r + nz * off * across, lz = chamber.at.z + nz * r + nx * off * across;
-        const score = Math.min(...local.map((q) => Math.hypot(q.x - lx, q.z - lz)), Infinity);
-        const inside = toWorld(p, { x: lx - nx * r * 0.5, y: chamber.at.y, z: lz - nz * r * 0.5 });
-        const [dx, dz] = turn(nx, nz);
-        return { inside, dx, dz, score: score + random() * 2 };
-      }),
-    ).sort((a, b) => b.score - a.score);
-    // The face: on the first, its track from the middle bending in square to it.
-    const first = stretches.shift();
-    if (first) {
-      const { inside, dx, dz } = first;
-      const f = floorUnder(field, inside.x, hubFloor + 3, inside.z);
-      const wall = f === null ? null : reachTo(field, inside.x, f + 2, inside.z, dx, dz, 30);
-      if (wall !== null && f !== null) {
-        const wx = inside.x + dx * wall, wz = inside.z + dz * wall;
-        const stop = { x: wx - dx * TRACK_SHORT, y: hub.y, z: wz - dz * TRACK_SHORT };
-        const bend = { x: wx - dx * (TRACK_SHORT + 6), y: hub.y, z: wz - dz * (TRACK_SHORT + 6) };
-        const line = Math.hypot(bend.x - hub.x, bend.z - hub.z) > 3 ? [hub, bend, stop] : [hub, stop];
-        lay(line, ["join", "free"], deriveSeed(seed, 99));
-        park(stop.x - dx * CART_OUT, hub.y, stop.z - dz * CART_OUT, dx, dz, random, seed);
-        workFace(bend.x, hub.y, bend.z, dx, dz, random, seed);
+    // A dead end: sets in it, its face at its end.
+    if (deadEnd) {
+      const { at, ix, iz, depth } = deadEnd;
+      for (const k of depth > 9 ? [SET_IN, SET_IN + 4.5] : [SET_IN]) {
+        const fit = fitSet(field, at.x + ix * k, at.y, at.z + iz * k, ix, iz);
+        if (fit) stand(fit, ix, iz, 2.3, 0);
       }
+      workFace(at.x, at.y, at.z, ix, iz, random, seed);
+      continue;
     }
+
+    if (!room) continue;
+    const { hub, hubFloor, stretches } = room;
+    if (room.face) workFace(room.face.bend.x, hub.y, room.face.bend.z, room.face.dx, room.face.dz, random, seed);
     // Shoring against its walls: on the next stretches, as high as the wall stands upright.
     if (shoringDef) {
       const [lo, hi] = d.shoring!.count;
       const count = lo + Math.floor(random() * (hi - lo + 1));
-      for (let n = 0; n < count && stretches.length > 0; ) {
-        const { inside, dx, dz } = stretches.shift()!;
+      const left = stretches.slice();
+      for (let n = 0; n < count && left.length > 0; ) {
+        const { inside, dx, dz } = left.shift()!;
         const r = reachTo(field, inside.x, hubFloor + 1.2, inside.z, dx, dz, 30);
         if (r === null || r < 3.5) continue;
         const px = inside.x + dx * (r - 3), pz = inside.z + dz * (r - 3);
@@ -469,7 +675,8 @@ function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, f
     // What stands free on its floor, clear of its track.
     for (const e of extras) {
       if (random() >= e.chance) continue;
-      const reach = Math.min(chamber.radius[0], chamber.radius[1]) * 0.6;
+      const chamber = p.part.field?.find((t) => t.kind === "chamber");
+      const reach = chamber && chamber.kind === "chamber" ? Math.min(chamber.radius[0], chamber.radius[1]) * 0.6 : 4;
       for (let attempt = 0; attempt < 12; attempt++) {
         const a = random() * Math.PI * 2, r = 4 + random() * Math.max(0, reach - 4);
         const x = hub.x + Math.sin(a) * r, z = hub.z + Math.cos(a) * r;
@@ -480,11 +687,11 @@ function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, f
         break;
       }
     }
-  });
-  return placed;
+  }
+  return { placed, railed };
 }
 
-/** The fixtures at a cave's light spots: their models together, their lights and flames. */
+/** The fixtures at a cave's light spots - set clear of a mine's track - and its dressing: their models together, their lights and flames. */
 export function caveFixtures(layout: DungeonLayout, style: DungeonStyleDef, field: CaveField, props: (id: string) => PropDef | undefined): CaveFixtures {
   const options = (style.light.fixtures ?? [{ prop: style.light.fixture, weight: 1, place: "wall" as const }])
     .map((f) => ({ ...f, def: props(f.prop) }))
@@ -493,7 +700,9 @@ export function caveFixtures(layout: DungeonLayout, style: DungeonStyleDef, fiel
       return !!f.def;
     });
   const b = new ModelBuilder();
-  let placed = 0;
+  const dressed = dress(b, layout, style, field, props);
+  let placed = dressed.placed;
+  const onRail = (x: number, z: number): boolean => dressed.railed.some((q) => Math.hypot(q.x - x, q.z - z) < RAIL_CLEAR);
   if (options.length > 0) {
     const total = options.reduce((s, o) => s + o.weight, 0);
     layout.parts.forEach((p, index) => {
@@ -506,31 +715,35 @@ export function caveFixtures(layout: DungeonLayout, style: DungeonStyleDef, fiel
         const start = random() * Math.PI * 2;
         const floor = floorUnder(field, spot.x, spot.y + 2, spot.z);
         if (floor === null) return;
-        if (option.place === "floor") {
+        if (option.place === "floor" && !onRail(spot.x, spot.z)) {
           // On the floor where the spot is, turned any way.
           b.appendFurniture(model, spot.x, floor, spot.z, Math.sin(start), Math.cos(start));
           placed++;
           return;
         }
-        const level = option.place === "wall" ? floor + TORCH_HEIGHT : floor + 1;
-        const wall = nearestWall(field, spot.x, level, spot.z, start);
-        if (!wall) return;
         if (option.place === "wall") {
           // Its back on the rock (the prop's back 0.35 m behind its origin), facing out; its flame at the height.
+          const level = floor + TORCH_HEIGHT;
+          const wall = nearestWall(field, spot.x, level, spot.z, start);
+          if (!wall) return;
           const flame = model.lights?.[0]?.position[1] ?? 0;
           b.appendFurniture(model, wall.x + wall.out[0] * 0.3, level - flame, wall.z + wall.out[1] * 0.3, wall.out[0], wall.out[1]);
-        } else {
-          // At the wall's foot: a little out from where the rock rises, on the floor there.
+          placed++;
+          return;
+        }
+        // At a wall's foot (the nearest whose foot is clear of any track): a little out from where the
+        // rock rises, on the floor there, facing in. (Where a floor spot lies on the track, too.)
+        for (const wall of wallsAround(field, spot.x, floor + 1, spot.z, start)) {
           const x = wall.x + wall.out[0] * 1.2, z = wall.z + wall.out[1] * 1.2;
           const foot = floorUnder(field, x, floor + 2, z);
-          if (foot === null) return;
+          if (foot === null || onRail(x, z)) continue;
           b.appendFurniture(model, x, foot - 0.05, z, wall.out[0], wall.out[1]);
+          placed++;
+          return;
         }
-        placed++;
       });
     });
   }
-  placed += dress(b, layout, style, field, props);
   const model = placed > 0 ? b.finish({ x: 0, z: 0 }) : null;
   return { model, lights: model?.lights ?? [], effects: model?.effects ?? [] };
 }
