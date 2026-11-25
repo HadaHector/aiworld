@@ -11,11 +11,11 @@ import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
 import { plantedTrees } from "../world/foliage/featureTrees";
 import { createTreeCover, createTreeScatter, type TreeGround, type TreePlacement } from "../world/foliage/treeScatter";
-import { compoundGap, layoutCompound, planCompound, settleProps, settleOnGround, wallStretches, type CompoundLayout, type CompoundSite } from "../world/features/compound";
+import { aditFixtures, compoundGap, layoutCompound, planCompound, settleProps, settleOnGround, wallStretches, type CompoundLayout, type CompoundSite } from "../world/features/compound";
 import { ADIT_GAP } from "../world/features/featureSites";
 import { compoundPads, createPadField, propPads, type Pad, type PadField } from "../world/settlements/padField";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
-import { generateProp, measureProp } from "../world/props/propGenerator";
+import { generateProp } from "../world/props/propGenerator";
 import { deriveSeed, mulberry32 } from "../world/rng";
 import { smoothstep } from "../world/mathUtils";
 
@@ -131,10 +131,10 @@ export function buildFeaturePreview(
   const railTrack = content.props.find((prop) => prop.id === "railTrack");
   if (layout.rails && railTrack) layout.walls.push({ prop: railTrack, variant: 0, points: layout.rails, heights: [], ends: ["free", "join"], breach: false });
   settleOnGround([layout], sampleTerrain);
-  const frame = content.props.find((prop) => prop.id === "timberSet");
-  if (mouth && frame) {
-    const { halfWidth, halfDepth } = measureProp(frame, seed, 0);
-    layout.props.push({ prop: frame, variant: 0, x: mouth.x + mouth.ux * 1.5, z: mouth.z + mouth.uz * 1.5, y: mouth.y, frontX: -mouth.ux, frontZ: -mouth.uz, on: null, lift: 0, reach: Math.hypot(halfWidth, halfDepth), halfWidth, halfDepth, group: -1, up: [0, 1, 0] });
+  if (mouth) {
+    const fixtures = aditFixtures(mouth, content.props.find((prop) => prop.id === "timberSet"), railTrack, seed);
+    layout.props.push(...fixtures.props);
+    layout.walls.push(...fixtures.walls);
   }
 
   const placed: FeaturePreview["placed"] = [
