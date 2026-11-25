@@ -18,7 +18,7 @@
     // compound.ts's layoutRoadside).
     yard: { radius: [15, 19] },
     // Its buildings' and props' ground trodden to earth, fraying out into the grass 3 m past them.
-    pads: { slope: 0.6, blend: [1.5, 10], spill: { material: "track", reach: 3 } },
+    pads: { slope: 0.2, blend: [1.5, 10], spill: { material: "track", reach: 3 } },
     arrangement: "roadside",
     // The inn always, its front to the road; a stable most times; a shed now and then.
     buildings: [

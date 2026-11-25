@@ -176,7 +176,7 @@ export const HOUSE_MAX_CUT_FILL = 6;
 
 /** Around a pad the ground returns to its own level at this slope, as wide as that takes - the same
  *  rule road shoulders follow (roadConfig's ROAD_SIDE_SLOPE) - between these widths. */
-export const PAD_SIDE_SLOPE = 0.6;
+export const PAD_SIDE_SLOPE = 0.2;
 export const PAD_BLEND_MIN = 1.5;
 export const PAD_BLEND_MAX = 10;
 /** Pads are painted with the road surface by reporting a road gap this much larger than the
