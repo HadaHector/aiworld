@@ -178,7 +178,7 @@ the forest style using synth stand-ins.
 - Code is in `src/music/`: `theory.ts`, `song.ts` (the model), `instruments.ts` (synths rendered to
   sample zones), `player.ts`, `styles.ts`, `composer.ts` and `format.ts`. The page is in
   `src/musicPage/`.
-- `npm run probe -- scripts/probe/music.mjs [place] [visit] [patterns]` prints a song as tracker
+- `npm run probe -- scripts/tools/music.mjs [place] [visit] [patterns]` prints a song as tracker
   text, without audio.
 - **Styles:**
   - **Forest:** medieval ambient.

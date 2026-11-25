@@ -1,5 +1,8 @@
 // The autumn vale (SLICE.md, W1 and W9): the `vale` config keeps one dimension, a single autumn
 // wood zone of 14 cells, one landmass, with a start village chosen in it, the same every time.
+// And its druid groves (SLICE.md W5), on the same worlds: a ring of 5-6 ancient oaks planted through the
+// real tree scatter (the wrapper the chunk worker, the main thread and the server's collision use), evenly
+// round the middle, none of the scatter's own trees at their feet, the standing stone at the middle.
 //   npm run probe -- scripts/probe/vale.mjs [seeds] [map=<folder>]   (map: a relief PNG of each seed)
 import { pick } from "./mode.mjs";
 import { loadContentFromDisk, loadCreatureRulesFromDisk } from "../diskContent.mjs";
@@ -7,6 +10,8 @@ import { createZones } from "../../src/sim/creatures/zones.ts";
 import { createWorldData } from "../../src/world/worldData.ts";
 import { chooseStarts } from "../../src/world/settlements/starts.ts";
 import { planWorld } from "../../src/world/cells/worldLayout.ts";
+import { plantedTrees } from "../../src/world/foliage/featureTrees.ts";
+import { createTreeScatter, samplerGround } from "../../src/world/foliage/treeScatter.ts";
 import { writeFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 
@@ -79,7 +84,37 @@ check("the full world keeps 10 cells a zone", full.world.cellsPerArea === 10);
 
 const creatures = loadCreatureRulesFromDisk("vale");
 check("levels by cell", content.dimension.creatureLevels === "cells");
-const seeds = Number(process.argv[2]) || pick(2, 6);
+check("the grove kind exists", content.featureKinds.some((k) => k.id === "druidGrove"));
+check("the biome rolls the grove", content.biomes[0].features.some((f) => f.featureId === "druidGrove"));
+check("the ancient oak exists", content.treeKinds.some((k) => k.id === "ancientOak"));
+let groves = 0;
+
+/** The druid groves of one world (moved here from grove.mjs). */
+function checkGroves(seed, world) {
+  const mine = world.compoundLayouts.filter((l) => l.kindId === "druidGrove");
+  groves += mine.length;
+  for (const layout of mine) {
+    const planted = plantedTrees([layout], content.treeKinds);
+    check(`seed ${seed}: 5-6 oaks planted`, planted.length >= 5 && planted.length <= 6, String(planted.length));
+    check(`seed ${seed}: the stone stands at the middle`, layout.props.some((p) => p.prop.generator === "menhir" && Math.hypot(p.x - layout.x, p.z - layout.z) < 2));
+    check(`seed ${seed}: no buildings in the grove`, layout.buildings.length === 0);
+    const half = 70;
+    const scatter = createTreeScatter(seed, content, plantedTrees(world.compoundLayouts, content.treeKinds));
+    const got = scatter(layout.x - half, layout.z - half, layout.x + half, layout.z + half, samplerGround(world.sampleTerrain));
+    const oaks = got.filter((t) => t.kind === "ancientOak");
+    check(`seed ${seed}: the scatter returns the ring`, oaks.length === planted.length, `${oaks.length} of ${planted.length}`);
+    const crowded = got.filter((t) => t.kind !== "ancientOak" && planted.some((p) => Math.hypot(t.x - p.x, t.z - p.z) < p.clearance));
+    check(`seed ${seed}: none of the scatter's trees at the oaks' feet`, crowded.length === 0, String(crowded.length));
+    const inside = got.filter((t) => t.kind !== "ancientOak" && Math.hypot(t.x - layout.x, t.z - layout.z) < layout.yard.radius - 1);
+    check(`seed ${seed}: the grove's clearing is clear`, inside.length === 0, `${inside.length} trees in it`);
+    const sameAgain = scatter(layout.x - half, layout.z - half, layout.x + half, layout.z + half, samplerGround(world.sampleTerrain));
+    check(`seed ${seed}: the grove's trees the same every time`, JSON.stringify(sameAgain) === JSON.stringify(got));
+  }
+  return mine.length;
+}
+
+// 3 seeds give 5 groves (1000, 8919, 16838); the full 8 give 11.
+const seeds = Number(process.argv[2]) || pick(3, 8);
 for (let s = 0; s < seeds; s++) {
   const seed = 1000 + s * 7919;
   const layout = planWorld(seed, content.world);
@@ -139,10 +174,13 @@ for (let s = 0; s < seeds; s++) {
   check(`seed ${seed}: levels rise with distance`, bands.every((b, i) => i === 0 || b[0] >= bands[i - 1][0]));
   check(`seed ${seed}: the far side reaches level 9`, bands[bands.length - 1][1] >= 9, JSON.stringify(bands.at(-1)));
   log(`  cell levels by distance: ${bands.map((b) => b.join("-")).join(" ")}; zone ${zones[0].levels.join("-")}`);
+  const groveCount = checkGroves(seed, world);
   const sites = world.settlements.length;
   const features = {};
   for (const f of world.features ?? []) features[f.kind ?? f.type ?? "?"] = (features[f.kind ?? f.type ?? "?"] ?? 0) + 1;
-  log(`seed ${seed}: land cells ${world.landCellSites.length}, settlements ${sites}, start ${starts[0] ? `(${Math.round(starts[0].x ?? starts[0].at?.x)}, ${Math.round(starts[0].z ?? starts[0].at?.z)})` : "none"}, extent ${Math.round(layout.worldExtent)} m, ${Math.round(performance.now() - t)} ms${warnings.length ? `, warnings: ${warnings.join("; ")}` : ""}`);
+  log(`seed ${seed}: land cells ${world.landCellSites.length}, settlements ${sites}, ${groveCount} grove(s), start ${starts[0] ? `(${Math.round(starts[0].x ?? starts[0].at?.x)}, ${Math.round(starts[0].z ?? starts[0].at?.z)})` : "none"}, extent ${Math.round(layout.worldExtent)} m, ${Math.round(performance.now() - t)} ms${warnings.length ? `, warnings: ${warnings.join("; ")}` : ""}`);
 }
+check("the seeds have a druid grove", groves > 0, `${groves} in ${seeds} seeds`);
+log(`${groves} grove(s) in ${seeds} seeds`);
 log(failures ? `${failures} failure(s)` : "ok");
 process.exit(failures ? 1 : 0);

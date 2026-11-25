@@ -37,66 +37,95 @@ import { createTerrainSampler } from "../../src/world/terrain/terrainSampler.ts"
 const world = createTerrainSampler(1337, loadContent());
 ```
 
-## The probes, timed (audit of 2026-11-21)
+## Running them: by category
 
-Run `npm run probe:quick` for the fast set (about 7 minutes, one probe at a time, a line each). Probes that
-sweep seeds or layouts have a quick default; `--full` (or `PROBE_FULL=1`) gives the whole sweep, e.g.
+The probes are grouped by the team's fields (WORKFLOW.md). A session runs its own field's; the main session
+runs the merged branches' fields after a merge, or all of them.
+
+```bash
+npm run probes -- --list               # the categories and their probes
+npm run probes -- dungeons rules       # those categories (a probe in both runs once)
+npm run probes -- all                  # every probe, 3 at a time: about 3.5 minutes
+npm run probes -- water quests         # single probes by name work too
+npm run probes -- all --full           # full mode: the whole sweeps (many minutes)
+npm run probes -- dungeons --worklists # also the worklists (probes that fail until their work is built)
+npm run probes -- all --jobs=1         # one at a time (about 7 minutes; times are each probe alone)
+```
+
+The table of categories is at the top of `run.mjs`. A probe file in no category stops the run, so a new
+probe gets one. The run takes a machine-wide lock (`aiworld-probe-quick.lock` in the system temp folder), so
+two runs never share the CPU. It sets `PROBE_JOBS`, so a probe with a wall-clock check (navigation's search
+times) can allow for the shared CPU.
+
+| category | probes |
+|---|---|
+| features | abandonedCamp, yardShape, vale |
+| placement | vale, starts, abandonedCamp |
+| dungeons | dungeons, navigation; worklists caves, caveMouths |
+| terrain-water | water, riverLevels, mapTiles, swim, vale |
+| gameplay | abilities, entities, collision, creatures, beast, chat, feedback, ambience |
+| rules | balance, items, progression, quests, npcs, saves, starts |
+| art | body, beast, icons, feedback |
+
+Probes that sweep seeds or layouts have a quick default; `--full` (or `PROBE_FULL=1`) gives the whole sweep, e.g.
 `npm run probe -- scripts/probe/dungeons.mjs --full`. `mode.mjs` holds the switch (`pick(quick, full)`).
 
-Why they were slow: every server probe pumped its ticks with `await setTimeout(0)`, and on Windows that
-sleeps about 15 ms a tick - swim, creatures and quests spent most of their time asleep. Now `setImmediate`
-(same ordering, no sleep). The rest of the time is world generation (about 5-10 s per `small`/default
-world) and `generateLayout` for dungeons (about 0.5 s a layout, game code).
+## The probes, timed (2026-11-25)
 
-Seconds are wall time on a machine shared with other sessions; "before" is the original, "after" is quick mode.
-Checks are as the probe counts them (quick mode, where it differs from full, in brackets).
+Seconds: alone, then in `npm run probes -- all` (3 at a time, on a machine shared with other sessions).
+All 26 pass; `all` takes 213 s, about as long as quests does beside the others.
 
-| probe | before s | after s | checks (fails) | covers | verdict |
-|---|---|---|---|---|---|
-| abandonedCamp | 7.4 | 6.9 | 62 | rotted-roof camp feature over 30 layouts | keep |
-| ambience | 0.4 | 0.4 | - | ambience levels, lair songs compose | keep |
-| balance | 3.5 | 1.4 | 431 | balance curves, role stats, prices | keep |
-| beast | 5.6 | 4.8 | "all good" | beast plans: bodies, gaits bake, animator, atlas | keep |
-| beastGaits | 2.3 | 1.9 | "all good" | feet do not slide or sink | keep |
-| body | 3.9 | 3.5 | - | race bodies: manifold, winding, weights | keep |
-| grove | 9.6 | 9.1 | "ok" | druid grove odds and ring of oaks, 8 seeds | keep |
-| icons | 2.9 | 1.6 | 25 failures | icon names core uses exist in the pack | keep; passes, with seven icons listed as waiting for generation (torch, bandage, iron ingot, spell scroll, hardened sword short/long/great) |
-| roadWater | 23.5 | 8.6 | 4179 road points (full: 11169) | no road under water | speed-up: 2 seeds/config quick, 6 full |
-| water | 7.2 | 6.0 | 37948 | waterAt agrees with ground, deterministic | keep |
-| yardShape | 5.3 | 4.7 | "no faults" | polygon-yard layouts | keep |
-| swim | 66.7 | 6.6 | 13 | swimming, diving, drowning on a server | speed-up (setImmediate) |
-| vale | 25.2 | 9.3 | "ok" | vale config: one zone, start village | speed-up: 2 seeds quick, 6 full |
-| starts | 34.2 | 10.7 | 96 (full 236) | start site choice, saved characters | speed-up: 3 seeds/config quick, 8 full |
-| riverLevels | 6.9 | 5.5 | 954 | river levels fall to the sea, fords, bridges | keep |
-| mapTiles | 12.2 | 9.8 | 26 | map tiles: size, determinism, water | keep (also writes a PNG when given a folder) |
-| chat | 9.1 | 4.6 | all pass | chat parser, commands, range, rate limit | speed-up |
-| saves | 9.2 | 4.2 | 53/55 (2) | saves, stores, restart finds the character | speed-up; passes 55/55 (it had teleported into the sea; the relaxed-start warning is filtered) |
-| npcs | 35.4 | 24.6 | 424 | factions, standing, casts, services | speed-up (setImmediate); still slow - world builds per section |
-| entities | 10.6 | 9.8 | 98 | formulas, stats, entities on the server | keep |
-| items | 12.6 | 12.2 | 129 | item rules, rolls, loot, equipment | keep |
-| progression | 26.3 | 14.2 | 155 | XP, talents, unlocks, saves | speed-up |
-| abilities | 8.7 | 9.5 | 137 | skills, magic, casting, a fight | keep |
-| feedback | 9.8 | 9.3 | 1860/1861 (1) | sounds, particles, textures render | keep; passes (named animation clips need no sound; the chips-fall check averages 20 bursts) |
-| collision | 9.8 | 8.9 | "all good" | collision maths against slow answers | keep |
-| navigation | 57.7 | 26.4 | 487/487 (full 1507) | crypt walk-line graph, motor walks, houses | speed-up: 60 layouts quick, 200 full; the wolf-up-the-stairs fail was the house graph (links through furniture, stair lane), fixed 2026-11-22 |
-| creatures | 118 | 28.7 | 97/99 (2) | creature rules, spawner, brain, hunting bot | speed-up (setImmediate; the 90 s bot is simulated time, not wall); passes 99/99 (the bot starts on inland ground; the tiny spawn is in the sea) |
-| quests | 223 | 67 | 432 (full 448) | quest runtime, generator over worlds, intro chains | speed-up: fewer seeds quick (see note), setImmediate |
-| dungeons | >900 (timed out) | 63 | 22239 (full ~113000) | 1000 crypt layouts on the real terrain, rules, walked on the motor | speed-up: 40 layouts quick, 1000 full; quick misses the known failures; `--full` (2026-11-22, 633 s): 3 of 620535 - layout 126 (rock over cryptHallPillars 7.15 m, needs 7.5), layout 729 loops 17 and 18 (a loop with only 1 join round, below loopSpan); not reproduced: the "no room for the key" and mausoleum-without-lair failures once reported |
-| caves | 176 | 169 | 119 (55 fail) | lairs on a headless server, walked to every spot | not in quick set: the lair check (SLICE.md E6); **keep as the worklist for NAVIGATION.md step 6**: its 28 failures of 129 are the missing cave walk graph ("a way to the boss/chest/spawn spot") and one minimal cave layout with no boss (lair #4) |
-| music | 0.3 | 0.3 | none | prints a tracker text of a song | drop candidate as a probe (a tool; no checks, cannot fail) |
-| aboveWaterRewire | - | - | none | one-off rewrite of the packs' waterline rules (`--write`) | drop candidate: already applied to the packs |
+| probe | alone s | in all s | checks | proves |
+|---|---|---|---|---|
+| quests | 108 | 185 | 429 | quest runtime, the generator over worlds (3 tiny, 2 small), weighting, the intro chain |
+| dungeons | 45 | 66 | 12959 (full ~113000) | 20 crypt layouts quick (1000 full) on the real terrain, every rule, walked on the motor |
+| creatures | 24 | 45 | 99 | creature rules, spawner, brain, the hunting bot |
+| npcs | 25 | 42 | 433 | factions, standing, casts, NPCs in the world, services |
+| navigation | 24 | 38 | 465 | crypt walk-line graph, motor walks, a wolf through rooms and up an inn's stairs |
+| starts | 14 | 21 | 68 (full more) | start sites from the dimension rule, 2 seeds a config quick (8 full), saved characters |
+| vale | 14 | 22 | "ok" | vale config, one zone, start village, levels by cell; the druid groves (3 seeds quick, 8 full) |
+| water | 14 | 20 | 75902 | waterAt agrees with the ground; no road under water (2 seeds a config quick, 6 full) |
+| progression | 10 | 21 | 155 | XP, talents, unlocks, saves |
+| abandonedCamp | 10 | 14 | 175 | the rotted camp: 12 layouts quick (30 full), roofs, 3 vale worlds quick (8 full) |
+| mapTiles | 10 | 16 | 26 | map tiles: size, determinism, water (writes a PNG when given a folder) |
+| items | 8 | 17 | 129 | item rules, rolls, loot, equipment |
+| abilities | 8 | 14 | 145 | skills, magic, casting, a fight |
+| entities | 8 | 13 | 98 | formulas, stats, entities on the server |
+| feedback | 9 | 13 | 1864 | sounds, particles, textures render |
+| collision | 8 | 13 | "all good" | collision maths against slow answers |
+| riverLevels | 8 | 11 | 1016 | river levels fall to the sea, fords, bridges |
+| swim | 7 | 13 | 13 | swimming, diving, drowning on a server |
+| beast | 7 | 9 | "all good" | beast plans: bodies, gaits bake, animator, atlas; feet do not slide or sink |
+| chat | 5 | 10 | all pass | chat parser, commands, range, rate limit |
+| saves | 5 | 9 | 55 | saves, stores, restart finds the character |
+| yardShape | 5 | 8 | "no faults" | polygon-yard layouts |
+| body | 4 | 6 | - | race bodies: manifold, winding, weights |
+| icons | 3 | 5 | - | icon names core uses exist in the pack (seven listed as waiting for generation) |
+| balance | 3 | 5 | 431 | balance curves, role stats, prices |
+| ambience | 0.3 | 0.5 | - | ambience levels, lair songs compose |
+| *caves* (worklist) | 169 | - | 119 (fails) | lairs on a headless server, walked to every spot; fails until cave navigation (NAVIGATION.md step 6) |
+| *caveMouths* (worklist) | 22 | - | fails 2 of 20 | the vale's cave mouths' lairs lay out whole (seed 6: two minimal lairs) |
 
-Quests quick mode: the generator uses the 3 tiny worlds and 2 of the 3 small ones; the weighting section 2 of 5
-worlds. Taking just 1 small world failed the statistical "weapons and armour are both offered" check (11 of 39),
-so 2 is the floor.
+Quests' time is servers, not worlds (a small world takes 2-3.5 s to make; the generator section starts 7
+servers). The quick mode checks "the same quests twice" on one world per config (all in full). Taking just 1
+small world fails the statistical "weapons and armour are both offered" check, so 2 is the floor.
 
-Not run, and not probes: `hook.mjs`, `tsResolve.mjs`, `loadContent.mjs` (the loaders), `mode.mjs`, `quick.mjs`.
+Not probes: `hook.mjs`, `tsResolve.mjs`, `loadContent.mjs` (the loaders), `mode.mjs`, `run.mjs` (the runner).
 
-### Overlap and candidates to drop (not deleted - for the owner to decide)
+## Tools (scripts/tools)
 
-- `music.mjs`: no checks, prints a song; belongs under `scripts/` as a tool (or is covered by ambience.mjs, which composes songs and checks them).
-- `aboveWaterRewire.mjs`: a migration, done; keep only if the rewrite may be needed again for a new pack.
-- `caves.mjs`: exits 1 today (28 of 129 checks) because cave navigation (NAVIGATION.md step 6) is not built; kept as its worklist, it is the lair check (SLICE.md E6), not a duplicate of navigation.mjs or dungeons.mjs.
-- `vale.mjs` and `starts.mjs` both check that a start village is chosen and is the same twice (vale for its one-zone config, starts for the dimension rule): partial overlap, different configs; fine to keep.
-- Several probes (creatures, navigation, npcs, quests, saves, starts) each build their own tiny world and server; sharing one across probes is not possible (separate processes), but inside npcs, quests and navigation a world is rebuilt per section - the next speed-up if wanted, needs only probe edits.
-- Needing game code, not done: `generateLayout` (0.5 s a layout) and `resolveDungeons` (5 s per run) set the floor for dungeons.
+Scripts that print or write, checking nothing; run them with the probe hook (`npm run probe -- scripts/tools/<x>.mjs`).
+
+- `cellwhy.mjs`: why cells are empty, per kind and condition (FEATURES.md, *Why a cell is empty*).
+- `music.mjs`: a composed song as tracker text.
+- `worldHash.mjs`: a hash of the world's layout and some chunks, to show a refactor changes nothing.
+
+## The pruning of 2026-11-25
+
+The quick set went (448 s one at a time), and probes are run by category instead. `roadWater` went into `water`,
+`grove` into `vale`, `beastGaits` into `beast` (each pair built the same worlds or plans). `cellwhy` and `music`
+moved to `scripts/tools`. `aboveWaterRewire` (a one-off rewrite of the packs, applied) was deleted, and so were
+the 140 git-ignored scratch probes of the main checkout, which were mostly one-off printouts or old copies of
+committed probes (a zip of them was kept outside the repo); `worldHash` became a tool. The scratch probes that
+could one day become checks: compounds (every compound's layout holds), furnish, faceWinding, openEdges, zfight.
+Scratch probes are for the moment: delete yours when the work is done, and make a probe of anything worth keeping.

@@ -60,7 +60,7 @@ warning when a rolled world is actually wider than `WORLD_EXTENT_WARNING` (32 km
 32 km, the edges start to lose the 1-2 mm accuracy GAMEPLAY.md accepts. The default's 20-30 zones
 make about 29 km. The warning starts at about 35 zones, the error at about 570.
 
-Checked with `scripts/probe/worldHash.local.mjs`: the default world's layout and chunks hash the
+Checked with `scripts/tools/worldHash.mjs`: the default world's layout and chunks hash the
 same before and after.
 
 ## Defining a dimension

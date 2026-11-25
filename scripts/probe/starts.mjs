@@ -45,7 +45,7 @@ const quiet = (run) => {
   }
 };
 
-const configs = [["tiny", pick(3, 8)], ["small", pick(3, 8)], ...(process.argv.includes("full") || pick(false, true) ? [["default", 3]] : [])];
+const configs = [["tiny", pick(2, 8)], ["small", pick(2, 8)], ...(process.argv.includes("full") || pick(false, true) ? [["default", 3]] : [])];
 
 for (const [config, seeds] of configs) {
   await section(`${config} starts`, () => {

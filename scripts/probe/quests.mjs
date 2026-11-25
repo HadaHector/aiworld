@@ -603,9 +603,10 @@ await section("the generator", async () => {
       const seed = 4000 + s * 911;
       const tag = `${config} seed ${seed}`;
       const w = await generatedWorld(config, seed);
-      const again = await generatedWorld(config, seed);
+      // The same quests from a second server on the same world: once per config in quick mode, every world in full.
+      const again = s === 0 || pick(false, true) ? await generatedWorld(config, seed) : null;
       check(`${tag}: every settlement has quests before anyone is near`, w.worldData.settlementLayouts.every((l) => w.quests.some((q) => q.id.startsWith(`q:mainland/${l.siteId}/`))), `${w.quests.length} quests`);
-      check(`${tag}: the same quests twice`, JSON.stringify(w.quests) === JSON.stringify(again.quests));
+      if (again) check(`${tag}: the same quests twice`, JSON.stringify(w.quests) === JSON.stringify(again.quests));
       const npcIds = new Map();
       for (const cast of w.casts.values()) for (const n of cast?.npcs ?? []) npcIds.set(n.id, n);
       const [start] = w.server.debug.starts.get("mainland");

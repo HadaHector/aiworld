@@ -14,7 +14,7 @@ import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { createCharacterMotor, createCollisionWorld, vec3 } from "../../src/world/collision/index.ts";
 import { mulberry32 } from "../../src/world/rng.ts";
 
-const COUNT = Number(process.argv[2] ?? pick(40, 1000));
+const COUNT = Number(process.argv[2] ?? pick(20, 1000));
 let failures = 0, checks = 0;
 function check(what, ok, detail = "") {
   checks++;
