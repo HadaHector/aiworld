@@ -1,4 +1,4 @@
-import { CascadedShadowGenerator, Color3, DirectionalLight, HemisphericLight, Vector3, type AbstractMesh, type Camera, type Scene } from "@babylonjs/core";
+import { CascadedShadowGenerator, Color3, DirectionalLight, HemisphericLight, RenderTargetTexture, Vector3, type AbstractMesh, type Camera, type Scene } from "@babylonjs/core";
 import type { AreaWeight } from "../cells/areaField";
 import { lerp } from "../mathUtils";
 import { computeDayNightFactors, SUNRISE_HOUR, SUNSET_HOUR } from "./dayNightMath";
@@ -105,6 +105,8 @@ export interface SunLighting {
   setUnderground: (ambient: [number, number, number] | null, now?: boolean) => void;
   /** How far underground the light is, 0 (out) to 1 (in), as it fades. */
   readonly underground: number;
+  /** Whether the sun's shadow map is paused: all the way underground, where the sun lights nothing. */
+  readonly shadowsPaused: boolean;
 }
 
 /**
@@ -302,6 +304,22 @@ export function createSunLighting(scene: Scene): SunLighting {
   let under = 0;
   let underTarget = 0;
   const underAmbient: [number, number, number] = [0, 0, 0];
+  /**
+   * Underground, all the way in, the sun's shadow map is no longer drawn: the sun lights nothing
+   * there (its intensity is faded to 0), so its shadows show nowhere, and drawing them is pure cost
+   * on the CPU - every caster round the player (the wood over the cave, its terrain) culled and drawn
+   * into four cascades each frame. The map is left as it was, not switched off (the light's
+   * `shadowEnabled` is in every shaded material's defines: flipping it would recompile them all on
+   * the way in and out); it is drawn again from the moment the way out begins, before the sun fades
+   * back in.
+   */
+  let shadowsPaused = false;
+  function pauseShadows(paused: boolean): void {
+    if (paused === shadowsPaused) return;
+    shadowsPaused = paused;
+    const map = shadowGenerator.getShadowMap();
+    if (map) map.refreshRate = paused ? RenderTargetTexture.REFRESHRATE_RENDER_ONCE : RenderTargetTexture.REFRESHRATE_RENDER_ONEVERYFRAME;
+  }
 
   // Scratch accumulators for applyTimeOfDay's blend - module-lifetime, not per-call, since this
   // runs every frame and a fresh Color3 per field per frame is pure garbage-collector pressure for
@@ -425,6 +443,7 @@ export function createSunLighting(scene: Scene): SunLighting {
     const cycleSeconds = DEFAULT_DAY_NIGHT_CYCLE_MINUTES * 60;
     timeHours = (timeHours + (deltaSeconds / cycleSeconds) * 24) % 24;
     under = underTarget > under ? Math.min(underTarget, under + deltaSeconds * UNDERGROUND_FADE) : Math.max(underTarget, under - deltaSeconds * UNDERGROUND_FADE);
+    pauseShadows(underTarget >= 1 && under >= 1);
     applyTimeOfDay(areaWeights);
   }
 
@@ -448,10 +467,9 @@ export function createSunLighting(scene: Scene): SunLighting {
   function setUnderground(light: [number, number, number] | null, now = false): void {
     underTarget = light ? 1 : 0;
     if (light) underAmbient.splice(0, 3, ...light);
-    if (now) {
-      under = underTarget;
-      applyTimeOfDay(lastAreaWeights);
-    }
+    if (now) under = underTarget;
+    pauseShadows(underTarget >= 1 && under >= 1);
+    if (now) applyTimeOfDay(lastAreaWeights);
   }
 
   return {
@@ -476,6 +494,9 @@ export function createSunLighting(scene: Scene): SunLighting {
     setUnderground,
     get underground() {
       return under;
+    },
+    get shadowsPaused() {
+      return shadowsPaused;
     },
   };
 }
