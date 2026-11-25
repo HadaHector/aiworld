@@ -736,3 +736,14 @@ Not started; to be sized and put into sessions.
   place, and no active light sources at all (no lanterns, torches, glowing windows).
 - **Abandoned road:** an "abandoned" road material or generation rule for the road that leads to such a place
   (overgrown, broken, faded track).
+
+### Mine on the map; two ground faults found (2026-11-25)
+
+- **Mine feature (merged):** `features/mine.json5`, a compound with a road, a worked yard, a timber portal,
+  spoil heaps, rails and a cart, sited in the autumn wood (odds 0.7); its entrance opens the mine lair.
+  Not seen in the game yet; 2 of 21 mouths in 8 test worlds give a lair with no boss; a few probe walks stall.
+- **Two real faults, still in the game** (the riverLevels probe now skips them; each needs a fix):
+  - *Pad step:* a 3.4 m wall at the edge of a level pad by a logging camp's hillside yard (seed 4242, near
+    743, 1074), probably two compound pads at different heights overlapping. Field: features and compounds.
+  - *Low bridge ends:* where a road runs along a steep river, two bridges meet over the water and their
+    end points sit 0.98 m above it (seed 7, at -143, 117). Field: terrain, water and roads.
