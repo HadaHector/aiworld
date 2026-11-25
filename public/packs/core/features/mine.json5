@@ -1,0 +1,35 @@
+// A mine (DUNGEONS.md, *The mine*): a small worked yard before an adit cut in a hillside - the timber portal at its mouth, a track
+// out of it to the yard, spoil and ore heaps, carts, a windlass and a tool shed. A road leads to it. Its adit opens the mine lair
+// (dungeonStyles/mine.json5) as a cave mouth opens the cave. Sited where the hill suits; a cell with none has no mine.
+{
+  name: "Mine",
+  type: "compound",
+  compound: {
+    // The adit's dungeon style.
+    adit: "mine",
+    // The yard before it: steeper ground than a camp takes (it is levelled to the adit's floor), any cover.
+    site: { grade: [0, 0.45], cover: [0, 1] },
+    yard: { shape: "polygon", points: [5, 6], radius: [10, 13] },
+    pads: { slope: 0.7, blend: [2, 12] },
+    arrangement: "ring",
+    trails: [],
+    buildings: [
+      { building: "toolShed", count: [1, 1], required: true },
+      { building: "shingleCottage", count: [1, 1], chance: 0.6 },
+    ],
+    props: [
+      { prop: "windlass", count: [1, 1], at: "yard" },
+      { prop: "oreCart", count: [1, 2], at: "yard" },
+      { prop: "mineCart", count: [1, 1], at: "yard", chance: 0.6 },
+      { prop: "orePile", count: [3, 5], at: "yardEdge" },
+      { prop: "oreSack", count: [2, 4], at: "yard" },
+      { prop: "barrel", count: [1, 2], at: "yardEdge" },
+      { prop: "crate", count: [1, 2], at: "byBuilding" },
+      { prop: "toolRack", count: [1, 1], at: "byBuilding" },
+      { prop: "lantern", count: [1, 2], at: "yard" },
+    ],
+  },
+  clearing: [22, 55],
+  stumps: 0.5,
+  road: { importance: 0.5, links: [1, 1], wants: ["settlement"], maxLength: 2500 },
+}

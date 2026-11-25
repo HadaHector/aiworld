@@ -1009,7 +1009,7 @@ export function createServer(options: ServerOptions): Server {
       if (!dimension?.dungeons || !entity.body) return null;
       const feet = entity.body.motor.state.feet;
       // A crypt under the nearest mausoleum (or a hillside); a cave in a hillside.
-      const site = dungeonSiteNear(dimension.world, feet.x, feet.z, 1500, options.dungeons?.styles.get(style)?.builder !== "field");
+      const site = dungeonSiteNear(dimension.world, feet.x, feet.z, 1500, options.dungeons?.styles.get(style)?.builder !== "field", style);
       if (!site) return null;
       // One dungeon a site, a style and a size, unless a seed is asked for.
       const key = `${siteKey(dimension.id, site)}/${style}/${size}`;

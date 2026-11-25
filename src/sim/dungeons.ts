@@ -40,6 +40,29 @@ export interface DimensionDungeons {
   close: (id: string) => void;
 }
 
+/** How many seeds are tried for a site before its minimal layout is taken. */
+const SEED_TRIES = 12;
+
+/** A layout with its boss and rooms where the site gives one: seeds after the asked one until it is not minimal (a thin
+ *  hill fits some seeds and not others). The seed it came from is the dungeon's, so the client lays out the same. */
+export function wholeLayout(content: DungeonContent, style: string, size: string, seed: number, site: DungeonSite, ground: Parameters<typeof generateLayout>[5]): { layout: DungeonLayout; used: number } {
+  let first: { layout: DungeonLayout; used: number } | null = null;
+  let error: unknown = null;
+  for (let k = 0; k < SEED_TRIES; k++) {
+    const used = (seed + k * 7919) >>> 0;
+    try {
+      const layout = generateLayout(content, style, size, used, site, ground);
+      if (!layout.minimal) return { layout, used };
+      first ??= { layout, used };
+    } catch (e) {
+      // (A site that refuses even the minimal layout under one seed may take another.)
+      error = e;
+    }
+  }
+  if (first) return first;
+  throw error;
+}
+
 /** The dungeons of one dimension, laid out against its ground. */
 export function createDimensionDungeons(world: WorldData, collision: CollisionWorld, content: DungeonContent): DimensionDungeons {
   const placed = new Map<string, PlacedDungeon>();
@@ -56,7 +79,7 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
       if (!def) throw new Error(`no dungeon style "${style}"`);
       const sizeDef = def.sizes[size];
       if (!sizeDef) throw new Error(`the dungeon style "${style}" has no size "${size}"`);
-      const layout = generateLayout(content, style, size, seed, site, ground);
+      const { layout, used } = wholeLayout(content, style, size, seed, site, ground);
       // A kit's parts' own colliders; a field's rock meshed as a whole (caveField.ts).
       const cave = def.builder === "field" ? buildCave(layout, def, ground) : null;
       const batch = collision.addBatch(cave ? caveColliders(cave) : layout.parts.flatMap(placedShapes));
@@ -79,7 +102,7 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
         id,
         style,
         size,
-        seed,
+        seed: used,
         site,
         entry: sizeDef.entry,
         layout,
@@ -135,7 +158,7 @@ export type Mouth = DungeonSite & { style: string; kind: "crypt" | "cave" };
 
 /** A cave mouth's site (dungeons/caveMouths.ts): the middle of its slip's foot, at its floor. */
 export function caveMouthSite(m: CaveMouthSite): Mouth {
-  return { x: m.x, y: m.y, z: m.z, facing: m.facing, mouth: true, style: "cave", kind: "cave" };
+  return { x: m.x, y: m.y, z: m.z, facing: m.facing, mouth: true, style: m.style ?? "cave", kind: "cave" };
 }
 
 /** The nearest dungeon mouth within `reach` of a point - a mausoleum's crypt, a hillside's cave - or
@@ -164,10 +187,11 @@ export function mouthNear(world: WorldData, x: number, z: number, reach: number,
  * within 20 m and 12 m within 40 m behind the door - facing down the slope, the dungeon running in
  * under the rise.
  */
-export function dungeonSiteNear(world: WorldData, x: number, z: number, reach = 1500, crypts = true): (DungeonSite & { kind: "crypt" | "cave" | "slope" }) | null {
+export function dungeonSiteNear(world: WorldData, x: number, z: number, reach = 1500, crypts = true, style = "cave"): (DungeonSite & { kind: "crypt" | "cave" | "slope" }) | null {
   // A cave: at the nearest cave mouth, else on a hillside.
   if (!crypts) {
-    const mouth = mouthNear(world, x, z, reach, "cave");
+    // (A mine's adit for a mine; any cave mouth when there is none.)
+    const mouth = mouthNear(world, x, z, reach, style) ?? mouthNear(world, x, z, reach, "cave");
     if (mouth) return { ...mouth, kind: "cave" };
   }
   let best: (DungeonSite & { kind: "crypt" | "cave" | "slope" }) | null = null;

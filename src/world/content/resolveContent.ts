@@ -1708,7 +1708,7 @@ function readQuarry(quarry: RawObject, reader: Reader): QuarrySpec {
 
 /** A compound's block - see CompoundSpec. */
 function readCompound(compound: RawObject, reader: Reader, buildings: Map<string, BuildingDef>, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): CompoundSpec {
-  reader.onlyKeys(compound, "compound", ["site", "yard", "pads", "arrangement", "trails", "buildings", "props", "boundary", "graves"]);
+  reader.onlyKeys(compound, "compound", ["site", "yard", "pads", "arrangement", "trails", "buildings", "props", "boundary", "graves", "adit"]);
   // How its level ground blends back - the settlements' own unless it says.
   const padsRaw = compound.pads === undefined ? {} : reader.object(compound.pads, "compound.pads");
   reader.onlyKeys(padsRaw, "compound.pads", ["slope", "blend", "spill"]);
@@ -1767,7 +1767,9 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
       place: entry.place === undefined ? "side" : reader.oneOf(entry, "place", path, COMPOUND_PLACES),
     }];
   });
+  const adit = reader.optionalString(compound, "adit", "compound") ?? null;
   return {
+    adit,
     site: {
       grade: reader.range(site, "grade", "compound.site", { allowEqual: true }),
       cover,

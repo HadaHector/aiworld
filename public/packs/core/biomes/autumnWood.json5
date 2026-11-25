@@ -31,6 +31,7 @@
     { feature: "cemetery", odds: 0.3 },
     { feature: "druidGrove", odds: 0.3 },
     { feature: "caveMouth", odds: 0.7 },
+    { feature: "mine", odds: 0.7 },
     { feature: "none", odds: 0.3 },
   ],
   // Each area its own lie of the land: a flat lowland wood, rolling wooded hills, or hill country

@@ -177,6 +177,9 @@ export interface YardPolygonSpec {
  * faces. Each range is rolled per compound.
  */
 export interface CompoundSpec {
+  /** A mine: the yard stands before an adit cut into a hillside (dungeons/caveMouths.ts), and this is
+   *  the dungeon style under it. Null for none. */
+  adit: string | null;
   /** The ground it wants: the grade across it within the range (rise over run); tree cover round
    *  it at least the first, the more the better up to the second (0-1, as the trees scatter by);
    *  a river within `nearWater` counts in its favour (null: no matter); and at least

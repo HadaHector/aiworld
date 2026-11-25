@@ -57,6 +57,8 @@ export interface CaveMouthSite {
   y: number;
   z: number;
   facing: number;
+  /** The dungeon style under it ("cave" when not said): a mine's adit says "mine". */
+  style?: string;
   /** Uphill, along the slip. */
   ux: number;
   uz: number;
@@ -148,6 +150,19 @@ function approachable(sample: Sampler, x: number, z: number, ux: number, uz: num
     }
   }
   return false;
+}
+
+/** A mouth judged at a foot point for a feature that carries one (a mine's adit, features/mine.json5):
+ *  the same ground a cave mouth needs, or null. */
+export function mouthAt(sample: Sampler, x: number, z: number, trace: Trace = NO_TRACE): (CaveMouthSite & { score: number }) | null {
+  const j = judge(sample, x, z, trace);
+  if (!j) return null;
+  return { id: 0, x, y: j.y, z, facing: (Math.atan2(-j.ux, -j.uz) * 180) / Math.PI, ux: j.ux, uz: j.uz, score: j.score };
+}
+
+/** Whether a walker can reach a mouth from open ground. */
+export function mouthApproachable(sample: Sampler, m: CaveMouthSite): boolean {
+  return approachable(sample, m.x, m.z, m.ux, m.uz);
 }
 
 /**

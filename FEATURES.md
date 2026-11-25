@@ -900,3 +900,7 @@ that suits (its record's note says which). Also: spacing between features 500 ->
 and reach 220 -> 400 m; autumnWood odds: `none` 0.8 -> 0.3, `coachingInn` 0.5 -> 0.15. Vale, 60 seeds: empty cells 52% -> 22%
 (`none` 17% -> 7%); cave mouth in 50 of 60 seeds (was 36), abandoned camp in 51 (was 41). Left alone: settlement spacing (900 m)
 - 700 m shortened the letter quests' walks enough to fail the quests probe's pay check.
+
+## Mine (as built)
+
+A compound with an `adit` (a dungeon style): sited on a hillside, its yard before a cut in the slope, a road, a tool shed, carts, spoil and a windlass; the adit opens the lair. See DUNGEONS.md, *The mine in the world*.

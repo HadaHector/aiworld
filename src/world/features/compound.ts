@@ -1,3 +1,4 @@
+import type { CaveMouthSite } from "../dungeons/caveMouths";
 import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { TreeCover } from "../foliage/treeScatter";
@@ -65,6 +66,8 @@ export interface CompoundSite {
   trails: { to: TrailDestination; length: number }[];
   /** Seeds its layout, so it is the same however the roads came out. */
   seed: number;
+  /** A mine's adit (features/mine.json5, `compound.adit`): the mouth cut in the slope behind its yard. */
+  adit?: CaveMouthSite;
   /** A roadside compound's road: the angles (from its middle) it leaves the yard at either way -
    *  its two ways in, kept free as a ring's gates are. Empty for one the roads come to. */
   roadAngles: number[];

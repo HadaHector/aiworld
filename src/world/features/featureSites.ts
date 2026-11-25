@@ -1,3 +1,4 @@
+import { mouthApproachable, mouthAt } from "../dungeons/caveMouths";
 import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { SettlementSite } from "../settlements/settlementSites";
@@ -46,6 +47,13 @@ const CANDIDATE_RADIUS = CELL_SPACING * 0.4;
 /** Kept this far clear of a settlement's edge, and of each other. */
 const SETTLEMENT_CLEARANCE = 150;
 const MIN_FEATURE_SPACING = 300;
+
+/** A mine's adit: points tried for it in a cell, how far from the cell's middle, how far before it the
+ *  yard's middle lies past the yard's radius, and how far the yard's ground may stand off its floor. */
+const ADIT_CANDIDATES = 600;
+const ADIT_REACH = 380;
+const ADIT_GAP = 24;
+const ADIT_STEP = 9;
 
 const FEATURE_ROLL_SALT = 901;
 const FEATURE_PLACE_SALT = 902;
@@ -126,6 +134,41 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
   const tryKind = (index: number, cell: number, rng: () => number, trace: Trace, begin: () => void): FeatureSite | null => {
     const kind = kinds[index];
     const site = cellSites[cell];
+    if (kind.type === "compound" && kind.compound?.adit) {
+      // A mine: first the ground for its adit, then its yard before it, level with the adit's floor.
+      const plan = planCompound(kind, seed, rng);
+      const away = plan.yardRadius + ADIT_GAP;
+      const found: { mouth: NonNullable<ReturnType<typeof mouthAt>>; x: number; z: number; areaId: number }[] = [];
+      for (let attempt = 0; attempt < ADIT_CANDIDATES; attempt++) {
+        const radius = Math.sqrt(rng()) * ADIT_REACH;
+        const angle = rng() * Math.PI * 2;
+        const fx = site.x + Math.cos(angle) * radius;
+        const fz = site.z + Math.sin(angle) * radius;
+        begin();
+        const mouth = mouthAt(sampleTerrain, fx, fz, trace);
+        if (!mouth) continue;
+        const x = fx - mouth.ux * away, z = fz - mouth.uz * away;
+        if (!clearOfOthers(x, z, trace)) continue;
+        const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover, trace);
+        if (scored && Math.abs(scored.height - mouth.y) <= ADIT_STEP) found.push({ mouth, x, z, areaId: scored.areaId });
+      }
+      const best = found.sort((a, b) => b.mouth.score - a.mouth.score).find((f) => mouthApproachable(sampleTerrain, f.mouth));
+      if (!best) return null;
+      const { score: _score, ...mouth } = best.mouth;
+      return {
+        id: 0,
+        kindIndex: index,
+        kind,
+        x: best.x,
+        z: best.z,
+        areaId: best.areaId,
+        footprint: plan.radius,
+        entrance: null,
+        quarry: null,
+        settlement: null,
+        compound: { ...plan, x: best.x, z: best.z, height: mouth.y, roadAngles: [], adit: { ...mouth, style: kind.compound.adit } },
+      };
+    }
     if (kind.type === "compound" && kind.compound && kind.compound.arrangement !== "roadside") {
       // Everything that decides its size first, so where it lands does not change how big it is.
       const plan = planCompound(kind, seed, rng);

@@ -1,3 +1,4 @@
+import { measureProp } from "../props/propGenerator";
 import { sampleCounter, timed } from "../loadTimings";
 import { deriveSeed } from "../rng";
 import { smoothstep, lerp } from "../mathUtils";
@@ -504,13 +505,31 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // each is levelled to it.
   settleProps(compoundLayouts, sampleTerrain);
   padField = createPadField([...propPads(compoundLayouts), ...settlementPads(settlementLayouts), ...compoundPads(compoundLayouts)]);
+  // A mine's rails run from its yard into its adit (laid on the ground, as a wall is).
+  const adits = features.flatMap((feature) => (feature.compound?.adit ? [{ feature, mouth: feature.compound.adit }] : []));
+  const propById2 = new Map(content.props.map((prop) => [prop.id, prop]));
+  for (const { feature, mouth } of adits) {
+    const layout = compoundLayouts.find((l) => l.featureId === feature.id);
+    const rails = propById2.get("railTrack");
+    if (layout && rails) layout.walls.push({ prop: rails, variant: 0, points: [{ x: feature.x, z: feature.z }, { x: mouth.x - mouth.ux, z: mouth.z - mouth.uz }], heights: [], ends: ["free", "join"], breach: false });
+  }
   settleOnGround(compoundLayouts, sampleTerrain);
+  // Its timber portal, after the ground is settled: it stands at the adit's own floor, not on a pad.
+  for (const { feature, mouth } of adits) {
+    const layout = compoundLayouts.find((l) => l.featureId === feature.id);
+    const frame = propById2.get("timberSet");
+    if (!layout || !frame) continue;
+    const { halfWidth, halfDepth } = measureProp(frame, seed, 0);
+    layout.props.push({ prop: frame, variant: 0, x: mouth.x + mouth.ux * 1.5, z: mouth.z + mouth.uz * 1.5, y: mouth.y, frontX: -mouth.ux, frontZ: -mouth.uz, on: null, lift: 0, reach: Math.hypot(halfWidth, halfDepth), halfWidth, halfDepth, group: -1, up: [0, 1, 0] });
+  }
   spillField = createSpillField(compoundLayouts, spillMaterials(content));
   // Last, the caves' mouths: found on the ground as everything else has left it.
-  const caveMouths = timed("Finding cave mouths", () => {
+  const sited = timed("Finding cave mouths", () => {
     const caveCells = rolls.flatMap((roll, cell) => (roll !== NO_ROLL && kinds[roll].type === "cave" ? [cell] : []));
     return siteCaveMouths(seed, worldExtent, sampleTerrain, settlements, caveCells.map((cell) => landCellSites[cell]), caveCells.map((cell) => traces[cell]));
   });
+  // (And the mines' adits, which their features sited.)
+  const caveMouths = [...sited, ...adits.map((a) => a.mouth)].map((m, id) => ({ ...m, id }));
   mouthClear = caveMouthClearance(caveMouths);
 
   return { sampleTerrain, worldExtent, areaBounds, areaNames, landCellSites, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours, caveMouths, riverProfiles, waters, cellPlacements: traces.map((trace) => trace.record()) };

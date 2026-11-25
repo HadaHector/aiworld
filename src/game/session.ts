@@ -231,7 +231,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
             return site ? [{ kind: "dungeon", x: site.x, z: site.z, title: "Crypt" }] : [];
           }),
         ),
-        ...world.caveMouths.map((m): MapMarker => ({ kind: "dungeon", x: m.x, z: m.z, title: "Cave" })),
+        ...world.caveMouths.map((m): MapMarker => ({ kind: "dungeon", x: m.x, z: m.z, title: m.style === "mine" ? "Mine" : "Cave" })),
       ];
       mouths = { world, markers };
     }
