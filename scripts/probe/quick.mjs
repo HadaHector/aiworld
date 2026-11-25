@@ -6,6 +6,39 @@
 // Left out of the set: music (prints a song, checks nothing), aboveWaterRewire (a one-off rewrite of the
 // packs), caves (a diagnostic of the lairs that fails until NAVIGATION.md step 6 is built), and the helpers.
 import { spawnSync } from "node:child_process";
+import { openSync, closeSync, unlinkSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// One heavy probe run at a time on this machine (WORKFLOW.md): a lock file in the system temp folder, so
+// every worktree's copy of this script shares it. A second run waits for the first; a lock left by a dead
+// process (older than an hour) is taken over.
+const LOCK = join(tmpdir(), "aiworld-probe-quick.lock");
+const LOCK_STALE_MS = 60 * 60 * 1000;
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+let announced = false;
+for (;;) {
+  try {
+    closeSync(openSync(LOCK, "wx"));
+    writeFileSync(LOCK, `${process.pid} ${Date.now()}`);
+    break;
+  } catch {
+    let since = 0;
+    try {
+      since = Number(readFileSync(LOCK, "utf8").split(" ")[1]) || 0;
+    } catch {}
+    if (since && Date.now() - since > LOCK_STALE_MS) {
+      try { unlinkSync(LOCK); } catch {}
+      continue;
+    }
+    if (!announced) console.log("another probe:quick is running; waiting for it to finish...");
+    announced = true;
+    sleep(5000);
+  }
+}
+const release = () => { try { if (existsSync(LOCK)) unlinkSync(LOCK); } catch {} };
+process.on("exit", release);
+process.on("SIGINT", () => { release(); process.exit(130); });
 const SET = ["abandonedCamp", "ambience", "balance", "beast", "beastGaits", "body", "grove", "icons", "roadWater", "water", "yardShape", "swim", "vale", "starts",
   "riverLevels", "mapTiles", "chat", "saves", "npcs", "entities", "items", "progression", "abilities", "feedback", "collision", "navigation", "creatures", "quests", "dungeons"];
 const only = process.argv.slice(2).filter((a) => !a.startsWith("--"));
