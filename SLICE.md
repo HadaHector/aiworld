@@ -747,3 +747,10 @@ Not started; to be sized and put into sessions.
     743, 1074), probably two compound pads at different heights overlapping. Field: features and compounds.
   - *Low bridge ends:* where a road runs along a steep river, two bridges meet over the water and their
     end points sit 0.98 m above it (seed 7, at -143, 117). Field: terrain, water and roads.
+- **The owner's rulings on the two faults** (2026-11-25):
+  - *Pad step is not a fault by itself.* A camp or other feature does not have to be reachable from every
+    side: of 4 approach directions, 2 clear ones are enough. The check should test reachability that way,
+    not flag every steep pad edge.
+  - *The bridges are a road-maker bug.* Three bridges came together because roads met over the river. The
+    road maker keeps away from rivers today, but not by enough: junctions (and roads in general) should
+    keep a wider distance from rivers, so roads never meet over water.
