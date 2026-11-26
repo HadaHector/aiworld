@@ -22,6 +22,8 @@ export const AMBIENCE_PRESETS: Record<string, AmbienceState> = {
   "by the river": { ...BASE, waterDistance: 4 },
   "on the shore": { ...BASE, seaDistance: 8, life: 0.4 },
   "sea in the distance": { ...BASE, seaDistance: 60, life: 0.6 },
+  "sea to the right": { ...BASE, seaDistance: 15, life: 0.4, seaBearing: { x: 1, z: 0, focus: 1 }, facing: { x: 0, z: 1 } },
+  "river behind": { ...BASE, waterDistance: 6, waterBearing: { x: 0, z: -1, focus: 1 }, facing: { x: 0, z: 1 } },
   "river in the distance": { ...BASE, waterDistance: 28 },
   "river in rain": { ...BASE, wind: 1.4, rain: 0.8, waterDistance: 4 },
   "indoors, calm": { ...BASE, indoors: true },
@@ -145,6 +147,34 @@ export function createAmbienceTab(): AmbienceTab {
       outputs.push(read);
       grid.append(label, input, out);
     }
+    // Which way the water lies, facing north: 0 ahead, 90 to the right; "all round" is no side.
+    {
+      const label = document.createElement("span");
+      label.textContent = "Water from (deg)";
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = "-190";
+      input.max = "180";
+      input.step = "5";
+      const out = document.createElement("output");
+      const read = (): void => {
+        const b = state.seaBearing ?? state.waterBearing;
+        const deg = b && b.focus > 0 ? Math.round((Math.atan2(b.x, b.z) * 180) / Math.PI) : -190;
+        input.value = String(deg);
+        out.textContent = deg <= -185 ? "all round" : String(deg);
+      };
+      input.oninput = () => {
+        const deg = Number(input.value);
+        const a = (deg * Math.PI) / 180;
+        const bearing = deg <= -185 ? undefined : { x: Math.sin(a), z: Math.cos(a), focus: 1 };
+        state.waterBearing = bearing;
+        state.seaBearing = bearing;
+        state.facing = { x: 0, z: 1 };
+        redraw?.();
+      };
+      outputs.push(read);
+      grid.append(label, input, out);
+    }
     const toggle = (text: string, get: () => boolean, set: (v: boolean) => void): HTMLLabelElement => {
       const l = document.createElement("label");
       const c = document.createElement("input");
@@ -215,7 +245,7 @@ export function createAmbienceTab(): AmbienceTab {
     pick(name) {
       const preset = AMBIENCE_PRESETS[name];
       if (!preset) return;
-      Object.assign(state, preset);
+      Object.assign(state, { waterBearing: undefined, seaBearing: undefined, facing: undefined }, preset);
       playing = true;
     },
     frame(ambience) {
