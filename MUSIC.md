@@ -450,6 +450,13 @@ at the player's own **Ambience** volume (options window, beside Music and Effect
     they are low-passed at 650 Hz and quieter, but rain on a roof stays. The recordings go through the
     same outdoor bus, so the low-pass, the underground fade and the underwater muffle apply to them.
   - Water is heard from 38 m, full within 4 m.
+  - **From its side** (2026-11-26): each spoke that finds water pulls towards it, the nearer the
+    harder (standing in it pulls every way), so the search gives the river's and the sea's way and how
+    one-sided it is (`focus`: 1 all one way, near 0 on a spit or in the water). Each frame, against the
+    camera's facing, the water and surf layers are panned to that side (at most 0.65, never one ear
+    alone) and dulled a little when behind (a low-pass towards 2.8 kHz), both smoothed over a quarter
+    second so the eight spokes do not step. Indoors the side is half as sure. The water layer takes the
+    river's side while the surf is heard, else the nearer's.
 - **Loudness** (RMS, rendered offline: `node scripts/tools/ambienceLevels.mjs`, which serves this
   checkout itself on 5190-5197):
 
@@ -484,8 +491,8 @@ at the player's own **Ambience** volume (options window, beside Music and Effect
     file).
   - **Needs game code:** a campfire loop (a fire's distance in the state), mine creaks and distant
     thunder (one-shots with no scheduler yet).
-  - **Otherwise:** no sound for snow, mist or the swamp's frogs, and nothing positional (the layers
-    are the same everywhere around the player).
+  - **Otherwise:** no sound for snow, mist or the swamp's frogs, and nothing else positional (only
+    the water and the sea come from a side).
 
 ## Milestones
 

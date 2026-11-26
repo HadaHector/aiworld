@@ -166,6 +166,25 @@ export function createAmbience(ctx: BaseAudioContext, output: AudioNode, recordi
   outdoorCut.frequency.value = 18000;
   outdoors.connect(outdoorCut);
   outdoorCut.connect(volume);
+  /** Where a bed lies: panned to its side and dulled a little when it is behind, then outdoors. */
+  const place = (): { input: AudioNode; set: (pan: number, behind: number) => void } => {
+    const panner = ctx.createStereoPanner();
+    const back = ctx.createBiquadFilter();
+    back.type = "lowpass";
+    back.frequency.value = 20000;
+    panner.connect(back);
+    back.connect(outdoors);
+    return {
+      input: panner,
+      set(pan, behind) {
+        // (Slower than the camera turns, so the 45-degree spokes of the search do not step.)
+        panner.pan.setTargetAtTime(pan, ctx.currentTime, 0.25);
+        back.frequency.setTargetAtTime(20000 * (1 - behind) + 2800 * behind, ctx.currentTime, 0.25);
+      },
+    };
+  };
+  const waterPlace = place();
+  const surfPlace = place();
 
   const sources: (AudioScheduledSourceNode)[] = [];
   const loop = (buffer: AudioBuffer): AudioBufferSourceNode => {
@@ -272,7 +291,7 @@ export function createAmbience(ctx: BaseAudioContext, output: AudioNode, recordi
   loop(white).connect(riffle);
   riffle.connect(riffleLevel);
   riffleLevel.connect(waterLevel);
-  waterLevel.connect(outdoors);
+  waterLevel.connect(waterPlace.input);
 
   // --- below ground: room tone, a crypt's drone, and the drips through a stone room's tail ---
   const hollowBus = ctx.createGain();
@@ -554,7 +573,7 @@ export function createAmbience(ctx: BaseAudioContext, output: AudioNode, recordi
     level.gain.value = 0;
     // Outdoors through the outdoor bus (underground, indoors and its low-pass act on it); a lair's
     // straight to the volume, at the mix's own level.
-    level.connect(id === "room" || id === "crypt" ? volume : outdoors);
+    level.connect(id === "room" || id === "crypt" ? volume : id === "water" ? waterPlace.input : id === "surf" ? surfPlace.input : outdoors);
     let into: AudioNode = level;
     for (const [type, hz] of [["lowpass", def.lowpass], ["highpass", def.highpass]] as const) {
       if (hz <= 0) continue;
@@ -646,6 +665,10 @@ export function createAmbience(ctx: BaseAudioContext, output: AudioNode, recordi
     gainAt(waterLevel.gain, levels.water * 0.5 * synthOf("water"));
     gainAt(roomSynth.gain, synthOf("room"));
     gainAt(outdoors.gain, target.outdoors);
+    // The water from its side: with surf heard the water layer is the river's alone, else the nearer.
+    if (hearing("surf")) waterPlace.set(target.riverPan, target.riverBehind);
+    else waterPlace.set(target.waterPan, target.waterBehind);
+    surfPlace.set(target.surfPan, target.surfBehind);
     outdoorCut.frequency.setTargetAtTime(target.outdoorCutHz, ctx.currentTime, 0.15);
     // (A crypt's: a cave and a mine have no bed of their own, only the reverb on the effects.)
     gainAt(hollowBus.gain, target.room * 0.8);

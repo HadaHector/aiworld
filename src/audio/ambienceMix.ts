@@ -24,6 +24,19 @@ export interface AmbienceState {
   seaDistance?: number;
   /** 0..1, how alive the place is: woods are full of birds, bare ground is not. */
   life: number;
+  /** Where the river (or pond) and the sea lie, on the ground (x east, z north), and how much of it
+   *  is one way: 1 all one side, 0 all round (standing in it, or on a spit). Left out: no direction. */
+  waterBearing?: Bearing;
+  seaBearing?: Bearing;
+  /** The way the listener faces, on the ground (the camera's forward). Left out: north. */
+  facing?: { x: number; z: number };
+}
+
+/** A direction on the ground and how sure it is: `focus` 0..1. */
+export interface Bearing {
+  x: number;
+  z: number;
+  focus: number;
 }
 
 /** What each layer should be: gains are 0..1 before the player's volume, rates are per second. */
@@ -60,6 +73,34 @@ export interface AmbienceMix {
   crypt: number;
   /** 0..1, the stone reverb on the sound effects (footsteps, blows) underground. */
   echo: number;
+  /** Left (-1) to right (1) for the water layer (the nearer of river and sea), the river alone and
+   *  the surf; and 0..1 how far each is behind the listener (dulled a little when it is). */
+  waterPan: number;
+  riverPan: number;
+  surfPan: number;
+  waterBehind: number;
+  riverBehind: number;
+  surfBehind: number;
+}
+
+/** The furthest a bed is panned: never all in one ear, which on speakers sounds like a channel gone. */
+export const PAN_MOST = 0.65;
+
+/** A bearing as heard facing `facing`: pan left to right, and how far behind. */
+export function heard(bearing: Bearing | undefined, facing: { x: number; z: number } | undefined, softer = 1): { pan: number; behind: number } {
+  if (!bearing || !(bearing.focus > 0)) return { pan: 0, behind: 0 };
+  const fl = Math.hypot(facing?.x ?? 0, facing?.z ?? 1) || 1;
+  const fx = (facing?.x ?? 0) / fl;
+  const fz = (facing?.z ?? 1) / fl;
+  const bl = Math.hypot(bearing.x, bearing.z);
+  if (bl < 1e-6) return { pan: 0, behind: 0 };
+  const bx = bearing.x / bl;
+  const bz = bearing.z / bl;
+  // Right of the facing is (fz, -fx): facing north (+z), east (+x) is to the right.
+  const right = bx * fz - bz * fx;
+  const ahead = bx * fx + bz * fz;
+  const focus = clamp(bearing.focus) * softer;
+  return { pan: clamp(right, -1, 1) * focus * PAN_MOST, behind: clamp(-ahead) * focus };
 }
 
 /** Water is heard from this far, at most; it is at full voice within `WATER_CLOSE`. */
@@ -104,6 +145,11 @@ export function ambienceMix(s: AmbienceState): AmbienceMix {
   const hollow = below;
   const crypt = s.hollow === "crypt" ? below : 0;
   const wet = indoors ? 0.5 : 1;
+  // Through walls a sound's way is less sure.
+  const softer = indoors ? 0.5 : 1;
+  const river = heard(s.waterBearing, s.facing, softer);
+  const seaWay = heard(s.seaBearing, s.facing, softer);
+  const nearer = near(sea) > riverNear ? seaWay : river;
   return {
     wind: wind * wall * out,
     rustle: rustle * wall * out,
@@ -124,5 +170,11 @@ export function ambienceMix(s: AmbienceState): AmbienceMix {
     dripsPerSecond: crypt * 0.22,
     crypt: crypt,
     echo: hollow,
+    waterPan: nearer.pan,
+    riverPan: river.pan,
+    surfPan: seaWay.pan,
+    waterBehind: nearer.behind,
+    riverBehind: river.behind,
+    surfBehind: seaWay.behind,
   };
 }

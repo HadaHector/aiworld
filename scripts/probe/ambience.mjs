@@ -3,7 +3,7 @@
 // layer playing its recording once loaded - and its synthesized voice when a file is missing.
 // Usage: npm run probe -- scripts/probe/ambience.mjs
 import { existsSync } from "node:fs";
-const { ambienceMix, dayness } = await import("../../src/audio/ambienceMix.ts");
+const { ambienceMix, dayness, PAN_MOST } = await import("../../src/audio/ambienceMix.ts");
 const { createAmbience } = await import("../../src/audio/ambience.ts");
 const { readAmbienceRecordings } = await import("../../src/audio/ambienceRecordings.ts");
 const { resolveFeedback } = await import("../../src/feedback/rules.ts");
@@ -55,7 +55,26 @@ check(out["in a crypt"].room === 1 && out["wood, day"].room === 0 && out["wood, 
   check(shore.surf > 0.9 && far.surf > 0.05 && far.surf < shore.surf / 3 && out["wood, day"].surf === 0, "the sea's surf: full on the shore, faint from 70 m");
   check(shore.water > 0.4 && shore.river === 0 && both.river > 0 && both.river < both.water, "the water layer: the sea's too without surf, a river's alone with it");
 }
-for (const [name, m] of Object.entries(out)) for (const [k, v] of Object.entries(m)) check(Number.isFinite(v) && v >= 0, `${name}: ${k} sane`) || 0;
+for (const [name, m] of Object.entries(out)) for (const [k, v] of Object.entries(m)) check(Number.isFinite(v) && (k.endsWith("Pan") ? Math.abs(v) <= 1 : v >= 0), `${name}: ${k} sane`) || 0;
+{
+  // The water from its side: x is east, z north; the camera's forward is the facing.
+  const east = { x: 1, z: 0, focus: 1 };
+  const north = { x: 0, z: 1 };
+  const facingEast = ambienceMix({ ...base, seaDistance: 20, seaBearing: east, facing: { x: 1, z: 0 } });
+  const facingNorth = ambienceMix({ ...base, seaDistance: 20, seaBearing: east, facing: north });
+  const facingSouth = ambienceMix({ ...base, seaDistance: 20, seaBearing: east, facing: { x: 0, z: -1 } });
+  const facingWest = ambienceMix({ ...base, seaDistance: 20, seaBearing: east, facing: { x: -1, z: 0 } });
+  check(Math.abs(facingNorth.surfPan - PAN_MOST) < 1e-9 && Math.abs(facingSouth.surfPan + PAN_MOST) < 1e-9, `the sea to the east: right facing north (${f(facingNorth.surfPan)}), left facing south (${f(facingSouth.surfPan)})`);
+  check(Math.abs(facingEast.surfPan) < 1e-9 && facingEast.surfBehind === 0 && Math.abs(facingWest.surfPan) < 1e-9 && facingWest.surfBehind > 0.99, "ahead: centred and clear; behind: centred and dulled");
+  const spit = ambienceMix({ ...base, seaDistance: 10, seaBearing: { x: 0, z: 0.01, focus: 0.02 }, facing: north });
+  check(Math.abs(spit.surfPan) < 0.05 && spit.surfBehind < 0.05, "the sea all round (a spit): centred");
+  const inside = ambienceMix({ ...base, indoors: true, waterDistance: 5, waterBearing: east, facing: north });
+  check(inside.riverPan > 0 && inside.riverPan < PAN_MOST * 0.6, "through walls, less sure of the side");
+  const both = ambienceMix({ ...base, waterDistance: 5, waterBearing: { x: -1, z: 0, focus: 1 }, seaDistance: 30, seaBearing: east, facing: north });
+  check(both.riverPan < 0 && both.waterPan === both.riverPan && both.surfPan > 0, "a river to the west, the sea to the east: each from its side, the water layer the nearer's");
+  const none = ambienceMix({ ...base, waterDistance: 5 });
+  check(none.riverPan === 0 && none.waterBehind === 0, "with no bearing: centred, as before");
+}
 
 // --- the recordings ---
 const config = readConfigFromDisk(undefined);

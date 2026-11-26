@@ -18,7 +18,7 @@ import { createParticleRenderer, type ParticleRenderer } from "../particles/rend
 import { whenAudio } from "../audio/context";
 import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
 import { createAmbience, impulse, type Ambience } from "../audio/ambience";
-import { SEA_REACH, WATER_REACH } from "../audio/ambienceMix";
+import { SEA_REACH, WATER_REACH, type Bearing } from "../audio/ambienceMix";
 import { SEA_LEVEL } from "../world/cells/areaField";
 import { createUnderwaterLook, type UnderwaterLook } from "./underwater";
 import { createCuePlayer, type Bone, type CueContext, type CuePlayer, type UnitTraits } from "../feedback/cues";
@@ -401,6 +401,9 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   let surroundAt = -Infinity;
   let waterDistance = Infinity;
   let seaDistance = Infinity;
+  /** Which way the river and the sea lie: each spoke's hit pulls towards it, the nearer the harder. */
+  const waterWay: Bearing = { x: 0, z: 0, focus: 0 };
+  const seaWay: Bearing = { x: 0, z: 0, focus: 0 };
   let life = 1;
   let indoors = false;
   const surroundings = (eye: { x: number; y: number; z: number }): void => {
@@ -415,26 +418,50 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     // it where it meets the sea).
     waterDistance = Infinity;
     seaDistance = Infinity;
-    const look = (x: number, z: number, r: number): void => {
+    const pulls = { water: { x: 0, z: 0, w: 0 }, sea: { x: 0, z: 0, w: 0 } };
+    const look = (x: number, z: number, r: number, a: number): void => {
       const w = world.waterAt(x, z);
       if (w.depth <= 0.05) return;
-      if (SEA_LEVEL - world.heightAt(x, z) >= SEA_DEPTH) seaDistance = Math.min(seaDistance, r);
+      const isSea = SEA_LEVEL - world.heightAt(x, z) >= SEA_DEPTH;
+      if (isSea) seaDistance = Math.min(seaDistance, r);
       else waterDistance = Math.min(waterDistance, r);
+      // (Standing in it pulls every way at once: a weight with no direction.)
+      const weight = Math.max(0, 1 - r / (isSea ? SEA_REACH : WATER_REACH)) ** 2;
+      const pull = isSea ? pulls.sea : pulls.water;
+      pull.w += weight;
+      if (r > 0) {
+        pull.x += Math.cos(a) * weight;
+        pull.z += Math.sin(a) * weight;
+      }
     };
-    look(eye.x, eye.z, 0);
+    look(eye.x, eye.z, 0, 0);
     for (const r of RING) {
       if (waterDistance <= r && seaDistance <= r) break;
       for (let k = 0; k < 8; k++) {
         const a = (k / 8) * Math.PI * 2 + (r % 2) * 0.2;
-        look(eye.x + Math.cos(a) * r, eye.z + Math.sin(a) * r, r);
+        look(eye.x + Math.cos(a) * r, eye.z + Math.sin(a) * r, r, a);
       }
       // (A river is not heard past its reach: past it, only the sea is looked for.)
       if (r >= WATER_REACH && seaDistance < Infinity) break;
     }
+    for (const [pull, way] of [[pulls.water, waterWay], [pulls.sea, seaWay]] as const) {
+      const length = Math.hypot(pull.x, pull.z);
+      way.x = pull.x;
+      way.z = pull.z;
+      way.focus = pull.w > 0 ? length / pull.w : 0;
+    }
   };
-  const ambient = (eye: { x: number; y: number; z: number } | null): void => {
+  const facing = { x: 0, z: 1 };
+  const ambient = (eye: { x: number; y: number; z: number } | null, camera: Camera | null): void => {
     if (!ambience || !worldNow || !eye) return;
     surroundings(eye);
+    if (camera) {
+      const f = camera.getDirection(BABYLON_FORWARD);
+      if (Math.hypot(f.x, f.z) > 1e-3) {
+        facing.x = f.x;
+        facing.z = f.z;
+      }
+    }
     const blend = worldNow.weatherBlend();
     const share = worldNow.undergroundShare();
     ambience.update({
@@ -448,6 +475,9 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       waterDistance,
       seaDistance,
       life,
+      waterBearing: waterWay,
+      seaBearing: seaWay,
+      facing,
     });
     // The stone's reverb on the effects underground: footsteps and blows ring in a cave, a mine, a crypt.
     if (echo) echo.gain.setTargetAtTime(ambience.mix().echo * 0.35, echo.context.currentTime, 0.3);
@@ -520,6 +550,9 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       worldNow = world ?? null;
       surroundAt = -Infinity;
       waterDistance = Infinity;
+      seaDistance = Infinity;
+      waterWay.focus = 0;
+      seaWay.focus = 0;
       indoors = false;
       surfaces = world ? createSurfaceProbe(world, rules) : null;
       if (scene && world) look = createUnderwaterLook(scene, game.water.look);
@@ -543,7 +576,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       const shake = feel.update(dt);
       const offset = (camera as ArcRotateCamera | null)?.targetScreenOffset;
       offset?.set(shake.x, shake.y);
-      ambient(eye);
+      ambient(eye, camera);
       if (!sfx || !camera) return;
       const p = camera.globalPosition;
       const f = camera.getDirection(BABYLON_FORWARD);
