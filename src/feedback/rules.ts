@@ -9,6 +9,7 @@ import type { GameRules } from "../sim/rules/gameRules";
 import { COMBAT_EVENT_KINDS } from "../sim/skills/events";
 import { readSynth, type SynthLayer } from "../audio/synth";
 import { readParticleTexture, type ParticleTextureDef } from "../particles/textures";
+import { NO_RECORDINGS, readAmbienceRecordings, type AmbienceRecordings } from "../audio/ambienceRecordings";
 
 // --- the definitions ---------------------------------------------------------------------------
 
@@ -193,6 +194,8 @@ export interface FeedbackRules {
   config: FeedbackConfig;
   /** Each skill's cues by phase, by skill index (from `SkillDef.cues`, checked). */
   skillCues: Partial<Record<Phase, string>>[];
+  /** The ambience's recordings (`rules/ambience.json5`, MUSIC.md *Ambience*). */
+  ambience: AmbienceRecordings;
 }
 
 // --- reading -------------------------------------------------------------------------------------
@@ -207,9 +210,10 @@ interface Entry {
   data: unknown;
 }
 
-function feedbackEntries(packs: PackSource[], issues: ContentIssue[]): { folders: Map<string, Map<string, Entry>>; config?: Entry } {
+function feedbackEntries(packs: PackSource[], issues: ContentIssue[]): { folders: Map<string, Map<string, Entry>>; config?: Entry; ambience?: Entry & { pack: string } } {
   const folders = new Map<string, Map<string, Entry>>(FEEDBACK_FOLDERS.map((f) => [f, new Map()]));
   let config: Entry | undefined;
+  let ambience: (Entry & { pack: string }) | undefined;
   for (const pack of orderPacks(packs, issues)) {
     for (const { path, text } of pack.files) {
       const parts = path.split("/");
@@ -217,9 +221,11 @@ function feedbackEntries(packs: PackSource[], issues: ContentIssue[]): { folders
       const file = `${pack.id}/${path}`;
       const id = parts[1].replace(/\.json5$/, "");
       if (parts[0] === "rules") {
-        if (id !== "feedback") continue;
+        if (id !== "feedback" && id !== "ambience") continue;
         const data = parseFile(file, text, issues);
-        if (data !== undefined) config = { id, file, data };
+        if (data === undefined) continue;
+        if (id === "feedback") config = { id, file, data };
+        else ambience = { id, file, data, pack: pack.id };
         continue;
       }
       if (!folders.has(parts[0])) continue;
@@ -231,7 +237,7 @@ function feedbackEntries(packs: PackSource[], issues: ContentIssue[]): { folders
       if (data !== undefined) folders.get(parts[0])!.set(id, { id, file, data });
     }
   }
-  return { folders, config };
+  return { folders, config, ambience };
 }
 
 const sorted = (m: Map<string, Entry>): Entry[] => [...m.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -618,7 +624,7 @@ function readConfig(entry: Entry | undefined, issues: ContentIssue[], cues: Read
  */
 export function resolveFeedback(packs: PackSource[], game: GameRules): FeedbackRules {
   const issues: ContentIssue[] = [];
-  const { folders, config: configEntry } = feedbackEntries(packs, issues);
+  const { folders, config: configEntry, ambience: ambienceEntry } = feedbackEntries(packs, issues);
 
   const textureEntries = sorted(folders.get("particleTextures")!);
   const textures = textureEntries.map((e) => readParticleTexture(e.id, new Reader(issues, e.file), e.data));
@@ -648,8 +654,9 @@ export function resolveFeedback(packs: PackSource[], game: GameRules): FeedbackR
       if (key !== "weapon" && key !== "armor" && key !== "family") reader.fail(joinPath(joinPath("look", "feedback"), key), "unknown field (expected one of: weapon, armor, family)");
     }
   }
+  const ambience = ambienceEntry ? readAmbienceRecordings(ambienceEntry.data, ambienceEntry.file, ambienceEntry.pack, issues) : NO_RECORDINGS;
   if (issues.length > 0) throw new ContentError(issues);
-  return { sounds, textures, textureIndex, effects, cues, config, skillCues };
+  return { sounds, textures, textureIndex, effects, cues, config, skillCues, ambience };
 }
 
 /**

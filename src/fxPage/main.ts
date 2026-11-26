@@ -7,7 +7,7 @@ import { ArcRotateCamera, Color3, Color4, DirectionalLight, HemisphericLight, Me
 import { whenAudio } from "../audio/context";
 import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
 import { createAmbience, type Ambience } from "../audio/ambience";
-import { AMBIENCE_PRESETS, createAmbienceTab } from "./ambiencePanel";
+import { AMBIENCE_PRESETS, createAmbienceTab, measureAmbience } from "./ambiencePanel";
 import type { RenderedSound } from "../audio/synth";
 import { createEngine } from "../core/engine";
 import { createCuePlayer, type Bone, type CuePlayer, type UnitTraits } from "../feedback/cues";
@@ -138,9 +138,24 @@ try {
 }
 let sfx: Sfx | null = null;
 let ambience: Ambience | null = null;
+const ambienceUrl = (path: string): string => `${import.meta.env.BASE_URL}packs/${path}`;
+// For scripts/tools/ambienceLevels.mjs: a preset rendered offline and measured.
+(window as unknown as { __fxAmbience: unknown }).__fxAmbience = {
+  presets: AMBIENCE_PRESETS,
+  measureAmbience: (preset: string, options?: { seconds?: number; settle?: number; recorded?: boolean }) => measureAmbience(rules.ambience, ambienceUrl, AMBIENCE_PRESETS[preset], options),
+  /** A recording's own loudness, whole: RMS, peak and seconds. */
+  async fileRms(path: string) {
+    const data = await (await fetch(ambienceUrl(path))).arrayBuffer();
+    const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(data);
+    let sum = 0, peak = 0, n = 0;
+    for (let c = 0; c < buffer.numberOfChannels; c++) for (const v of buffer.getChannelData(c)) (sum += v * v), (peak = Math.max(peak, Math.abs(v))), n++;
+    return { rms: Math.sqrt(sum / n), peak, seconds: buffer.duration, channels: buffer.numberOfChannels };
+  },
+  ready: () => typeof rules !== "undefined",
+};
 const ambienceTab = createAmbienceTab();
 whenAudio((audio) => {
-  ambience = createAmbience(audio.ctx, audio.ambient);
+  ambience = createAmbience(audio.ctx, audio.ambient, rules.ambience, ambienceUrl);
   ambience.setVolume((Number(volume.value) / 100) ** 2);
   ambience.setMuted(!ambienceTab.playing);
   sfx = createSfx(audio.ctx, audio.effects, rules, (sound, file) => `${import.meta.env.BASE_URL}packs/${sound.file.split("/")[0]}/${file}`);

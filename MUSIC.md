@@ -404,32 +404,88 @@ These are things the player does for every song, so they change how the same not
 
 ## Ambience
 
-The sound the place makes (SLICE.md P7): `src/audio/ambience.ts`, none of it from files. It plays on its
-own `ambient` bus (`GameAudio.ambient`, beside the music and effects, under the same limiter and the
-underwater muffle) at the player's own **Ambience** volume (options window, beside Music and Effects; kept in `aiworld.ambience.volume`, default 70).
+The sound the place makes (SLICE.md P7): `src/audio/ambience.ts`. It plays on its own `ambient` bus
+(`GameAudio.ambient`, beside the music and effects, under the same limiter and the underwater muffle)
+at the player's own **Ambience** volume (options window, beside Music and Effects; kept in
+`aiworld.ambience.volume`, default 70).
 
-- **Layers:** wind (brown noise through a band that gusts), dry leaves (bright noise fluttering on the
-  gusts), rain (a pink-noise hiss and a loop of drop ticks), water (three wandering bands and a riffle),
-  birds (one-shots: a "fee-bee" whistle, a trill, a warble, a chirp, plus a distant woodpecker and crow),
-  an owl at night, a cave's room tone and draught, drips through a synthetic stone-room tail, and a
-  crypt's low drone.
-- **Where:** `src/audio/ambienceMix.ts` is the pure part - `AmbienceState` in (wind and rain from the
+- **Recordings where there are some** (2026-11-26): `rules/ambience.json5` in the core pack maps a
+  layer to its file or files (`public/packs/core/ambience/*.ogg`), with a gain, optional low- and
+  high-pass, `covers` (other layers' synthesized voices it stands in for) and `quiets` (synthesized
+  one-shots it turns down: birds, owls, caws, knocks). Read in `src/audio/ambienceRecordings.ts`
+  beside the feedback rules. A layer with no file keeps its synthesized voice, and so does one whose
+  file is still loading or failed to load: the game never waits on audio. A loop is decoded once, its
+  last 1.5 s crossfaded (equal power) into its start so the loop has no seam, and started at a random
+  point. `oneShots` are pools of takes, each played with a little pitch and level variation: `bird`,
+  `owl`, `caw`, `knock` and `drip` replace the synthesized calls once they have a file, and any other
+  name (thunder, a creak) is there for the game to play (`Ambience.oneShot`). None yet. A new
+  recording for an existing layer or one-shot needs data only.
+- **Layers now:**
+  - **wind:** `wind.ogg` (gain 4).
+  - **rain:** `rain.ogg` (gain 5.5, covers the synthesized drops).
+  - **water:** `creek.ogg` (gain 5), for a river or a pond.
+  - **surf:** `seashore.ogg` (gain 2), for the sea, heard from 90 m and full within 12 m. Without a
+    surf file the water layer plays for the sea too, as before.
+  - **forestDay** and **forestNight:** `forest.ogg` (gain 2.5, synthesized birds at 0.3 of their rate)
+    and `forest_night.ogg` (gain 5, owls at 0.6), crossfaded by the hour as the birds and owl are.
+    The wood's bed is hushed by rain, a gale and snow, scaled by how alive the biome is, and dulled
+    through walls.
+  - **Still synthesized:** the dry leaves (wind.ogg is wind only), the bird calls, the owl, and the
+    crypt's room tone, drone and drips.
+  - **roofRain:** rain on a roof indoors. It has no file yet; once it has one, it replaces the outdoor
+    rain indoors.
+- **Caves and mines** (the owner's call, 2026-11-26) have no bed and no drips. Their sound is a stone
+  reverb on the effects (footsteps, blows): `GameAudio.echo`, a send from the effects bus into a
+  2.4 s synthetic tail, opened to 0.35 with the underground share. A crypt keeps its drone, room tone
+  and drips, and gets the reverb too.
+- **Where:** `src/audio/ambienceMix.ts` is the pure part: `AmbienceState` in (wind and rain from the
   weather blend, the hour, how far underground the light is, the dungeon's kind, indoors, metres to
-  the nearest water, how alive the biome is), layer levels out. `src/game/feedback.ts` fills the state each
-  frame (the weather and the underground share from `world.weatherBlend()` and `world.undergroundShare()`;
-  indoors, the biome and the water search, eight spokes out to 38 m, four times a second).
+  the nearest river or pond and to the sea, how alive the biome is), layer levels out.
+  `src/game/feedback.ts` fills the state each frame: the weather and the underground share from
+  `world.weatherBlend()` and `world.undergroundShare()`; indoors, the biome and the water search,
+  eight spokes out to 90 m, four times a second. The sea is water over ground at least 1.5 m under
+  the sea's level; a river or a pond lies above it.
   - Birds by day (not in rain, a gale or snow), an owl at night; none indoors or underground.
   - Rain and wind stop underground (the light's own fade, so they fade out walking into a cave); indoors
-    they are low-passed at 650 Hz and quieter, but rain on a roof stays.
+    they are low-passed at 650 Hz and quieter, but rain on a roof stays. The recordings go through the
+    same outdoor bus, so the low-pass, the underground fade and the underwater muffle apply to them.
   - Water is heard from 38 m, full within 4 m.
-  - A cave has drips and room tone; a crypt fewer drips and the drone.
-- **Checks:** `npm run probe -- scripts/probe/ambience.mjs` prints the levels for the wood by day and
-  night, rain, a gale, the river, indoors, a cave and a crypt and checks them, and composes the lair styles.
-  Rendered offline in the page the loudness (RMS) is wood 0.023, night 0.024, cave 0.027, crypt 0.046.
-- **Listening:** `fx.html`, the *Ambience* tab: 16 presets (the wood by day, dusk, night, rain, storm, by the river, indoors, a cave, a crypt...) and sliders for every field of the state, with the levels they make shown. Plays on the page's Volume (the Effects one); *Stop all* silences it.
-- **Not done:** no distinct sea surf; water
-  does not tell a river from a pond; no sound for snow, mist or the swamp's frogs; nothing positional (the
-  layers are the same everywhere around the player). Listening on real speakers is the user's call.
+- **Loudness** (RMS, rendered offline: `node scripts/tools/ambienceLevels.mjs`, which serves this
+  checkout itself on 5190-5197):
+
+  | Place | Recorded | Synthesized |
+  | --- | --- | --- |
+  | wood by day | 0.023-0.025 | 0.020 |
+  | night | 0.022 | 0.022 |
+  | gale | 0.046 | 0.052 |
+  | rain | 0.038 | 0.049 |
+  | storm | 0.056 | 0.070 |
+  | by the river | 0.031 | 0.030 |
+  | on the shore | 0.037 | 0.027 |
+  | indoors | 0.009 | 0.010 |
+  | indoors in rain | 0.012 | 0.016 |
+  | crypt | 0.058 | 0.058 |
+  | cave | 0 (the reverb is on the effects) | 0 |
+
+  Rain and storm are a little under the synthesized ones on purpose: rain.ogg's drops peak high, about
+  0.8-0.9 in a storm.
+- **Checks:** `npm run probe -- scripts/probe/ambience.mjs` checks the levels for the wood by day and
+  night, rain, a gale, the river, the sea, indoors, a cave and a crypt, and composes the lair styles.
+  It also reads the core pack's recordings and checks each file is there, and runs the ambience on a
+  stand-in audio context to check that each layer plays its recording once loaded and its synthesized
+  voice when its file will not load.
+- **Listening:** `fx.html`, the *Ambience* tab: presets (the wood by day, dusk, night, rain, storm, by
+  the river, on the shore, indoors, a cave, a crypt...) and sliders for every field of the state, with
+  the levels they make shown. Each loop lists what it plays now and has a *rec* switch between its
+  recording and its synthesized voice. Plays on the page's Volume (the Effects one); *Stop all*
+  silences it.
+- **Not done:**
+  - **Data only:** cave drips for crypts, rain on a roof, bird calls, a bigger river (as another water
+    file).
+  - **Needs game code:** a campfire loop (a fire's distance in the state), mine creaks and distant
+    thunder (one-shots with no scheduler yet).
+  - **Otherwise:** no sound for snow, mist or the swamp's frogs, and nothing positional (the layers
+    are the same everywhere around the player).
 
 ## Milestones
 

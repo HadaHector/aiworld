@@ -17,8 +17,9 @@ import { createPropEffects, type PropEffects } from "../world/props/propEffects"
 import { createParticleRenderer, type ParticleRenderer } from "../particles/render";
 import { whenAudio } from "../audio/context";
 import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
-import { createAmbience, type Ambience } from "../audio/ambience";
-import { WATER_REACH } from "../audio/ambienceMix";
+import { createAmbience, impulse, type Ambience } from "../audio/ambience";
+import { SEA_REACH, WATER_REACH } from "../audio/ambienceMix";
+import { SEA_LEVEL } from "../world/cells/areaField";
 import { createUnderwaterLook, type UnderwaterLook } from "./underwater";
 import { createCuePlayer, type Bone, type CueContext, type CuePlayer, type UnitTraits } from "../feedback/cues";
 import type { FeedbackRules } from "../feedback/rules";
@@ -111,6 +112,8 @@ const DEAD = 1 << FLAG.dead;
 
 /** The page's sound as heard from under water: everything above this goes. */
 const MUFFLED_HZ = 600;
+/** Metres of water under the sea's level where the ambience hears the sea rather than a river. */
+const SEA_DEPTH = 1.5;
 /** How alive a biome is with birds, 0..1; a biome not listed is 0.6. */
 const LIFE: Record<string, number> = { autumnWood: 1, bluebellWood: 1, cloudForest: 0.9, rainforest: 1, meadow: 0.9, greenAlps: 0.7, desert: 0.15, sandSea: 0.1, saltFlat: 0.1, polarDesert: 0.05, icePeaks: 0.1, frostSteppe: 0.2 };
 const time = (): number => performance.now();
@@ -130,6 +133,8 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   let muffle: BiquadFilterNode | null = null;
   /** Whether the camera is under water now. */
   let underwater = false;
+  /** The effects' send into the stone reverb, opened underground. */
+  let echo: GainNode | null = null;
   let volume = options.volume;
   let ambienceVolume = options.ambienceVolume;
   let disposed = false;
@@ -140,10 +145,12 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     sfx = createSfx(audio.ctx, audio.effects, rules, (sound, file) => `${baseUrl}packs/${sound.file.split("/")[0]}/${file}`);
     sfx.setVolume(volume);
     sfx.prewarm();
-    ambience = createAmbience(audio.ctx, audio.ambient);
+    ambience = createAmbience(audio.ctx, audio.ambient, rules.ambience, (path) => `${baseUrl}packs/${path}`);
     ambience.setVolume(ambienceVolume);
     muffle = audio.muffle;
     muffle.frequency.value = underwater ? MUFFLED_HZ : 22000;
+    echo = audio.echo;
+    if (!audio.echoRoom.buffer) audio.echoRoom.buffer = impulse(audio.ctx, 2.4);
   });
 
   // What a unit hits with and wears, worked out again only when what it shows changes.
@@ -390,9 +397,10 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   };
 
   // --- the ambience: what surrounds the camera, worked out a few times a second ---
-  const RING = [3, 6, 10, 16, 24, WATER_REACH];
+  const RING = [3, 6, 10, 16, 24, WATER_REACH, 55, 72, SEA_REACH];
   let surroundAt = -Infinity;
   let waterDistance = Infinity;
+  let seaDistance = Infinity;
   let life = 1;
   let indoors = false;
   const surroundings = (eye: { x: number; y: number; z: number }): void => {
@@ -402,20 +410,26 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     indoors = !!world.buildingAt(eye.x, eye.y, eye.z);
     const here = world.sampleTerrain(eye.x, eye.z);
     life = LIFE[here.primaryBiome.id] ?? 0.6;
-    // The nearest water, feeling out along eight spokes.
+    // The nearest water and the nearest sea, feeling out along eight spokes: the sea is water over
+    // ground that lies well under the sea's level (a river or a pond lies above it, or barely under
+    // it where it meets the sea).
     waterDistance = Infinity;
-    if (world.waterAt(eye.x, eye.z).depth > 0.05) {
-      waterDistance = 0;
-      return;
-    }
-    search: for (const r of RING) {
+    seaDistance = Infinity;
+    const look = (x: number, z: number, r: number): void => {
+      const w = world.waterAt(x, z);
+      if (w.depth <= 0.05) return;
+      if (SEA_LEVEL - world.heightAt(x, z) >= SEA_DEPTH) seaDistance = Math.min(seaDistance, r);
+      else waterDistance = Math.min(waterDistance, r);
+    };
+    look(eye.x, eye.z, 0);
+    for (const r of RING) {
+      if (waterDistance <= r && seaDistance <= r) break;
       for (let k = 0; k < 8; k++) {
         const a = (k / 8) * Math.PI * 2 + (r % 2) * 0.2;
-        if (world.waterAt(eye.x + Math.cos(a) * r, eye.z + Math.sin(a) * r).depth > 0.05) {
-          waterDistance = r;
-          break search;
-        }
+        look(eye.x + Math.cos(a) * r, eye.z + Math.sin(a) * r, r);
       }
+      // (A river is not heard past its reach: past it, only the sea is looked for.)
+      if (r >= WATER_REACH && seaDistance < Infinity) break;
     }
   };
   const ambient = (eye: { x: number; y: number; z: number } | null): void => {
@@ -432,8 +446,11 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       hollow: share > 0 ? hollow : null,
       indoors,
       waterDistance,
+      seaDistance,
       life,
     });
+    // The stone's reverb on the effects underground: footsteps and blows ring in a cave, a mine, a crypt.
+    if (echo) echo.gain.setTargetAtTime(ambience.mix().echo * 0.35, echo.context.currentTime, 0.3);
   };
 
   const at: Vec3 = { x: 0, y: 0, z: 0 };

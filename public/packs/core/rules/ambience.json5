@@ -1,0 +1,31 @@
+// The ambience's recordings (MUSIC.md, *Ambience*): which layer plays a file instead of its
+// synthesized voice. A layer with no entry keeps its voice; a later pack replaces this file whole,
+// its files then its own. Paths are inside the pack (public/packs/core/...).
+//
+// loops: a layer's recording, looped (its end crossfaded into its start), started at a random point.
+//   Layers: wind, rustle, rain, patter, water (a river or a pond), surf (the sea, heard from 90 m),
+//   forestDay, forestNight, roofRain (indoors under rain), room (a crypt's room tone), crypt (its
+//   drone). surf, forestDay, forestNight and roofRain have no synthesized voice: silent until they
+//   have a file (the sea is the water layer's then). Caves and mines have no bed: their sound is a
+//   stone reverb on the effects.
+//   files     one or more; one is picked each time the game starts
+//   gain      at the layer's full level
+//   lowpass, highpass   Hz, optional
+//   covers    other layers whose synthesized voices it stands in for (rain's drops are in rain.ogg)
+//   quiets    synthesized one-shots turned down while it is heard, a factor on their rate:
+//             birds, owls, caws, knocks (0 silences them)
+// oneShots: recorded takes, played at random with a little pitch and level variation. bird, owl, caw,
+//   knock and drip replace the synthesized calls as soon as they have one; any other name (thunder,
+//   creak) waits for the game to play it.
+//   files, gain, pitch (semitones, [low, high]), volume ([low, high] factor)
+{
+  loops: {
+    wind: { files: ["ambience/wind.ogg"], gain: 4 },
+    rain: { files: ["ambience/rain.ogg"], gain: 5.5, covers: ["patter"] },
+    water: { files: ["ambience/creek.ogg"], gain: 5 },
+    surf: { files: ["ambience/seashore.ogg"], gain: 2 },
+    forestDay: { files: ["ambience/forest.ogg"], gain: 2.5, quiets: { birds: 0.3 } },
+    forestNight: { files: ["ambience/forest_night.ogg"], gain: 5, quiets: { owls: 0.6 } },
+  },
+  oneShots: {},
+}

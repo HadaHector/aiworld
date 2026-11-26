@@ -14,6 +14,10 @@ export interface GameAudio {
   ambient: AudioNode;
   /** Everything heard goes through this low-pass: wide open in air, closed under water (WATER.md). */
   muffle: BiquadFilterNode;
+  /** The effects' send into a stone room's reverb: 0 in the open, up underground (MUSIC.md, *Ambience*). */
+  echo: GainNode;
+  /** The reverb the send goes into: its tail is set once (ambience.ts's `impulse`). */
+  echoRoom: ConvolverNode;
 }
 
 /** Made at once; given out only once it runs. */
@@ -41,7 +45,13 @@ function make(): GameAudio {
   music.connect(limiter);
   effects.connect(limiter);
   ambient.connect(limiter);
-  made = { ctx, music, effects, ambient, muffle };
+  const echo = ctx.createGain();
+  echo.gain.value = 0;
+  const echoRoom = ctx.createConvolver();
+  effects.connect(echo);
+  echo.connect(echoRoom);
+  echoRoom.connect(limiter);
+  made = { ctx, music, effects, ambient, muffle, echo, echoRoom };
   // Running already, or as soon as the browser allows: then everyone waiting gets it.
   ctx.addEventListener("statechange", started);
   started();
