@@ -14,9 +14,13 @@
   voxel: 1.25,
   sizes: {
     lair: { rooms: [2, 3], entry: "seamless" },
-    dungeon: { rooms: [8, 12], entry: "seamless" },
+    // The size a cave mouth or a mine's adit on the map opens (sim/server.ts, mouthDungeon): half
+    // what it was (owner, 2026-11-26) - 3 to 6 rooms with the boss's, about 11-26 parts.
+    dungeon: { rooms: [3, 5], entry: "seamless" },
   },
-  branching: 0.4,
+  // Its ways branch often (was 0.4): with half the rooms, so a side way still leaves the line to the
+  // boss in every one of them.
+  branching: 0.8,
   boss: { tags: ["boss"] },
   cover: 8,
   deepest: 50,
