@@ -40,6 +40,22 @@ function floorUnder(field: CaveField, x: number, y: number, z: number): number |
   return null;
 }
 
+/** The steepest a floor prop stands on: rise over run across its footprint. */
+const LEVEL = 0.15;
+
+/** Whether the floor under a footprint (a square of `r` half-side) round (x, z) is level enough to
+ *  stand a prop on: sounded at its middle and corners, from `from` down. */
+function levelAt(field: CaveField, x: number, from: number, z: number, r: number): boolean {
+  let lo = Infinity, hi = -Infinity;
+  for (const [ox, oz] of [[0, 0], [r, r], [-r, r], [r, -r], [-r, -r]]) {
+    const f = floorUnder(field, x + ox, from, z + oz);
+    if (f === null) return false;
+    lo = Math.min(lo, f);
+    hi = Math.max(hi, f);
+  }
+  return hi - lo <= LEVEL * r * 2;
+}
+
 /** The rock round a point, level with it, looked for in 16 ways - the nearest first: where, and which way out of it. */
 function wallsAround(field: CaveField, x: number, y: number, z: number, start: number): { x: number; z: number; out: [number, number]; distance: number }[] {
   const hits: { x: number; z: number; out: [number, number]; distance: number }[] = [];
@@ -211,6 +227,8 @@ const MOUTH_IN = 2.5;
 const LANTERN_BODY = 0.55;
 const LANTERN_CHAIN = 0.7;
 const LANTERN_TOP = LANTERN_BODY * 1.3 + 0.06 + 0.06 + LANTERN_CHAIN;
+/** A floor prop's footprint, as a half-side, for how level its floor must be (a barrel, a crate, a sack). */
+const FOOTPRINT = 0.7;
 /** How far what stands on the floor keeps from the track. */
 const RAIL_CLEAR = 1.8;
 
@@ -472,7 +490,7 @@ function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, f
         const along = e.at === "foot" ? -side * (1.9 + random() * 0.6) : (random() < 0.5 ? 1 : -1) * (2.9 + random() * 1.6);
         const px = wx + nx * out + tx * along, pz = wz + nz * out + tz * along;
         const f = floorAt(px, pz);
-        if (f === null || !clearOf(field, px, f, pz, 0.9) || taken.some(([a, c]) => Math.hypot(a - px, c - pz) < 2.2) || nearRail(px, pz, RAIL_CLEAR)) continue;
+        if (f === null || !clearOf(field, px, f, pz, 0.9) || !levelAt(field, px, f + 1.5, pz, FOOTPRINT) || taken.some(([a, c]) => Math.hypot(a - px, c - pz) < 2.2) || nearRail(px, pz, RAIL_CLEAR)) continue;
         taken.push([px, pz]);
         const turn = random() * Math.PI * 2;
         put(m, px, f - 0.03, pz, Math.sin(turn), Math.cos(turn));
@@ -681,7 +699,7 @@ function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, f
         const a = random() * Math.PI * 2, r = 4 + random() * Math.max(0, reach - 4);
         const x = hub.x + Math.sin(a) * r, z = hub.z + Math.cos(a) * r;
         const f = floorUnder(field, x, hubFloor + 3, z);
-        if (f === null || !clearOf(field, x, f, z, 1.6) || nearRail(x, z, 3.4)) continue;
+        if (f === null || !clearOf(field, x, f, z, 1.6) || !levelAt(field, x, f + 1.5, z, 1.4) || nearRail(x, z, 3.4)) continue;
         const t = random() * Math.PI * 2;
         put(generateProp(e.def, seed, Math.floor(random() * 6)), x, f - 0.03, z, Math.sin(t), Math.cos(t));
         break;
@@ -715,7 +733,7 @@ export function caveFixtures(layout: DungeonLayout, style: DungeonStyleDef, fiel
         const start = random() * Math.PI * 2;
         const floor = floorUnder(field, spot.x, spot.y + 2, spot.z);
         if (floor === null) return;
-        if (option.place === "floor" && !onRail(spot.x, spot.z)) {
+        if (option.place === "floor" && !onRail(spot.x, spot.z) && levelAt(field, spot.x, floor + 1.5, spot.z, FOOTPRINT)) {
           // On the floor where the spot is, turned any way.
           b.appendFurniture(model, spot.x, floor, spot.z, Math.sin(start), Math.cos(start));
           placed++;
@@ -732,11 +750,12 @@ export function caveFixtures(layout: DungeonLayout, style: DungeonStyleDef, fiel
           return;
         }
         // At a wall's foot (the nearest whose foot is clear of any track): a little out from where the
-        // rock rises, on the floor there, facing in. (Where a floor spot lies on the track, too.)
+        // rock rises, on the floor there, facing in - where it is level. (Where a floor spot lies on
+        // the track or a slope, too; none such, none.)
         for (const wall of wallsAround(field, spot.x, floor + 1, spot.z, start)) {
           const x = wall.x + wall.out[0] * 1.2, z = wall.z + wall.out[1] * 1.2;
           const foot = floorUnder(field, x, floor + 2, z);
-          if (foot === null || onRail(x, z)) continue;
+          if (foot === null || onRail(x, z) || !levelAt(field, x, foot + 1.5, z, FOOTPRINT)) continue;
           b.appendFurniture(model, x, foot - 0.05, z, wall.out[0], wall.out[1]);
           placed++;
           return;
