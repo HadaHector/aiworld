@@ -45,7 +45,7 @@ const MARK_RANGE = 90;
 const MAP_PIN_RANGE = 400;
 
 /** Where a body is to be made: a point, or (with `start`) the start of that id, once it is placed. */
-type Arrival = { x: number; z: number; start?: string };
+type Arrival = { x: number; z: number; start?: string; y?: number; lair?: SavedLair };
 import type { SaveStore } from "../save/store";
 import { cleanChat, createRateLimit, parseArgs, splitWords } from "./chat/chat";
 import { createServerCommands, nameBook, type CommandHost } from "./chat/serverCommands";
@@ -54,7 +54,7 @@ import { dungeonChests } from "./dungeons";
 import { dungeonSpawnPoints } from "./creatures/dungeonSpawns";
 import type { DungeonContent } from "../world/dungeons/dungeonDefs";
 import { deriveSeed } from "../world/rng";
-import { SAVE_VERSION, makeSaveId, nameProblem, tidyName, type CharacterRecord, type CharacterSummary, type WorldRecord } from "../save/records";
+import { SAVE_VERSION, makeSaveId, nameProblem, tidyName, type CharacterRecord, type CharacterSummary, type SavedLair, type WorldRecord } from "../save/records";
 
 /** How near a mausoleum a player comes before the dungeon under it is laid out and drawn, and how far
  *  off it is let go again (DUNGEONS.md, *Seamless*). */
@@ -841,8 +841,9 @@ export function createServer(options: ServerOptions): Server {
     if (entity.standing) record.standing = Object.fromEntries(entity.standing);
     record.quests = questSystem.export(entity);
     // Travelling, it has no body yet: it is wherever it is headed.
-    const at = entity.body ? { x: entity.x, z: entity.z } : player.arrival;
-    record.travel = { ...record.travel, dimension: entity.dimension, x: at.x, z: at.z, facing: entity.facing };
+    const at: Arrival = entity.body ? { x: entity.x, z: entity.z, ...lairOf(entity) } : player.arrival;
+    const { y: _y, lair: _lair, ...rest } = record.travel;
+    record.travel = { ...rest, dimension: entity.dimension, x: at.x, z: at.z, facing: entity.facing, ...(at.lair ? { y: at.y, lair: structuredClone(at.lair) } : {}) };
     record.played = Date.now();
     record.playedSeconds += player.playing;
     player.playing = 0;
@@ -928,6 +929,8 @@ export function createServer(options: ServerOptions): Server {
     }
     if (skipped.length > 0) problem(`${record.name}'s save names what the packs no longer have: ${skipped.join(", ")}`);
     const arrival: Arrival = { x: at.x, z: at.z, start: (at as Arrival).start };
+    // Left in a lair: laid out again once its dimension is there and the body is made (restoreLair).
+    if (at === record.travel && record.travel.lair && record.travel.y !== undefined) Object.assign(arrival, { y: record.travel.y, lair: record.travel.lair });
     const joined: Player = { entity, arrival, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: record, playing: 0 };
     players.set(entity.id, joined);
     connection.player = joined;
@@ -1131,14 +1134,7 @@ export function createServer(options: ServerOptions): Server {
         const key = there?.id ?? `${siteKey(dimension.id, site)}/${site.style}/dungeon`;
         if (current === key) continue;
         if (current && !nearMouth.has(entity.id)) continue;
-        let dungeon = there;
-        if (!dungeon) {
-          const seed = deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
-          dungeon = dimension.dungeons.open(key, site.style, "dungeon", seed, site);
-          mouthOpened.add(key);
-          peopleDungeon(dimension.id, dungeon);
-          chestsDungeon(dimension.id, dungeon);
-        }
+        const dungeon = there ?? mouthDungeon(dimension, site);
         inDungeon.set(entity.id, dungeon.id);
         nearMouth.add(entity.id);
         connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, mouth: site.mouth ?? false, entry: dungeon.entry });
@@ -1152,6 +1148,72 @@ export function createServer(options: ServerOptions): Server {
       }
     }
   }
+  /** A mouth's own dungeon, laid out under it and filled (or the one already there by its key). */
+  function mouthDungeon(dimension: Dimension, site: ReturnType<typeof mouthNear> & object): PlacedDungeon {
+    const key = `${siteKey(dimension.id, site)}/${site.style}/dungeon`;
+    const known = dimension.dungeons!.placed.get(key);
+    if (known) return known;
+    const seed = deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
+    const dungeon = dimension.dungeons!.open(key, site.style, "dungeon", seed, site);
+    mouthOpened.add(key);
+    peopleDungeon(dimension.id, dungeon);
+    chestsDungeon(dimension.id, dungeon);
+    return dungeon;
+  }
+
+  /** The lair a body stands in, as a save keeps it (with its feet's height), or nothing. */
+  function lairOf(entity: Entity): Pick<Arrival, "y" | "lair"> {
+    const dungeons = loaded.get(entity.dimension)?.dungeons;
+    const dungeon = dungeons?.at(entity.x, entity.y, entity.z) ?? dungeons?.at(entity.x, entity.y + 1, entity.z);
+    if (!dungeon) return {};
+    return { y: entity.y, lair: { id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, site: structuredClone(dungeon.site), mouth: mouthOpened.has(dungeon.id) } };
+  }
+
+  /**
+   * A body just made where its character was left in a lair (FRONTEND.md, *Saves*): the lair laid out
+   * again as entering it does - a mouth's from its mouth, a /dungeon's from its seed - and the body put
+   * on its floor at the spot. If the lair is not there any more (its mouth gone, the content changed,
+   * the spot no longer inside it), the body goes out before its entrance instead.
+   */
+  function restoreLair(entity: Entity, dimension: Dimension, lair: SavedLair, y: number): void {
+    if (!entity.body || !dimension.dungeons) return;
+    const dungeons = dimension.dungeons;
+    let dungeon: PlacedDungeon | undefined;
+    try {
+      if (lair.mouth) {
+        const site = mouthNear(dimension.world, lair.site.x, lair.site.z, 2, lair.style);
+        if (site && Math.round(site.x) === Math.round(lair.site.x) && Math.round(site.z) === Math.round(lair.site.z)) dungeon = placedAt(dimension, site) ?? mouthDungeon(dimension, site);
+      } else {
+        const there = placedAt(dimension, lair.site);
+        if (!there) {
+          dungeon = dungeons.open(lair.id, lair.style, lair.size, lair.seed, lair.site);
+          peopleDungeon(dimension.id, dungeon);
+          chestsDungeon(dimension.id, dungeon);
+        } else if (there.id === lair.id) dungeon = there;
+      }
+    } catch (error) {
+      problem(`The lair "${lair.id}" could not be laid out again: ${String(error)}`);
+    }
+    const { x, z } = entity;
+    if (dungeon && (dungeons.at(x, y, z) === dungeon || dungeons.at(x, y + 1, z) === dungeon)) {
+      entity.body.teleportTo({ x, y: dungeon.floorAt ? dungeon.floorAt(x, y, z) + 0.3 : y + 0.05, z });
+      follow(entity);
+      inDungeon.set(entity.id, dungeon.id);
+      if (lair.mouth) nearMouth.add(entity.id);
+      else nearMouth.delete(entity.id);
+      const site = dungeon.site;
+      connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, mouth: site.mouth ?? false, entry: dungeon.entry });
+      return;
+    }
+    // Out before its door, on the ground; a /dungeon's opened for this alone goes again.
+    const out = (lair.site.facing * Math.PI) / 180;
+    const exit = dungeon?.exit ?? { x: lair.site.x + Math.sin(out) * 4, z: lair.site.z + Math.cos(out) * 4 };
+    entity.body.teleport(exit.x, exit.z);
+    follow(entity);
+    if (dungeon && !mouthOpened.has(dungeon.id) && ![...inDungeon.values()].includes(dungeon.id)) closeDungeon(dimension, dungeon);
+    problem(`${entity.name ?? "A character"} was left in a lair that is not there as it was: put outside its entrance.`);
+  }
+
   /** Puts a player at the foot of a dungeon's entrance, and tells its client what to draw. */
   function enterDungeonAt(entity: Entity, dungeon: PlacedDungeon): void {
     if (!entity.body) return;
@@ -1517,7 +1579,10 @@ export function createServer(options: ServerOptions): Server {
       if (at.facing !== undefined) entity.body.face(at.facing);
       follow(entity);
       dimension.entities.set(entity.id, entity);
-      dimension.streamer.loadAround(at.x, at.z, pointsIn(entity.dimension));
+      if (player.arrival.lair && player.arrival.y !== undefined) restoreLair(entity, dimension, player.arrival.lair, player.arrival.y);
+      delete player.arrival.lair;
+      delete player.arrival.y;
+      dimension.streamer.loadAround(entity.x, entity.z, pointsIn(entity.dimension));
       // A new character placed at its start for the first time: its point and first home kept.
       const travel = player.character?.travel;
       if (travel?.start !== undefined && player.arrival.start !== undefined) {

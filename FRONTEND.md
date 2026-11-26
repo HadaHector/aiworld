@@ -307,6 +307,18 @@ character's people. Nothing else changes.
 `starts` by the character's origins, with no world needed; the point and first home are placed when
 the character first enters, once the world is generated (`travel.start` in the record until then).
 
+*Logging out in a lair* (2026-11-25, the owner found it put them on the terrain above): a character
+left standing in a lair keeps it in `travel.lair` (its id, style, size, seed, site, and whether its
+mouth opened it) and its feet's height in `travel.y`. Entering again, once the dimension is loaded
+and the body made, the server's `restoreLair` lays the lair out again as entering does (a mouth's
+from the mouth found at that site, a `/dungeon` one from its seed), puts the body on its floor at the
+spot and tells the client to draw it. The lair exists before the body is placed, and the client's
+"in it already" path pauses the sun shadows. If the lair is not there as it was (the mouth gone, the
+content changed, the spot no longer inside it), the body is put on the ground before its entrance
+instead. Lair creatures killed stay dead until their respawn time, since their keys are in the world
+delta, which the world record keeps; a boss is no different. Check: `scripts/probe/lairSave.mjs`
+(a cave, a mine and a crypt of the vale, seed 6).
+
 ## Pack data
 
 `rules/frontend.json5`, replaced whole by a later pack as the other rules files are:
