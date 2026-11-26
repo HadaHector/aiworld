@@ -939,3 +939,24 @@ The owner's notes on a mine seen in the game (2026-11-25), as built:
 - The adit's timber portal (`timberSet`) is the feature's: terrainSampler stands it 1.5 m into the slip from
   the mouth's foot, at the floor's level. The workbench's mine preview has a stand-in adit at that distance
   (on its level patch, no hill), so its track, carts and portal show there.
+
+## Props only on level enough ground (2026-11-25, the owner's note)
+
+"Props are placed on slopes, like crate and barrel, only place them if the floor is horizontal enough." A
+compound's props (its kind's `props` list: crates, barrels, carts, log piles, chopping blocks and the
+like, in the yard, round its buildings, by its trails and roads) stand only where the ground under the
+footprint and half a metre round it rises no more than **0.15** over its run (`PROP_MAX_SLOPE`, the
+plane through the four corners' heights - `footprintSlope` in compound.ts).
+
+- **Placing:** each spot tried is judged on the ground as the compound's own yard and buildings' pads
+  will leave it (`groundAhead`: the world's pads do not exist yet when it is laid out); a spot too
+  steep is passed over for the next, and a prop with none left is dropped, as one that finds no room is.
+- **Then, on the ground as it lies** once the roads are graded and every yard and building levelled
+  (before the props' own pads), `dropSteepProps` takes out any still too steep - a whole group with it
+  and what stands on it. Mostly logs by trails, which lanes and trails graded after the layout tilted.
+- Over the 4 riverLevels and 8 vale worlds this skips about 180 props more than before (of about 2400):
+  crates and barrels by buildings on banks, logs by trails, chopping blocks; no centrepiece (cold fire,
+  windlass, saw spot, log deck) is lost.
+- Not covered: a cemetery's graves (their own limit, `GRAVE_MAX_SLOPE` 0.35 - headstones on a
+  hillside churchyard), a boundary's gates (across their lanes) and a mine's portal (at its adit's floor).
+- The featureReach probe checks every one of the props in the list on the finished ground.

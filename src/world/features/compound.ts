@@ -17,6 +17,7 @@ import type { RoadNetwork } from "../roads/roadNetwork";
 import { ROAD_HALF_WIDTH } from "../roads/roadConfig";
 import { arrangeGroup, arrangeProp, setDown, type Arranged, type PlacedProp } from "../props/propGroups";
 import { measureProp } from "../props/propGenerator";
+import { compoundPads, createPadField } from "../settlements/padField";
 import type { PropDef, Spill } from "../props/propTypes";
 import { generateLine, type LineEnd, type LineRun } from "../props/propGenerator";
 import type { BuildingModel } from "../buildings/buildingTypes";
@@ -117,6 +118,9 @@ export interface CompoundLayout {
    *  Laid as a line prop once the ground is final; its carts stand on it (`at: "rails"`) and every
    *  other prop keeps off it. */
   rails?: CellPoint[];
+  /** The props its kind's list set down (placeProps) - not its gates, graves or portal: each on ground
+   *  no steeper than PROP_MAX_SLOPE (see dropSteepProps). */
+  looseProps?: PlacedProp[];
 }
 
 /**
@@ -553,8 +557,10 @@ export function layoutCompound(
   }
 
   const boundary = kind.compound!.boundary ? layoutBoundary(kind.compound!.boundary, worldSeed, rng, buildings, lanes, trails, sampleTerrain, circleOutline(x, z, rim + GATE_SET_BACK)) : { walls: [], gates: [] };
-  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim }, boundary, rails);
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] }, padSpill: kind.compound!.pads.spill, walls: boundary.walls, rails };
+  const padBlend = { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] };
+  const ground = groundAhead(sampleTerrain, { x, z, y, radius: yardRadius, level }, buildings, padBlend);
+  const { props, droppedProps, looseProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim }, boundary, rails, ground);
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend, padSpill: kind.compound!.pads.spill, walls: boundary.walls, rails, looseProps };
 }
 
 /** A building keeps this far from a lane's middle - a polygon yard's buildings are found by where
@@ -728,7 +734,9 @@ function layoutPolygonRing(
   }
 
   const boundary = kind.compound!.boundary ? layoutBoundary(kind.compound!.boundary, worldSeed, rng, buildings, lanes, trails, sampleTerrain, translated(gateRel, x, z)) : { walls: [], gates: [] };
-  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius: site.yardReach, rim: reachOf(rimRel), shape: { yard: yardRel, rim: rimRel, gate: gateRel } }, boundary, rails);
+  const padBlend = { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] };
+  const ground = groundAhead(sampleTerrain, { x, z, y, radius: site.yardReach, level: reachOf(levelRel), levelOutline: translated(levelRel, x, z) }, buildings, padBlend);
+  const { props, droppedProps, looseProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius: site.yardReach, rim: reachOf(rimRel), shape: { yard: yardRel, rim: rimRel, gate: gateRel } }, boundary, rails, ground);
   return {
     featureId, kindId: kind.id, x, z,
     yard: { x, z, y, radius: site.yardReach, level: reachOf(levelRel), outline: translated(yardRel, x, z), levelOutline: translated(levelRel, x, z) },
@@ -737,6 +745,7 @@ function layoutPolygonRing(
     padSpill: kind.compound!.pads.spill,
     walls: boundary.walls,
     rails,
+    looseProps,
   };
 }
 
@@ -1169,7 +1178,8 @@ function layoutRows(featureId: number, kind: FeatureKindDef, site: CompoundSite,
 
 
   const nearbyRoads = roadLines.filter((line) => distanceToLine(line.points, x, z) < site.radius + TRAIL_ROAD_CLEARANCE);
-  const placed = placeProps(spec, site, worldSeed, rng, buildings, lanes, [], nearbyRoads, sampleTerrain, { x, z, yardRadius: Math.min(halfLength, halfWidth), rim: halfWidth }, { walls: boundary.walls, gates: [...boundary.gates, ...props] });
+  const rowsGround = groundAhead(sampleTerrain, null, buildings, { slope: spec.pads.slope, min: spec.pads.blend[0], max: spec.pads.blend[1] });
+  const placed = placeProps(spec, site, worldSeed, rng, buildings, lanes, [], nearbyRoads, sampleTerrain, { x, z, yardRadius: Math.min(halfLength, halfWidth), rim: halfWidth }, { walls: boundary.walls, gates: [...boundary.gates, ...props] }, undefined, rowsGround);
   return {
     featureId,
     kindId: kind.id,
@@ -1187,6 +1197,7 @@ function layoutRows(featureId: number, kind: FeatureKindDef, site: CompoundSite,
     padBlend: { slope: spec.pads.slope, min: spec.pads.blend[0], max: spec.pads.blend[1] },
     padSpill: spec.pads.spill,
     walls: boundary.walls,
+    looseProps: placed.looseProps,
   };
 }
 
@@ -1283,8 +1294,8 @@ function layoutRoadside(featureId: number, kind: FeatureKindDef, site: CompoundS
     footprints.push(chosen.box);
     lanes.push(pathToDoor(way, chosen.s, chosen.house, building.door, heightAt));
   }
-  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, [], nearbyRoads, sampleTerrain, { x, z, yardRadius: 0, rim: 0 });
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y: site.height, radius: 0, level: 0 }, entrances, lanes, trails: [], buildings, dropped, droppedRequired, props, droppedProps, padBlend, padSpill: kind.compound!.pads.spill, walls: [] };
+  const { props, droppedProps, looseProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, [], nearbyRoads, sampleTerrain, { x, z, yardRadius: 0, rim: 0 }, undefined, undefined, groundAhead(sampleTerrain, null, buildings, padBlend));
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y: site.height, radius: 0, level: 0 }, entrances, lanes, trails: [], buildings, dropped, droppedRequired, props, droppedProps, padBlend, padSpill: kind.compound!.pads.spill, walls: [], looseProps };
 }
 
 /** A path ends this far out from the door it leads to. */
@@ -1316,6 +1327,33 @@ function pathToDoor(way: WayOut, s: number, house: House, door: { x: number; z: 
   const start = alongWay(way, s + along) ?? road;
   const ground = house.y - HOUSE_FLOOR_ABOVE_STREET;
   return { points: [{ x: start.x, z: start.z }, ...ends], heights: [heightAt(s + along), ...ends.map(() => ground)], widthScale: PATH_WIDTH, taperEnds: false };
+}
+
+/** A prop is only set down where the ground under it (and round it, PROP_SLOPE_MARGIN) rises no more
+ *  than this over its run, either way: on level enough ground - not a crate on a bank. */
+export const PROP_MAX_SLOPE = 0.15;
+export const PROP_SLOPE_MARGIN = 0.5;
+
+/** How steep the ground is under a footprint and a margin round it: the rise over run of the plane
+ *  through its corners' heights, along it and across it together. */
+export function footprintSlope(box: { x: number; z: number; ax: number; az: number; hw: number; hd: number }, groundAt: (x: number, z: number) => number): number {
+  const hw = box.hw + PROP_SLOPE_MARGIN;
+  const hd = box.hd + PROP_SLOPE_MARGIN;
+  const h = (a: number, b: number): number => groundAt(box.x + box.ax * hw * a - box.az * hd * b, box.z + box.az * hw * a + box.ax * hd * b);
+  const [p, q, r, t] = [h(-1, -1), h(1, -1), h(1, 1), h(-1, 1)];
+  const along = (q + r - p - t) / (4 * hw);
+  const across = (r + t - p - q) / (4 * hd);
+  return Math.hypot(along, across);
+}
+
+/** The ground a compound's props will stand on, judged before the world's pads exist: the ground as it
+ *  lies, brought to its own yard's and buildings' pads (as the world will bring it - padField). */
+function groundAhead(sampleTerrain: TerrainSampler, yard: CompoundLayout["yard"] | null, buildings: House[], padBlend: CompoundLayout["padBlend"]): (x: number, z: number) => number {
+  const pads = createPadField(compoundPads([{ yard: yard ?? { x: 0, z: 0, y: 0, radius: 0, level: 0 }, buildings, padBlend } as CompoundLayout]));
+  return (x, z) => {
+    const height = sampleTerrain(x, z).height;
+    return pads.level(x, z, height, 1)?.height ?? height;
+  };
 }
 
 /** A prop keeps this far from anything else - a building, another prop. */
@@ -1431,13 +1469,16 @@ function placeProps(
   at: { x: number; z: number; yardRadius: number; rim: number; shape?: { yard: CellPoint[]; rim: CellPoint[]; gate: CellPoint[] } },
   boundary: { walls: WallRun[]; gates: PlacedProp[] } = { walls: [], gates: [] },
   rails?: CellPoint[],
-): { props: PlacedProp[]; droppedProps: string[] } {
+  /** The ground as its own pads will leave it (see groundAhead) - what a prop is judged level on. */
+  groundAt: (x: number, z: number) => number = (x, z) => sampleTerrain(x, z).height,
+): { props: PlacedProp[]; droppedProps: string[]; looseProps: PlacedProp[] } {
   // The boundary's gates are down already, and its wall in the way.
   const props: PlacedProp[] = [...boundary.gates];
   /** The footprints of what is down already. */
   const down: Box[] = boundary.gates.map((gate): Box => ({ x: gate.x, z: gate.z, ax: gate.frontZ, az: -gate.frontX, hw: gate.halfWidth, hd: gate.halfDepth }));
   const walled = (box: Box): boolean => boundary.walls.some((run) => lineToBox(run.points, box) < WALL_PROP_GAP);
   const droppedProps: string[] = [];
+  const looseProps: PlacedProp[] = [];
   // The buildings, and the ground before each one's door.
   const houseBoxes = buildings.map((house): Box => ({ x: house.x, z: house.z, ax: house.frontZ, az: -house.frontX, hw: house.width / 2, hd: house.depth / 2 }));
   const aprons = buildings.map((house): Box => {
@@ -1455,6 +1496,7 @@ function placeProps(
   const signed = new Set<WayOut>();
   // Beside a road out on its own: on dry land, off every other road, clear of what is down already.
   const fitsByRoad = (box: Box, own: RoadLine): boolean => {
+    if (footprintSlope(box, groundAt) > PROP_MAX_SLOPE) return false;
     if (roads.some((line) => line !== own && lineToBox(line.points, box) < ROAD_HALF_WIDTH)) return false;
     if (houseBoxes.some((house) => boxGap(house, box) < PROP_GAP) || down.some((other) => boxGap(other, box) < PROP_GAP)) return false;
     return corners(box).every((p) => {
@@ -1467,6 +1509,7 @@ function placeProps(
   // A mine's track is kept clear but by its carts, which stand on it.
   const fits = (box: Box, limit: number | CellPoint[] | null, onTrail: RoadLine | null, acrossLane: RoadLine | null = null, onApron = false, onRails = false): boolean => {
     if (rails && !onRails && lineToBox(rails, box) < RAIL_PROP_CLEARANCE) return false;
+    if (footprintSlope(box, groundAt) > PROP_MAX_SLOPE) return false;
     // Within a round of this radius, or - a polygon yard - inside that polygon.
     if (limit !== null && corners(box).some((p) => (typeof limit === "number" ? Math.hypot(p.x - at.x, p.z - at.z) > limit : polygonGap(limit, p.x - at.x, p.z - at.z) > 0))) return false;
     if (!acrossLane && paths.some((path) => lineToBox(path, box) < YARD_PATH_CLEARANCE)) return false;
@@ -1666,11 +1709,13 @@ function placeProps(
       if (best.lane) gated.add(best.lane);
       if (best.way) signed.add(best.way);
       const length = Math.hypot(best.fx, best.fz) || 1;
-      props.push(...setDown(arranged, best.x, best.z, best.fx / length, best.fz / length, down.length));
+      const set = setDown(arranged, best.x, best.z, best.fx / length, best.fz / length, down.length);
+      props.push(...set);
+      looseProps.push(...set);
       down.push(bestBox!);
     }
   }
-  return { props, droppedProps };
+  return { props, droppedProps, looseProps };
 }
 
 /** A footprint: a rectangle round (x, z), its half-extents along its unit axis (ax, az) and across
@@ -1731,6 +1776,32 @@ function shuffled<T>(list: T[], rng: () => number): T[] {
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
+}
+
+/**
+ * The props its kind's list set down (CompoundLayout.looseProps) taken out again where the ground as
+ * it now lies - roads graded, the yards and buildings levelled, before the props' own pads - is too
+ * steep under them (PROP_MAX_SLOPE): placeProps judged it ahead, from the compound's own pads alone.
+ * A whole group goes with any of it that stands on the ground, and what stands on what goes.
+ */
+export function dropSteepProps(layouts: CompoundLayout[], sampleTerrain: TerrainSampler): void {
+  const groundAt = (x: number, z: number): number => sampleTerrain(x, z).height;
+  for (const layout of layouts) {
+    if (!layout.looseProps?.length) continue;
+    const steep = new Set<number>();
+    for (const prop of layout.looseProps) {
+      if (prop.on) continue;
+      const box = { x: prop.x, z: prop.z, ax: prop.frontZ, az: -prop.frontX, hw: prop.halfWidth, hd: prop.halfDepth };
+      if (footprintSlope(box, groundAt) > PROP_MAX_SLOPE) steep.add(prop.group);
+    }
+    if (steep.size === 0) continue;
+    const gone = new Set(layout.looseProps.filter((prop) => steep.has(prop.group)));
+    // (One on another goes with it.)
+    for (const prop of layout.props) if (prop.on && gone.has(prop.on)) gone.add(prop);
+    for (const prop of gone) layout.droppedProps.push(prop.prop.id);
+    layout.props = layout.props.filter((prop) => !gone.has(prop));
+    layout.looseProps = layout.looseProps.filter((prop) => !gone.has(prop));
+  }
 }
 
 /**

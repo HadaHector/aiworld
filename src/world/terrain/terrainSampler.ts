@@ -9,7 +9,7 @@ import { createRoadField, type RoadField } from "../roads/roadField";
 import { planBridges, type Bridge } from "../roads/bridges";
 import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
 import { compoundPads, createPadField, propPads, settlementPads, type PadField } from "../settlements/padField";
-import { aditFixtures, layoutCompounds, settleProps, settleOnGround, type CompoundLayout } from "../features/compound";
+import { aditFixtures, dropSteepProps, layoutCompounds, settleProps, settleOnGround, type CompoundLayout } from "../features/compound";
 import { createSpillField, spillMaterials, type SpillField } from "../features/spill";
 import { createTreeCover } from "../foliage/treeScatter";
 import { PAD_PAINT_OFFSET } from "../settlements/settlementConfig";
@@ -505,8 +505,9 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     ROAD_GRADE_END_TAPER,
   );
   padField = createPadField([...settlementPads(settlementLayouts), ...compoundPads(compoundLayouts)]);
-  // The compounds' props stand on the ground as it now is, levelled - and then the ground under
-  // each is levelled to it.
+  // The compounds' props stand on the ground as it now is, levelled - those where it is too steep
+  // taken out - and then the ground under each is levelled to it.
+  dropSteepProps(compoundLayouts, sampleTerrain);
   settleProps(compoundLayouts, sampleTerrain);
   padField = createPadField([...propPads(compoundLayouts), ...settlementPads(settlementLayouts), ...compoundPads(compoundLayouts)]);
   // A mine's rails run from its yard's middle out to its adit (laid on the ground, as a wall is) -

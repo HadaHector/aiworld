@@ -11,7 +11,7 @@ import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
 import { plantedTrees } from "../world/foliage/featureTrees";
 import { createTreeCover, createTreeScatter, type TreeGround, type TreePlacement } from "../world/foliage/treeScatter";
-import { aditFixtures, compoundGap, layoutCompound, planCompound, settleProps, settleOnGround, wallStretches, type CompoundLayout, type CompoundSite } from "../world/features/compound";
+import { aditFixtures, compoundGap, dropSteepProps, layoutCompound, planCompound, settleProps, settleOnGround, wallStretches, type CompoundLayout, type CompoundSite } from "../world/features/compound";
 import { ADIT_GAP } from "../world/features/featureSites";
 import { compoundPads, createPadField, propPads, type Pad, type PadField } from "../world/settlements/padField";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
@@ -123,6 +123,7 @@ export function buildFeaturePreview(
   const layout = layoutCompound(0, kind, site, gates, roads, sampleTerrain, seed);
   // Levelled as the world levels it: the yard and the buildings' pads, then each prop's on them.
   pads = createPadField(compoundPads([layout]));
+  dropSteepProps([layout], sampleTerrain);
   settleProps([layout], sampleTerrain);
   const padList = [...propPads([layout]), ...compoundPads([layout])];
   pads = createPadField(padList);

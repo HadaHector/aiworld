@@ -7,6 +7,10 @@
 // water, a building or the compound's boundary (its openings are the gaps between its runs).
 // Worlds: the riverLevels worlds (one autumn-wood zone with rivers; seed 4242 has the logging camp whose
 // pad steps 3.4 m by a prop's pad) and the vale.
+// And every prop its kind's list set down (CompoundLayout.looseProps) stands on level enough ground: the
+// ground under its footprint and half a metre round rises no more than PROP_MAX_SLOPE over its run (the
+// owner's note, 2026-11-25: no crates and barrels on slopes). A cemetery's graves (their own limit) and
+// a boundary's gates are not in that list.
 //   npm run probe -- scripts/probe/featureReach.mjs [seeds...] [--full]
 const { pick } = await import("./mode.mjs");
 const { packSourcesFromDisk, loadContentFromDisk } = await import("../diskContent.mjs");
@@ -15,6 +19,7 @@ const { resolveContent } = await import("../../src/world/content/resolveContent.
 const { createTerrainSampler } = await import("../../src/world/terrain/terrainSampler.ts");
 const { polygonGap } = await import("../../src/world/features/yardShape.ts");
 const { DEFAULT_MOTOR } = await import("../../src/world/collision/characterMotor.ts");
+const { footprintSlope, PROP_MAX_SLOPE } = await import("../../src/world/features/compound.ts");
 
 let failures = 0, checks = 0;
 const check = (what, ok, detail = "") => { checks++; if (!ok) { failures++; console.log(`FAIL ${what}${detail ? `: ${detail}` : ""}`); } };
@@ -124,11 +129,19 @@ const worlds = [
   ...(given.length ? given : [1338, 7, 4242, 90210]).map((seed) => ({ seed, content: riverContent, name: "rivers" })),
   ...(given.length ? [] : Array.from({ length: pick(3, 8) }, (_, i) => ({ seed: 1000 + i * 7919, content: vale, name: "vale" }))),
 ];
-let compounds = 0;
+let compounds = 0, loose = 0, steepest = 0;
 const tally = [0, 0, 0, 0, 0];
 for (const { seed, content, name } of worlds) {
   const t = quiet(() => createTerrainSampler(seed, content));
+  const groundAt = (x, z) => t.sampleTerrain(x, z).height;
   for (const layout of t.compoundLayouts) {
+    for (const prop of layout.looseProps ?? []) {
+      if (prop.on) continue;
+      loose++;
+      const slope = footprintSlope({ x: prop.x, z: prop.z, ax: prop.frontZ, az: -prop.frontX, hw: prop.halfWidth, hd: prop.halfDepth }, groundAt);
+      steepest = Math.max(steepest, slope);
+      check(`${name} seed ${seed} ${layout.kindId} ${layout.featureId}: its ${prop.prop.id} stands on level enough ground`, slope <= PROP_MAX_SLOPE + 1e-6, `${slope.toFixed(3)} rise over run at (${prop.x.toFixed(0)}, ${prop.z.toFixed(0)})`);
+    }
     if (layout.yard.level <= 0) continue; // A roadside one: no yard, on its road.
     compounds++;
     const r = reach(t.sampleTerrain, layout);
@@ -141,6 +154,8 @@ for (const { seed, content, name } of worlds) {
   }
 }
 check("some compounds checked", compounds >= 5, `${compounds}`);
+check("some props checked", loose >= 100, `${loose}`);
+log(`featureReach: ${loose} props on the ground, steepest ${steepest.toFixed(3)} (limit ${PROP_MAX_SLOPE})`);
 log(`featureReach: ${compounds} compounds, clear directions 0..4: ${tally.join(" / ")}`);
 log(`${checks - failures}/${checks} checks passed`);
 process.exit(failures > 0 ? 1 : 0);
