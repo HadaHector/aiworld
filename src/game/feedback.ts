@@ -20,6 +20,7 @@ import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
 import { createAmbience, impulse, type Ambience } from "../audio/ambience";
 import { SEA_REACH, WATER_REACH, type Bearing } from "../audio/ambienceMix";
 import { SEA_LEVEL } from "../world/cells/areaField";
+import { WATER_SURFACE } from "../world/water";
 import { createUnderwaterLook, type UnderwaterLook } from "./underwater";
 import { createCuePlayer, type Bone, type CueContext, type CuePlayer, type UnitTraits } from "../feedback/cues";
 import type { FeedbackRules } from "../feedback/rules";
@@ -114,6 +115,8 @@ const DEAD = 1 << FLAG.dead;
 const MUFFLED_HZ = 600;
 /** Metres of water under the sea's level where the ambience hears the sea rather than a river. */
 const SEA_DEPTH = 1.5;
+/** Shallow water at the sea's surface is the sea's edge when deep sea lies within this much further. */
+const SHORE_TO_SEA = 30;
 /** How alive a biome is with birds, 0..1; a biome not listed is 0.6. */
 const LIFE: Record<string, number> = { autumnWood: 1, bluebellWood: 1, cloudForest: 0.9, rainforest: 1, meadow: 0.9, greenAlps: 0.7, desert: 0.15, sandSea: 0.1, saltFlat: 0.1, polarDesert: 0.05, icePeaks: 0.1, frostSteppe: 0.2 };
 const time = (): number => performance.now();
@@ -418,31 +421,58 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     // it where it meets the sea).
     waterDistance = Infinity;
     seaDistance = Infinity;
-    const pulls = { water: { x: 0, z: 0, w: 0 }, sea: { x: 0, z: 0, w: 0 } };
-    const look = (x: number, z: number, r: number, a: number): void => {
-      const w = world.waterAt(x, z);
-      if (w.depth <= 0.05) return;
-      const isSea = SEA_LEVEL - world.heightAt(x, z) >= SEA_DEPTH;
-      if (isSea) seaDistance = Math.min(seaDistance, r);
-      else waterDistance = Math.min(waterDistance, r);
+    // The sea's shallow edge (under SEA_DEPTH, at the sea's own surface) is the sea's only where deep
+    // sea lies close beyond it; else it is a legacy river or lake at that level. Sorted after the search.
+    let shoreDistance = Infinity;
+    const pulls = { water: { x: 0, z: 0, w: 0 }, sea: { x: 0, z: 0, w: 0 }, shoreAsWater: { x: 0, z: 0, w: 0 }, shoreAsSea: { x: 0, z: 0, w: 0 } };
+    const pullTo = (pull: { x: number; z: number; w: number }, r: number, a: number, reach: number): void => {
       // (Standing in it pulls every way at once: a weight with no direction.)
-      const weight = Math.max(0, 1 - r / (isSea ? SEA_REACH : WATER_REACH)) ** 2;
-      const pull = isSea ? pulls.sea : pulls.water;
+      const weight = Math.max(0, 1 - r / reach) ** 2;
       pull.w += weight;
       if (r > 0) {
         pull.x += Math.cos(a) * weight;
         pull.z += Math.sin(a) * weight;
       }
     };
+    const look = (x: number, z: number, r: number, a: number): void => {
+      const w = world.waterAt(x, z);
+      if (w.depth <= 0.05) return;
+      const below = SEA_LEVEL - world.heightAt(x, z);
+      if (below >= SEA_DEPTH) {
+        seaDistance = Math.min(seaDistance, r);
+        pullTo(pulls.sea, r, a, SEA_REACH);
+      } else if (w.surface <= WATER_SURFACE + 0.01) {
+        shoreDistance = Math.min(shoreDistance, r);
+        pullTo(pulls.shoreAsWater, r, a, WATER_REACH);
+        pullTo(pulls.shoreAsSea, r, a, SEA_REACH);
+      } else {
+        waterDistance = Math.min(waterDistance, r);
+        pullTo(pulls.water, r, a, WATER_REACH);
+      }
+    };
     look(eye.x, eye.z, 0, 0);
     for (const r of RING) {
-      if (waterDistance <= r && seaDistance <= r) break;
+      if (Math.min(waterDistance, shoreDistance) <= r && seaDistance <= r) break;
       for (let k = 0; k < 8; k++) {
         const a = (k / 8) * Math.PI * 2 + (r % 2) * 0.2;
         look(eye.x + Math.cos(a) * r, eye.z + Math.sin(a) * r, r, a);
       }
       // (A river is not heard past its reach: past it, only the sea is looked for.)
       if (r >= WATER_REACH && seaDistance < Infinity) break;
+    }
+    const join = (into: { x: number; z: number; w: number }, from: { x: number; z: number; w: number }): void => {
+      into.x += from.x;
+      into.z += from.z;
+      into.w += from.w;
+    };
+    if (shoreDistance < Infinity) {
+      if (seaDistance - shoreDistance <= SHORE_TO_SEA) {
+        seaDistance = Math.min(seaDistance, shoreDistance);
+        join(pulls.sea, pulls.shoreAsSea);
+      } else {
+        waterDistance = Math.min(waterDistance, shoreDistance);
+        join(pulls.water, pulls.shoreAsWater);
+      }
     }
     for (const [pull, way] of [[pulls.water, waterWay], [pulls.sea, seaWay]] as const) {
       const length = Math.hypot(pull.x, pull.z);

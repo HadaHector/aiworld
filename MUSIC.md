@@ -444,7 +444,10 @@ at the player's own **Ambience** volume (options window, beside Music and Effect
   `src/game/feedback.ts` fills the state each frame: the weather and the underground share from
   `world.weatherBlend()` and `world.undergroundShare()`; indoors, the biome and the water search,
   eight spokes out to 90 m, four times a second. The sea is water over ground at least 1.5 m under
-  the sea's level; a river or a pond lies above it.
+  the sea's level; a river or a pond lies above it. The sea's shallow edge (shallower, but at the
+  sea's own surface) is the sea's too when deep sea lies within 30 m beyond it, so the waterline
+  does not play the creek; else it is a river or lake at that level. (Measured on two worlds: of the
+  shallow water at the sea's surface, nearly all is within 20 m of deep sea.)
   - Birds by day (not in rain, a gale or snow), an owl at night; none indoors or underground.
   - Rain and wind stop underground (the light's own fade, so they fade out walking into a cave); indoors
     they are low-passed at 650 Hz and quieter, but rain on a roof stays. The recordings go through the
