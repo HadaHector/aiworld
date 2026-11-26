@@ -311,8 +311,13 @@ export function createPrecipitation(scene: Scene, heightAt: (x: number, z: numbe
     );
     if (amount <= 0.001) return;
     layCover(eye);
-    // Lit by the day, brightened a little so they read against the dark wood.
-    leafLight.set(Math.min(1.2, light.r * 1.1 + 0.08), Math.min(1.2, light.g * 1.1 + 0.08), Math.min(1.2, light.b * 1.1 + 0.08));
+    // Lit by the day, brightened a little so they read against the dark wood - but only by day: the lift
+    // fades with the light, and at night they are darkened further, so they never glow in the dark.
+    const brightness = (light.r + light.g + light.b) / 3;
+    const day = Math.min(1, brightness / 0.6);
+    const lift = 0.08 * day;
+    const scale = 1.1 * (0.45 + 0.55 * day);
+    leafLight.set(Math.min(1.2, light.r * scale + lift), Math.min(1.2, light.g * scale + lift), Math.min(1.2, light.b * scale + lift));
     material.setFloat("time", time);
     material.setFloat("amount", amount);
     material.setVector3("travel", travel);

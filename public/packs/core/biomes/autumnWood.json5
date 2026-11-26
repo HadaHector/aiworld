@@ -324,7 +324,7 @@
   },
   // Leaves drifting down through the air about the player: the thickest the layer goes (the wind
   // stirs it, rain and snow put it out).
-  fallingLeaves: 0.75,
+  fallingLeaves: 0.375,
   // Mostly fair and golden; the odd grey spell, mist in the hollows, a gale that strips the trees.
   weather: [
     { weather: "clear", odds: 3 },
