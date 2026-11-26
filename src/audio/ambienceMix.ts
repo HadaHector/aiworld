@@ -18,8 +18,10 @@ export interface AmbienceState {
   hollow: "cave" | "crypt" | null;
   /** Inside a house (outdoor sound comes through walls, dulled). */
   indoors: boolean;
-  /** Metres to the nearest water (a river, a pond) - Infinity for none. */
+  /** Metres to the nearest water that is not the sea (a river, a pond) - Infinity for none. */
   waterDistance: number;
+  /** Metres to the sea's water - Infinity for none (left out: none). */
+  seaDistance?: number;
   /** 0..1, how alive the place is: woods are full of birds, bare ground is not. */
   life: number;
 }
@@ -33,6 +35,18 @@ export interface AmbienceMix {
   /** The drops on leaves and ground, over the rain's hiss. */
   patter: number;
   water: number;
+  /** A river's or a pond's water alone, and the sea's surf (recorded only): with a surf recording
+   *  heard, the water layer plays `river`, else `water`, which is the nearer of the two. */
+  river: number;
+  surf: number;
+  /** The wood's own bed by day and by night (recorded only: silent without a file). */
+  forestDay: number;
+  forestNight: number;
+  /** Rain on the roof over the player, indoors (recorded only). */
+  roofRain: number;
+  /** A crypt's room tone and draught (a cave's and a mine's is silent: their sound is the reverb on
+   *  the effects - `echo`). */
+  room: number;
   /** Everything above ground, together: 0 deep underground. */
   outdoors: number;
   /** The low-pass the outdoor sound goes through: a wall's worth of it indoors. */
@@ -44,11 +58,16 @@ export interface AmbienceMix {
   dripsPerSecond: number;
   /** A crypt's low drone, over the room tone. */
   crypt: number;
+  /** 0..1, the stone reverb on the sound effects (footsteps, blows) underground. */
+  echo: number;
 }
 
 /** Water is heard from this far, at most; it is at full voice within `WATER_CLOSE`. */
 export const WATER_REACH = 38;
 export const WATER_CLOSE = 4;
+/** The sea is heard from this far, at full voice within `SEA_CLOSE`. */
+export const SEA_REACH = 90;
+export const SEA_CLOSE = 12;
 
 const clamp = (x: number, lo = 0, hi = 1): number => Math.min(hi, Math.max(lo, x));
 const smooth = (x: number): number => x * x * (3 - 2 * x);
@@ -71,24 +90,39 @@ export function ambienceMix(s: AmbienceState): AmbienceMix {
   // Always a faint breath in the trees, then rising with the weather's wind.
   const wind = clamp(0.1 + 0.5 * clamp(s.wind / 3) ** 0.8 + 0.2 * gale) * (1 - 0.5 * clamp(s.snow));
   const rustle = clamp((s.wind - 0.5) / 2.2) * 0.5 * (1 - rain * 0.5);
-  const waterNear = s.waterDistance >= WATER_REACH ? 0 : clamp(1 - (s.waterDistance - WATER_CLOSE) / (WATER_REACH - WATER_CLOSE)) ** 1.6;
+  const near = (d: number): number => (d >= WATER_REACH ? 0 : clamp(1 - (d - WATER_CLOSE) / (WATER_REACH - WATER_CLOSE)) ** 1.6);
+  const sea = s.seaDistance ?? Infinity;
+  const riverNear = near(s.waterDistance);
+  // (The synthesized water stands for the sea too, at a river's reach, when there is no surf to play.)
+  const waterNear = Math.max(riverNear, near(sea));
+  const surfNear = sea >= SEA_REACH ? 0 : clamp(1 - (sea - SEA_CLOSE) / (SEA_REACH - SEA_CLOSE)) ** 1.3;
   // Birds sing in the day, fall quiet in rain and in a gale, and not at all indoors or below.
   const singing = out * (1 - indoors) * day * clamp(1 - rain * 1.6) * clamp(1 - gale * 1.1) * clamp(1 - s.snow * 2) * clamp(s.life);
   const owls = out * (1 - indoors) * (1 - day) * clamp(1 - rain * 2) * clamp(1 - gale) * clamp(s.life);
+  // The wood's bed: what birds and insects make of it, hushed by rain, a gale and snow.
+  const bed = out * wall * clamp(s.life) * clamp(1 - rain * 0.9) * clamp(1 - gale * 0.7) * (1 - 0.6 * clamp(s.snow));
   const hollow = below;
   const crypt = s.hollow === "crypt" ? below : 0;
+  const wet = indoors ? 0.5 : 1;
   return {
     wind: wind * wall * out,
     rustle: rustle * wall * out,
     rain: rain ** 0.7 * 0.55 * (indoors ? 0.7 : 1) * out,
     patter: rain * 0.5 * (indoors ? 0.5 : 1) * out,
-    water: waterNear * 0.6 * (indoors ? 0.5 : 1) * out,
+    water: waterNear * 0.6 * wet * out,
+    river: riverNear * 0.6 * wet * out,
+    surf: surfNear * wall * out,
+    forestDay: bed * day,
+    forestNight: bed * (1 - day),
+    roofRain: rain ** 0.7 * indoors * out,
+    room: crypt,
     outdoors: out,
     outdoorCutHz: indoors ? 650 : 18000,
     birdsPerSecond: singing * 0.55,
     owlsPerSecond: owls * 0.05,
     hollow,
-    dripsPerSecond: hollow * (s.hollow === "crypt" ? 0.22 : 0.45),
+    dripsPerSecond: crypt * 0.22,
     crypt: crypt,
+    echo: hollow,
   };
 }

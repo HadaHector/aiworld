@@ -1,11 +1,25 @@
 // The ambience (SLICE.md, P7): the sound the place itself makes, under the music and the effects -
 // wind and dry leaves, rain, a river or pond nearby, birds by day and an owl by night, a cave's
-// room tone and drips, a crypt's low drone. Everything is made in code, none of it from files:
-// loops of filtered noise, and one-shots (a chirp, a drip) scheduled at random. Each frame the game
-// says what surrounds the player (`AmbienceState`); `ambienceMix` turns that into layer levels and
-// this fades the layers to them.
+// room tone and drips, a crypt's low drone. A layer with a recording (`rules/ambience.json5`, read
+// in ambienceRecordings.ts) plays it as a loop; one without keeps its voice made in code: loops of
+// filtered noise, and one-shots (a chirp, a drip) scheduled at random, which recorded takes replace
+// too. Each frame the game says what surrounds the player (`AmbienceState`); `ambienceMix` turns
+// that into layer levels and this fades the layers to them.
 
 import { ambienceMix, type AmbienceMix, type AmbienceState } from "./ambienceMix";
+import { AMBIENCE_LOOPS, NO_RECORDINGS, QUIETABLE, SYNTH_LOOPS, type AmbienceLoop, type AmbienceRecordings, type LoopRecording, type OneShotRecording, type Quietable } from "./ambienceRecordings";
+
+/** What a loop plays now: its recording, its synthesized voice (none to load, the recording still
+ *  loading, or switched off on the dev page), or nothing (no voice and no file that loaded). */
+export interface AmbienceLayerStatus {
+  id: AmbienceLoop;
+  file: string | null;
+  playing: "recorded" | "synth" | "silent";
+  /** "loading", "loaded", "missing" (it could not be fetched or decoded), or "" with no file. */
+  load: "" | "loading" | "loaded" | "missing";
+  /** Whether the recording is wanted (the dev page can turn it off, for the synthesized voice). */
+  recorded: boolean;
+}
 
 export interface Ambience {
   /** Each frame: the surroundings. */
@@ -16,7 +30,36 @@ export interface Ambience {
   setMuted: (muted: boolean) => void;
   /** The levels the layers are fading to now - for the dev page and the console. */
   mix: () => AmbienceMix;
+  /** Each loop's recording and what it plays now. */
+  layers: () => AmbienceLayerStatus[];
+  /** Plays a loop's recording (true) or its synthesized voice (false) - the dev page's switch. */
+  setRecorded: (id: AmbienceLoop, on: boolean) => void;
+  /** Settles once every recording has loaded or failed (the game does not wait on it). */
+  ready: () => Promise<void>;
+  /** Plays a recorded one-shot by name (thunder, a creak), panned; false if it has no takes loaded. */
+  oneShot: (name: string, pan?: number, level?: number) => boolean;
   dispose: () => void;
+}
+
+/** Seconds of a recording's end crossfaded into its start, at most, so its loop has no seam. */
+const SEAM = 1.5;
+
+/** A recording made into a loop: its last stretch faded (equal power) into its first, then cut. */
+function seamless(ctx: BaseAudioContext, buffer: AudioBuffer): AudioBuffer {
+  const fade = Math.floor(Math.min(SEAM, buffer.duration / 4) * buffer.sampleRate);
+  const length = buffer.length - fade;
+  if (fade < 16 || length < fade) return buffer;
+  const out = ctx.createBuffer(buffer.numberOfChannels, length, buffer.sampleRate);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const from = buffer.getChannelData(c);
+    const to = out.getChannelData(c);
+    to.set(from.subarray(0, length));
+    for (let i = 0; i < fade; i++) {
+      const t = (i + 0.5) / fade;
+      to[i] = from[i] * Math.sin((t * Math.PI) / 2) + from[length + i] * Math.cos((t * Math.PI) / 2);
+    }
+  }
+  return out;
 }
 
 /** Seconds a layer takes to fade to a new level (the time constant is a third of it). */
@@ -82,7 +125,7 @@ function patterLoop(ctx: BaseAudioContext, seconds: number, seed: number): Audio
 }
 
 /** A room's tail: noise that dies away, a little different in each ear. */
-function impulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
+export function impulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
   const rate = ctx.sampleRate;
   const length = Math.floor(seconds * rate);
   const buffer = ctx.createBuffer(2, length, rate);
@@ -102,7 +145,12 @@ function impulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
   return buffer;
 }
 
-export function createAmbience(ctx: AudioContext, output: AudioNode): Ambience {
+/**
+ * The ambience on `output`. `recordings` says which layers play files, fetched at `url(path)` (a
+ * pack-relative path, "core/ambience/wind.ogg") - lazily: until one has loaded, or if it fails, its
+ * layer keeps its synthesized voice.
+ */
+export function createAmbience(ctx: BaseAudioContext, output: AudioNode, recordings: AmbienceRecordings = NO_RECORDINGS, url: (path: string) => string = (path) => `/packs/${path}`): Ambience {
   const volume = ctx.createGain();
   let level = 1;
   let muted = false;
@@ -236,9 +284,12 @@ export function createAmbience(ctx: AudioContext, output: AudioNode): Ambience {
   const toneLevel = ctx.createGain();
   toneLevel.gain.value = 0.3;
   lfo(0.07, 0.2, toneLevel.gain);
+  // (The room's synthesized voice, together: off while its recording plays.)
+  const roomSynth = ctx.createGain();
+  roomSynth.connect(hollowBus);
   loop(brown).connect(tone);
   tone.connect(toneLevel);
-  toneLevel.connect(hollowBus);
+  toneLevel.connect(roomSynth);
   // A thin draught through the rock.
   const draught = ctx.createBiquadFilter();
   draught.type = "bandpass";
@@ -250,7 +301,7 @@ export function createAmbience(ctx: AudioContext, output: AudioNode): Ambience {
   lfo(0.13, 0.03, draughtLevel.gain);
   loop(pink).connect(draught);
   draught.connect(draughtLevel);
-  draughtLevel.connect(hollowBus);
+  draughtLevel.connect(roomSynth);
   const cryptLevel = ctx.createGain();
   cryptLevel.gain.value = 0;
   for (const [hz, level] of [[55, 0.5], [82.6, 0.28], [110.5, 0.14]] as const) {
@@ -465,8 +516,100 @@ export function createAmbience(ctx: AudioContext, output: AudioNode): Ambience {
       osc.start(at);
       osc.stop(at + 0.2);
     };
+    if (playShot("drip", panner, t)) return;
     plink(t, 1);
     if (Math.random() < 0.3) plink(t + rand(0.35, 0.8), 0.45);
+  };
+
+  // --- the recordings ---
+  let disposed = false;
+  const decoded = new Map<string, Promise<AudioBuffer | null>>();
+  const load = (path: string): Promise<AudioBuffer | null> => {
+    let known = decoded.get(path);
+    if (!known) {
+      known = fetch(url(path))
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((data) => ctx.decodeAudioData(data))
+        .catch((error: unknown) => {
+          console.warn(`Ambience: could not load ${path} (${String(error)})`);
+          return null;
+        });
+      decoded.set(path, known);
+    }
+    return known;
+  };
+  const loads: Promise<unknown>[] = [];
+  interface Recorded {
+    def: LoopRecording;
+    file: string;
+    level: GainNode;
+    load: "loading" | "loaded" | "missing";
+    on: boolean;
+  }
+  const recorded = new Map<AmbienceLoop, Recorded>();
+  for (const id of AMBIENCE_LOOPS) {
+    const def = recordings.loops[id];
+    if (!def) continue;
+    const level = ctx.createGain();
+    level.gain.value = 0;
+    // Outdoors through the outdoor bus (underground, indoors and its low-pass act on it); a lair's
+    // straight to the volume, at the mix's own level.
+    level.connect(id === "room" || id === "crypt" ? volume : outdoors);
+    let into: AudioNode = level;
+    for (const [type, hz] of [["lowpass", def.lowpass], ["highpass", def.highpass]] as const) {
+      if (hz <= 0) continue;
+      const filter = ctx.createBiquadFilter();
+      filter.type = type;
+      filter.frequency.value = hz;
+      filter.connect(into);
+      into = filter;
+    }
+    const file = def.files[Math.floor(Math.random() * def.files.length)];
+    const layer: Recorded = { def, file, level, load: "loading", on: true };
+    recorded.set(id, layer);
+    const head = into;
+    loads.push(
+      load(file).then((buffer) => {
+        if (disposed) return;
+        if (!buffer) {
+          layer.load = "missing";
+          return;
+        }
+        layer.load = "loaded";
+        loop(seamless(ctx, buffer)).connect(head);
+      }),
+    );
+  }
+  /** Whether a loop's recording is heard now (loaded, and not switched off). */
+  const hearing = (id: AmbienceLoop): boolean => {
+    const r = recorded.get(id);
+    return !!r && r.on && r.load === "loaded";
+  };
+  /** 1 while a loop's synthesized voice is to be heard: its own recording and none covering it heard. */
+  const synthOf = (id: AmbienceLoop): number => {
+    if (hearing(id)) return 0;
+    for (const [other, r] of recorded) if (r.def.covers.includes(id) && hearing(other)) return 0;
+    return 1;
+  };
+  const shots = new Map<string, { def: OneShotRecording; buffers: AudioBuffer[] }>();
+  for (const [name, def] of Object.entries(recordings.oneShots)) {
+    const pool = { def, buffers: [] as AudioBuffer[] };
+    shots.set(name, pool);
+    for (const file of def.files) loads.push(load(file).then((b) => b && !disposed && pool.buffers.push(b)));
+  }
+  /** One of a one-shot's takes, at random, a little higher or lower and louder or softer. */
+  const playShot = (name: string, to: AudioNode, t: number, level = 1): boolean => {
+    const pool = shots.get(name);
+    if (!pool || pool.buffers.length === 0) return false;
+    const src = ctx.createBufferSource();
+    src.buffer = pool.buffers[Math.floor(Math.random() * pool.buffers.length)];
+    src.playbackRate.value = 2 ** (rand(pool.def.pitch[0], pool.def.pitch[1]) / 12);
+    const g = ctx.createGain();
+    g.gain.value = pool.def.gain * rand(pool.def.volume[0], pool.def.volume[1]) * level;
+    src.connect(g);
+    g.connect(to);
+    src.start(t);
+    return true;
   };
 
   // --- the loop of it ---
@@ -481,15 +624,45 @@ export function createAmbience(ctx: AudioContext, output: AudioNode): Ambience {
 
   const update = (state: AmbienceState): void => {
     target = ambienceMix(state);
-    gainAt(windLevel.gain, target.wind * 0.9);
-    gainAt(rustleLevel.gain, target.rustle * 0.35);
-    gainAt(rainLevel.gain, target.rain * 0.6);
-    gainAt(patterLevel.gain, target.patter * 0.7);
-    gainAt(waterLevel.gain, target.water * 0.5);
+    // Rain on a roof, recorded, is the rain indoors: the outdoor rain's own goes under it.
+    const roofed = hearing("roofRain") && state.indoors ? 0 : 1;
+    const levels: Record<AmbienceLoop, number> = {
+      wind: target.wind,
+      rustle: target.rustle,
+      rain: target.rain * roofed,
+      patter: target.patter * roofed,
+      water: hearing("surf") ? target.river : target.water,
+      surf: target.surf,
+      forestDay: target.forestDay,
+      forestNight: target.forestNight,
+      roofRain: target.roofRain,
+      room: target.room * 0.8,
+      crypt: target.crypt,
+    };
+    gainAt(windLevel.gain, levels.wind * 0.9 * synthOf("wind"));
+    gainAt(rustleLevel.gain, levels.rustle * 0.35 * synthOf("rustle"));
+    gainAt(rainLevel.gain, levels.rain * 0.6 * synthOf("rain"));
+    gainAt(patterLevel.gain, levels.patter * 0.7 * synthOf("patter"));
+    gainAt(waterLevel.gain, levels.water * 0.5 * synthOf("water"));
+    gainAt(roomSynth.gain, synthOf("room"));
     gainAt(outdoors.gain, target.outdoors);
     outdoorCut.frequency.setTargetAtTime(target.outdoorCutHz, ctx.currentTime, 0.15);
-    gainAt(hollowBus.gain, target.hollow * 0.8);
-    gainAt(cryptLevel.gain, target.crypt * 0.16);
+    // (A crypt's: a cave and a mine have no bed of their own, only the reverb on the effects.)
+    gainAt(hollowBus.gain, target.room * 0.8);
+    gainAt(cryptLevel.gain, target.crypt * 0.16 * synthOf("crypt"));
+    // The recordings: outdoor ones at the mix's level over the outdoor bus's (which fades them below
+    // ground and dulls them indoors), a lair's at its own.
+    const quiet: Record<Quietable, number> = { birds: 1, owls: 1, caws: 1, knocks: 1 };
+    for (const [id, r] of recorded) {
+      const on = hearing(id);
+      const outside = id !== "room" && id !== "crypt";
+      const level = outside ? levels[id] / Math.max(target.outdoors, 1e-3) : levels[id];
+      gainAt(r.level.gain, on ? Math.min(level, 1) * r.def.gain : 0);
+      // A bed with birds of its own in it turns the synthesized ones down while it is heard.
+      if (on) for (const v of QUIETABLE) if (r.def.quiets[v] !== undefined) quiet[v] *= 1 - (1 - r.def.quiets[v]!) * Math.min(1, levels[id] * 4);
+    }
+    const birdRate = target.birdsPerSecond * quiet.birds;
+    const owlRate = target.owlsPerSecond * quiet.owls;
     // The sound waits for the first moment, so nothing starts in a burst.
     const now = ctx.currentTime;
     if (!started) {
@@ -502,24 +675,25 @@ export function createAmbience(ctx: AudioContext, output: AudioNode): Ambience {
     }
     // One-shots are scheduled a moment ahead, so a slow frame does not bunch them up.
     const ahead = now + 0.05;
-    if (target.birdsPerSecond > 0.01 && now >= nextBird) {
-      const song = birdSongs[Math.floor(Math.random() * birdSongs.length)];
-      const distance = Math.random();
-      song(birdOut(rand(-0.9, 0.9), distance), ahead);
-      nextBird = now + exponential(target.birdsPerSecond);
-    } else if (target.birdsPerSecond <= 0.01 && nextBird < now) nextBird = now + 2;
+    // A recorded take where there is one (its gain its own: the bird bus's 0.05 suits the synthesized
+    // notes, so a take is lifted back by 20), else the synthesized call.
+    if (birdRate > 0.01 && now >= nextBird) {
+      const out = birdOut(rand(-0.9, 0.9), Math.random());
+      if (!playShot("bird", out, ahead, 20)) birdSongs[Math.floor(Math.random() * birdSongs.length)](out, ahead);
+      nextBird = now + exponential(birdRate);
+    } else if (birdRate <= 0.01 && nextBird < now) nextBird = now + 2;
     if (target.birdsPerSecond > 0.05 && now >= nextCaw) {
-      caw(ahead);
+      if (Math.random() < quiet.caws && !playShot("caw", birdOut(rand(-0.9, 0.9), 0.8), ahead, 20)) caw(ahead);
       nextCaw = now + rand(40, 110);
     }
     if (target.birdsPerSecond > 0.05 && now >= nextKnock) {
-      knock(ahead);
+      if (Math.random() < quiet.knocks && !playShot("knock", birdOut(rand(-0.8, 0.8), 0.85), ahead, 20)) knock(ahead);
       nextKnock = now + rand(50, 140);
     }
-    if (target.owlsPerSecond > 0.002 && now >= nextOwl) {
-      owl(ahead);
-      nextOwl = now + exponential(target.owlsPerSecond) + 6;
-    } else if (target.owlsPerSecond <= 0.002 && nextOwl < now) nextOwl = now + 5;
+    if (owlRate > 0.002 && now >= nextOwl) {
+      if (!playShot("owl", birdOut(rand(-0.8, 0.8), 0.7), ahead, 20)) owl(ahead);
+      nextOwl = now + exponential(owlRate) + 6;
+    } else if (owlRate <= 0.002 && nextOwl < now) nextOwl = now + 5;
     if (target.dripsPerSecond > 0.02 && now >= nextDrip) {
       drip(ahead);
       nextDrip = now + 0.25 + exponential(target.dripsPerSecond);
@@ -538,7 +712,25 @@ export function createAmbience(ctx: AudioContext, output: AudioNode): Ambience {
       volume.gain.setTargetAtTime(muted ? 0 : level, ctx.currentTime, 0.4);
     },
     mix: () => target,
+    layers: () =>
+      AMBIENCE_LOOPS.map((id) => {
+        const r = recorded.get(id);
+        const synth = (SYNTH_LOOPS as readonly AmbienceLoop[]).includes(id);
+        return { id, file: r?.file ?? null, load: r?.load ?? "", recorded: r?.on ?? false, playing: hearing(id) ? "recorded" : synth ? "synth" : "silent" };
+      }),
+    setRecorded(id, on) {
+      const r = recorded.get(id);
+      if (r) r.on = on;
+    },
+    ready: () => Promise.all(loads).then(() => undefined),
+    oneShot(name, pan = 0, level = 1) {
+      const p = ctx.createStereoPanner();
+      p.pan.value = pan;
+      p.connect(outdoors);
+      return playShot(name, p, ctx.currentTime + 0.02, level);
+    },
     dispose() {
+      disposed = true;
       for (const source of sources) {
         try {
           source.stop();
