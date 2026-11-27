@@ -7,8 +7,9 @@
   compound: {
     // The adit's dungeon style.
     adit: "mine",
-    // The yard before it, close under the adit and levelled to its floor: steeper ground than a camp takes, any cover.
-    site: { grade: [0, 0.45], cover: [0, 1] },
+    // The yard levelled into a slope (cut at its back, filled at its front), the adit driven into the face
+    // the cut leaves (features/featureSites.ts, aditInto): steeper ground than a camp takes, any cover.
+    site: { grade: [0, 0.6], cover: [0, 1] },
     yard: { shape: "polygon", points: [5, 6], radius: [10, 13] },
     // Its banks back to the hillside as wide as 0.25 needs (the yard is levelled to the adit's floor, so
     // on a hillside it is filled or cut by up to about 10 m) - stopping at the slip's foot (padStop).

@@ -97,7 +97,10 @@ export function collectPlaces(settlements: SettlementSite[], features: FeatureSi
         wants: road.wants,
         maxLength: road.maxLength,
         condition: road.condition,
-        fixedGates: null,
+        // A mine's gates are at its sides, along the slope its yard is levelled into - where the yard is at
+        // the ground's own level, neither cut nor filled - so its road neither climbs the hill the adit goes
+        // into nor runs in a trench up its fill (features/featureSites.ts, aditInto).
+        fixedGates: compound.adit ? [-1, 1].map((side) => sideGate(compound.x, compound.z, compound.radius, compound.height, compound.adit!, side)) : null,
         settlement: null,
         feature,
       });
@@ -137,4 +140,12 @@ export function wanted(a: Place, b: Place): boolean {
 /** How grand a road carrying this much traffic is - see ROAD_CLASSES. */
 export function roadClassFor(traffic: number): RoadClass {
   return ROAD_CLASSES.find((roadClass) => traffic >= roadClass.minTraffic) ?? ROAD_CLASSES[ROAD_CLASSES.length - 1];
+}
+
+/** A mine's gate: on its circle square to the way to its adit, on `side`; its road's approach a little
+ *  further out. */
+function sideGate(x: number, z: number, radius: number, height: number, adit: { ux: number; uz: number }, side: number): SettlementGate {
+  const angle = Math.atan2(adit.uz, adit.ux) + (side * Math.PI) / 2;
+  const gx = x + Math.cos(angle) * radius, gz = z + Math.sin(angle) * radius;
+  return { x: gx, z: gz, angle, approachX: x + Math.cos(angle) * radius * 1.2, approachZ: z + Math.sin(angle) * radius * 1.2, roadHeight: height };
 }
