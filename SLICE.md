@@ -767,3 +767,10 @@ Not started; to be sized and put into sessions.
   `__aiworld.goto({ x: -1715.8, z: -1655.6, alpha: -3.663, beta: 0.754, radius: 21.7 })`) a road's raised bed
   runs straight across a river and cuts it in two: no bridge, the water stops at both sides. Field: terrain,
   water and roads (the roads session's river clearance work).
+  *Dropped (owner, 2026-11-27): that instance won't be found again once generation changes.*
+
+### Wave 2 (started 2026-11-27, owner's call: little parallel work, two sessions)
+
+- **14 Defence (B8)** to the gameplay, combat and HUD session; **16 Skill bank (I6, I7, P9)** to a new rules and
+  balance session. The rest of wave 2 (15 Duel tool to tools, 17 Items and 19 Quest curves to rules and
+  balance, 18 Creature roles to dungeons, 20 Lights and 21 G1 to terrain) waits until these land.
