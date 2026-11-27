@@ -651,3 +651,11 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   it, being hit by it, casting at it. Every other unit's `xpValue` is 1 or more. It also no longer
   casts its Straw Bolt; the `dummyCaster` habit stays in the pack, and the abilities and feedback
   probes give it back to their test fight's dummy.
+
+## The skill bank (2026-11-27)
+
+[SKILLBANK.md](SKILLBANK.md): the classes' skills now come by **character level** (`unlocks.adventure`
+in each origin, written out from its class template), not by class level; an `auto` unlock of a known
+skill at a spell `level` is a **rank**; level-up **stat points** (`statPoints` in `rules/progression.json5`,
+auto by the origins' `statWeights` or manual with `statSpend`) are saved as `stats`; origins have an
+`order` for character creation; the level-up screen is `src/ui/levelUpScreen.ts`. Protocol 16.
