@@ -1,0 +1,146 @@
+// The skill bank (SLICE.md 3b, task I6; SKILLBANK.md): every skill tagged, so class templates
+// (classTemplates/) can pick from it by ratios.
+//
+// What a skill does (its effects), how it is cast (timing, shape, reach, target), its cooldown,
+// school and resource are READ FROM THE SKILL FILE: a strike that applies a burn is "attack +
+// debuff.dot", a cast state makes it "cast". Only what the file cannot say is written here:
+//   pool    who it is for: class (players' class skills), creature, item (an item's use), effect
+//           (a part another skill applies: a burn, a stun), test.
+//   levels  the levels it is learned at, earliest to latest (default by cooldown class, below).
+//   power   how its power splits between purposes, when the even split of its effects is not right.
+// A `draft` is a planned skill with no file yet: its tags are written by hand until it is made.
+{
+  // What a class template's ratios are made of.
+  purposes: ["damage", "control", "defence", "healing", "mobility", "support"],
+  // Skills every character has, which no template counts.
+  free: ["autoAttack"],
+  // Cooldown classes by the cooldown's seconds, up to (a passive is "passive", a long buff "none").
+  cooldowns: { spammer: 3, short: 12, long: 60, ultimate: 100000 },
+  // The levels a skill is learned at when its entry says nothing, by cooldown class.
+  levels: { spammer: [1, 4], short: [1, 6], long: [3, 10], ultimate: [8, 10], none: [2, 10], passive: [4, 10] },
+  // Which purpose an effect serves; buffs and passives serve the purpose of the stat they raise.
+  effectPurpose: {
+    attack: "damage", "debuff.dot": "damage", "debuff.stat": "damage", "debuff.special": "damage", summon: "damage",
+    "debuff.flag": "control", taunt: "control",
+    "buff.aura": "defence",
+    heal: "healing", "heal.hot": "healing",
+    mobility: "mobility",
+    resource: "support", resurrect: "support",
+  },
+  statPurpose: {
+    strength: "damage", agility: "damage", intellect: "damage", weaponMax: "damage", weaponMin: "damage", weaponSpeed: "damage", fireCastTime: "damage", dotDuration: "damage",
+    armor: "defence", stamina: "defence", maxHealth: "defence",
+    spirit: "healing",
+    speed: "mobility",
+    maxMana: "support", maxRage: "support",
+  },
+
+  skills: {
+    // --- class skills that exist ---
+    autoAttack: { pool: "class", levels: [1, 1] },
+    // Warrior
+    heroicStrike: { pool: "class", levels: [1, 1] },
+    charge: { pool: "class", levels: [1, 2], power: { mobility: 0.6, control: 0.4 } },
+    thunderClap: { pool: "class", levels: [2, 4], power: { damage: 0.6, control: 0.4 } },
+    kick: { pool: "class", levels: [3, 6], power: { control: 1 } },
+    mortalStrike: { pool: "class", levels: [8, 10] },
+    deepWounds: { pool: "class", levels: [8, 10], school: "physical" },
+    // Mage
+    fireball: { pool: "class", levels: [1, 1] },
+    frostNova: { pool: "class", levels: [2, 4], power: { control: 0.7, damage: 0.3 } },
+    searingTotem: { pool: "class", levels: [5, 8] },
+    // Priest
+    smite: { pool: "class", levels: [1, 1] },
+    renew: { pool: "class", levels: [1, 2] },
+    shield: { pool: "class", levels: [2, 3] },
+
+    // --- drafts: planned class skills, no file yet (tags by hand until they are made) ---
+    // Warrior
+    shieldWall: { pool: "class", draft: "Raise the shield: absorbs a big hit's worth of damage for 10 s.", name: "Shield Wall",
+      effects: ["buff.aura"], timing: "instant", shape: "self", reach: "self", target: "self", cooldown: 45, school: "physical", resources: ["rage"], levels: [5, 8] },
+    toughness: { pool: "class", stats: ["armor"], draft: "Passive: +10% armour.", name: "Toughness", passive: true,
+      effects: ["buff.passive"], timing: "passive", shape: "self", reach: "self", target: "self", school: "physical", levels: [4, 6], power: { defence: 1 } },
+    // Mage
+    fireBlast: { pool: "class", draft: "An instant burst of flame: less than Fireball, but cast on the move.", name: "Fire Blast",
+      effects: ["attack"], timing: "instant", shape: "single", reach: "ranged", target: "enemy", cooldown: 8, school: "fire", resources: ["mana"], levels: [1, 2] },
+    frostbolt: { pool: "class", draft: "A bolt of ice: damage, and the target is chilled (slowed).", name: "Frostbolt",
+      effects: ["attack", "debuff.flag"], timing: "cast", shape: "single", reach: "ranged", target: "enemy", cooldown: 0, school: "frost", resources: ["mana"], levels: [3, 6], power: { damage: 0.6, control: 0.4 } },
+    blizzard: { pool: "class", draft: "Channel ice on a spot for 6 s: damage every second to enemies in it, slowing them.", name: "Blizzard",
+      effects: ["attack", "debuff.flag"], timing: "channel", shape: "point", reach: "ranged", target: "point", cooldown: 90, school: "frost", resources: ["mana"], levels: [8, 10], power: { damage: 0.7, control: 0.3 } },
+    arcaneMind: { pool: "class", stats: ["intellect"], draft: "Passive: +10% intellect.", name: "Arcane Mind", passive: true,
+      effects: ["buff.passive"], timing: "passive", shape: "self", reach: "self", target: "self", school: "arcane", levels: [4, 6], power: { damage: 1 } },
+    frostWard: { pool: "class", stats: ["armor"], draft: "Passive: +15% armour, frost on the skin.", name: "Frost Ward", passive: true,
+      effects: ["buff.passive"], timing: "passive", shape: "self", reach: "self", target: "self", school: "frost", levels: [8, 10], power: { defence: 1 } },
+    // Priest
+    heal: { pool: "class", draft: "A slow, big heal on an ally (or yourself).", name: "Heal",
+      effects: ["heal"], timing: "cast", shape: "single", reach: "ranged", target: "ally", cooldown: 0, school: "holy", resources: ["mana"], levels: [3, 5] },
+    fortitude: { pool: "class", stats: ["stamina"], draft: "An ally's stamina +10% for 30 minutes; one at a time.", name: "Fortitude",
+      effects: ["buff.long"], timing: "instant", shape: "single", reach: "ranged", target: "ally", cooldown: 0, school: "holy", resources: ["mana"], levels: [5, 7], power: { defence: 0.5, support: 0.5 } },
+    holyNova: { pool: "class", draft: "A burst of light around the priest: damages enemies near and heals allies near.", name: "Holy Nova",
+      effects: ["attack", "heal"], timing: "instant", shape: "around", reach: "melee", target: "none", cooldown: 30, school: "holy", resources: ["mana"], levels: [8, 10], power: { damage: 0.5, healing: 0.5 } },
+    meditation: { pool: "class", stats: ["spirit"], draft: "Passive: +10% spirit (mana and healing).", name: "Meditation", passive: true,
+      effects: ["buff.passive"], timing: "passive", shape: "self", reach: "self", target: "self", school: "holy", levels: [4, 6], power: { healing: 1 } },
+    devotion: { pool: "class", stats: ["stamina"], draft: "Passive: +10% stamina.", name: "Devotion", passive: true,
+      effects: ["buff.passive"], timing: "passive", shape: "self", reach: "self", target: "self", school: "holy", levels: [8, 10], power: { defence: 1 } },
+    // Ranger (bow)
+    steadyShot: { pool: "class", draft: "A quick bow shot: weapon damage.", name: "Steady Shot", weapon: "bow",
+      effects: ["attack"], timing: "instant", shape: "single", reach: "ranged", target: "enemy", cooldown: 2, school: "physical", resources: ["mana"], levels: [1, 1] },
+    poisonArrow: { pool: "class", draft: "A bow shot that leaves a poison ticking (the spider's poison effect).", name: "Poison Arrow", weapon: "bow",
+      effects: ["attack", "debuff.dot"], timing: "instant", shape: "single", reach: "ranged", target: "enemy", cooldown: 8, school: "nature", resources: ["mana"], levels: [1, 2] },
+    concussiveShot: { pool: "class", draft: "A blunt arrow: little damage, the target slowed for 4 s.", name: "Concussive Shot", weapon: "bow",
+      effects: ["attack", "debuff.flag"], timing: "instant", shape: "single", reach: "ranged", target: "enemy", cooldown: 12, school: "physical", resources: ["mana"], levels: [2, 3], power: { damage: 0.3, control: 0.7 } },
+    disengage: { pool: "class", draft: "Leap backwards, away from the target.", name: "Disengage",
+      effects: ["mobility"], timing: "instant", shape: "self", reach: "self", target: "self", cooldown: 20, school: "physical", resources: ["mana"], levels: [3, 5] },
+    entanglingShot: { pool: "class", draft: "An arrow that roots the target for 3 s.", name: "Entangling Shot", weapon: "bow",
+      effects: ["attack", "debuff.flag"], timing: "instant", shape: "single", reach: "ranged", target: "enemy", cooldown: 25, school: "nature", resources: ["mana"], levels: [5, 7], power: { damage: 0.3, control: 0.7 } },
+    rapidFire: { pool: "class", stats: ["weaponSpeed"], draft: "For 15 s the bow shoots 40% faster.", name: "Rapid Fire", weapon: "bow",
+      effects: ["buff.short"], timing: "instant", shape: "self", reach: "self", target: "self", cooldown: 120, school: "physical", resources: ["mana"], levels: [8, 10], power: { damage: 1 } },
+    keenEye: { pool: "class", stats: ["agility"], draft: "Passive: +10% agility.", name: "Keen Eye", passive: true,
+      effects: ["buff.passive"], timing: "passive", shape: "self", reach: "self", target: "self", school: "physical", levels: [4, 6], power: { damage: 1 } },
+    swiftFeet: { pool: "class", stats: ["speed"], draft: "Passive: +8% movement speed.", name: "Swift Feet", passive: true,
+      effects: ["buff.passive"], timing: "passive", shape: "self", reach: "self", target: "self", school: "physical", levels: [8, 10], power: { mobility: 1 } },
+
+    // --- creatures' skills: tagged, not picked by classes (yet) ---
+    acid: { pool: "creature" },
+    bash: { pool: "creature" },
+    bite: { pool: "creature" },
+    evade: { pool: "creature" },
+    frostBite: { pool: "creature" },
+    gore: { pool: "creature" },
+    hexBolt: { pool: "creature" },
+    maul: { pool: "creature" },
+    rabidBite: { pool: "creature" },
+    venom: { pool: "creature" },
+    web: { pool: "creature" },
+
+    // --- items' uses ---
+    applySalve: { pool: "item" },
+    applyWard: { pool: "item" },
+    drinkDraught: { pool: "item" },
+    drinkHealthPotion: { pool: "item" },
+    drinkManaPotion: { pool: "item" },
+    drinkWater: { pool: "item" },
+    eatBread: { pool: "item" },
+    eatRoastMeat: { pool: "item" },
+    readFrostNova: { pool: "item" },
+    useBandage: { pool: "item" },
+
+    // --- parts other skills apply (a new skill reuses these: a poison arrow applies `poison`) ---
+    bleed: { pool: "effect" },
+    burn: { pool: "effect" },
+    chargeStun: { pool: "effect" },
+    chilled: { pool: "effect" },
+    frozen: { pool: "effect" },
+    goreStun: { pool: "effect" },
+    poison: { pool: "effect" },
+    sunder: { pool: "effect" },
+    thunderClapSlow: { pool: "effect" },
+    totemBolt: { pool: "effect" },
+    weakenedSoul: { pool: "effect" },
+    webbed: { pool: "effect" },
+
+    // --- the training dummy's ---
+    dummyBolt: { pool: "test" },
+    dummyCaster: { pool: "test" },
+  },
+}

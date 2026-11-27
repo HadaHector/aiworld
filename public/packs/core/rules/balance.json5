@@ -28,8 +28,11 @@
     // Quest effort in kill-equivalents (QUESTS.md): the least and the most a drawn quest may ask.
     questEffortMin: { table: [4, 4, 5, 5, 6, 6, 7, 7, 8, 8] },
     questEffortMax: { table: [6, 6, 7, 8, 8, 9, 10, 10, 11, 12] },
-    // Skills a character knows at level L (3 at the start, 8 at ten).
-    skillCount: { from: 3, to: 8, shape: "linear" },
+    // Class skills a character knows at level L, auto-attack not counted (SKILLBANK.md; the owner,
+    // 2026-11-27: about 6 active and 2-3 passive at ten). Actives come at 2, 4, 6 and 8, passives at
+    // 5 and 10; class templates (classTemplates/) say which.
+    skillsActive: { table: [2, 3, 3, 4, 4, 5, 5, 6, 6, 6] },
+    skillsPassive: { table: [0, 0, 0, 0, 1, 1, 1, 1, 1, 2] },
     // Creature level of a land cell, read at the cell's place in order of distance from the start (1 =
     // the start's own cell), in a dimension with `creatureLevels: "cells"` (SLICE.md B2: the vale's 14
     // cells, 1 by the village to 9 at the far side; `cellSpread` in creatures.json5 adds 0-1 more).

@@ -1,0 +1,20 @@
+// A class template (SKILLBANK.md): what a class is, as ratios of purposes at key levels, from which
+// the generator picks its skills out of the bank (rules/skillBank.json5). Ratios count skill slots,
+// each skill split by its power; they are read between the key levels in a straight line.
+{
+  name: "Warrior",
+  // 0 = tank, 1 = glass cannon (SLICE.md 3a); how it deals with distance: closes, holds or kites.
+  axis: 0.3,
+  distance: "closes",
+  resources: ["rage"],
+  schools: ["physical"],
+  stats: ["strength", "stamina", "armor", "weaponMax"],
+  // How much it likes each reach (a skill on the caster itself is always fine).
+  reach: { melee: 1, ranged: 0.2 },
+  ratios: {
+    "1": { damage: 0.5, mobility: 0.3, control: 0.2 },
+    "10": { damage: 0.4, control: 0.2, mobility: 0.1, defence: 0.3 },
+  },
+  // At most, by level 10.
+  limits: { long: 2, ultimate: 1 },
+}

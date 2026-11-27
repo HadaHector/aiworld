@@ -1,0 +1,15 @@
+// The priest (SKILLBANK.md): mends, shields and wards, and smites when alone.
+{
+  name: "Priest",
+  axis: 0.4,
+  distance: "holds",
+  resources: ["mana"],
+  schools: ["holy"],
+  stats: ["spirit", "stamina"],
+  reach: { ranged: 1, melee: 0.5 },
+  ratios: {
+    "1": { damage: 0.5, healing: 0.5 },
+    "10": { healing: 0.45, defence: 0.35, damage: 0.2 },
+  },
+  limits: { long: 2, ultimate: 1 },
+}
