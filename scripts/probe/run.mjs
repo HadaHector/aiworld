@@ -19,7 +19,7 @@ const CATEGORIES = {
   placement: ["vale", "starts", "abandonedCamp"],
   dungeons: ["dungeons", "navigation"],
   "terrain-water": ["water", "riverLevels", "mapTiles", "swim", "vale"],
-  gameplay: ["lairSave", "abilities", "entities", "collision", "creatures", "beast", "chat", "feedback", "ambience"],
+  gameplay: ["lairSave", "lairLogin", "abilities", "entities", "collision", "creatures", "beast", "chat", "feedback", "ambience"],
   rules: ["balance", "items", "progression", "quests", "npcs", "saves", "starts"],
   art: ["body", "beast", "icons", "feedback"],
 };
@@ -59,7 +59,7 @@ for (const n of names) {
   if (flag("--worklists")) run.push(...(n === "all" ? worklists : WORKLISTS[n] ?? []));
 }
 // Slowest first, so the long ones do not end the run alone.
-const SLOW = ["quests", "dungeons", "caves", "npcs", "creatures", "navigation", "caveMouths", "starts"];
+const SLOW = ["lairLogin", "quests", "dungeons", "caves", "npcs", "creatures", "navigation", "caveMouths", "starts"];
 const queue = [...new Set(run)];
 queue.sort((a, b) => { const ia = SLOW.indexOf(a), ib = SLOW.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
 

@@ -1635,7 +1635,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       if (document.visibilityState === "hidden") void connection.save();
     }, { signal });
   }
-  await follow(true);
+  // Only a quick game comes back to the page's last view (a reload after a change shows the same
+  // spot): a saved character is where its save left it - teleported to that view, one left in a lair
+  // stood on the ground above it.
+  await follow(quick !== null);
 
   function render(): void {
     if (entering) return;
