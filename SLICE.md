@@ -777,3 +777,9 @@ Not started; to be sized and put into sessions.
 - **14 Defence merged** (24e53a2): seven switchable parts with effective-health multipliers. Owner's call
   (2026-11-27): **spells keep meeting creature resistance** (`spellBudget` 0.5; a mage does about 11% less to a
   level 1 creature). Players are fitted to the curve by the Duel tool (B7).
+- **Skill icons from ComfyUI** (owner, 2026-11-27; after the Skill bank's skill list is final, about 70 skills):
+  1. a script writes one prompt per skill from its tags (school sets colour and motif, kind the subject,
+     distance the framing), checked by eye; 2. a skill style in `icons.json` (a full square with a background,
+     not a cutout) and a full-square mode in `buildGenerated.mjs` (no crop to content); 3. a GPU window the
+     owner opens: about 70 skills x 8 variations, picked on the review page, built into `icons-generated`.
+     Steps 1-2 need no GPU and are the main session's.
