@@ -242,6 +242,8 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
         return `${skillName(e.skill)} can now be learned ${e.source === "trainer" ? "from a trainer" : e.source === "item" ? "from a book" : `by ${e.source}`}`;
       case "talent":
         return e.amount < 0 ? `${e.source}: talents reset` : `${e.source}: talent taken (rank ${e.level})`;
+      case "rank":
+        return `${skillName(e.skill)} is now rank ${e.amount}`;
       case "refused":
         return REFUSALS[e.source] ?? `Refused: ${e.source}`;
       default:

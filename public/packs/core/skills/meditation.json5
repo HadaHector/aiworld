@@ -1,0 +1,2 @@
+// A priest's passive (SKILLBANK.md, level 5): spirit +10% (mana back, and healing).
+{ name: "Meditation", icon: "spell-holy-spiral", passive: true, type: "spell", tags: ["school.holy"], states: { held: { hold: [{ do: "modifier", stat: "spirit", kind: "percent", value: 10 }] } } }

@@ -7,7 +7,8 @@ import { resolveGameRules } from "../../src/sim/rules/gameRules.ts";
 import { resolveProgressionRules, checkProgressionItems } from "../../src/sim/rules/progressionRules.ts";
 import { createEntity } from "../../src/sim/entity.ts";
 import { setBase, statValue } from "../../src/sim/stats.ts";
-import { addXp, createProgress, learn, nextOf, pickTalent, resetTree, setLevel } from "../../src/sim/progression/progress.ts";
+import { addXp, createProgress, learn, nextOf, pickTalent, resetTree, setLevel, spendStatPoint, statPointsLeft } from "../../src/sim/progression/progress.ts";
+import { levelGains } from "../../src/sim/progression/levelUp.ts";
 import { exportProgress, importProgress } from "../../src/sim/progression/save.ts";
 import { loadContentFromDisk } from "../diskContent.mjs";
 import { formulaText } from "../../src/sim/rules/formulaText.ts";
@@ -145,7 +146,7 @@ await section("rule book", () => {
   const unreadable = /\?(?![a-z]+=)/;
   check("no formula left unreadable", !unreadable.test(text), text.split("\n").filter((l) => unreadable.test(l)).slice(0, 5).join(" / "));
   check("the kill XP reads", text.includes("Killing a creature: (45 + 5 × the victim's Level) × the victim's XP value"), text.split("\n").find((l) => l.includes("Killing")));
-  check("an unlock reads", text.includes("At level 2: you learn Thunder Clap."));
+  check("an unlock reads", text.includes("At level 4: you learn Thunder Clap."));
   check("a generated class says so", text.includes('invented it from the template "hybrid"'));
   // What a stat does and where it comes from; what a discipline does; what an ability does.
   const section = (heading) => text.split("\n## ").find((s) => s.startsWith(`${heading}\n`)) ?? "";
@@ -154,7 +155,7 @@ await section("rule book", () => {
   check("swords: what it does", section("Swords (combat)").includes("Iron") && section("Swords (combat)").includes("How it rises"), section("Swords (combat)"));
   check("defence: what it does", section("Defence (combat)").includes("level × 4 Armor"), section("Defence (combat)"));
   check("fireball described", section("Fireball").includes("damage to the target") && section("Fireball").includes("Mage from the start"), section("Fireball"));
-  check("burn is an effect", section("Burn").startsWith("Burn\nAn effect Fireball applies"), section("Burn"));
+  check("burn is an effect", section("Burn").startsWith("Burn\nAn effect Fireball and Holy Fire apply"), section("Burn"));
   const own = { stats: new Map([[game.statIndex.get("intellect"), 14]]), levels: new Map([[progression.disciplineIndex.get("adventure"), 3]]), origins: [progression.originIndex.get("elf"), progression.originIndex.get("mage")] };
   const mine = chapterText(ruleBookChapters(game, progression, items, own));
   check("your character chapter", mine.startsWith("# Your character") && mine.includes("Intellect: 14") && mine.includes("class: Mage"), mine.slice(0, 300));
@@ -226,10 +227,10 @@ await section("unlocks", () => {
   const warrior = character("dwarf", "warrior");
   check("a people's discipline", level(warrior, "mining") === 5);
   check("class kit", !!knows(warrior, "heroicStrike") && !!knows(warrior, "charge") && !knows(warrior, "thunderClap") && !knows(warrior, "fireball"));
-  setLevel(ctx, warrior, D("class"), 2);
+  setLevel(ctx, warrior, D("adventure"), 4);
   check("auto at its level", knows(warrior, "thunderClap")?.source === "learn:auto", JSON.stringify(knows(warrior, "thunderClap")));
   check("not yet available", !warrior.progress.available.has(G.skillIndex.get("kick")));
-  setLevel(ctx, warrior, D("class"), 3);
+  setLevel(ctx, warrior, D("adventure"), 8);
   check("trainer: available", warrior.progress.available.get(G.skillIndex.get("kick"))?.cost === 50);
   check("not from a book", learn(ctx, warrior, G.skillIndex.get("kick"), "item") === "notYet");
   check("from the trainer", learn(ctx, warrior, G.skillIndex.get("kick"), "trainer") === "" && knows(warrior, "kick")?.source === "learn:trainer");
@@ -241,10 +242,80 @@ await section("unlocks", () => {
   check("defence stat", stat(warrior, "defenceSkill") === 3);
 
   const mage = character("elf", "mage");
-  setLevel(ctx, mage, D("class"), 3);
+  setLevel(ctx, mage, D("adventure"), 4);
   check("item: available", mage.progress.available.get(G.skillIndex.get("frostNova"))?.how === "item");
   check("item: not from a trainer", learn(ctx, mage, G.skillIndex.get("frostNova"), "trainer") === "notYet");
   check("item: taught by a book", learn(ctx, mage, G.skillIndex.get("frostNova"), "item") === "" && knows(mage, "frostNova")?.source === "learn:item");
+});
+
+// Ranks and level-up stat points (SKILLBANK.md; SLICE.md I6, I7, P9).
+await section("ranks and stat points", () => {
+  const w = character("human", "warrior");
+  check("a starting skill at rank 1", knows(w, "heroicStrike")?.level === 1);
+  setLevel(ctx, w, D("adventure"), 5);
+  check("rank 2 at 5 (four levels on)", knows(w, "heroicStrike")?.level === 2 && knows(w, "charge")?.level === 2, String(knows(w, "heroicStrike")?.level));
+  check("a rank is an event", w.progress.events.some((e) => e.kind === "rank" && e.skill === G.skillIndex.get("heroicStrike") && e.amount === 2));
+  setLevel(ctx, w, D("adventure"), 10);
+  check("rank 3 by ten, no more", knows(w, "heroicStrike")?.level === 3);
+  check("a trainer's skill is not taught by its rank", !knows(w, "kick"));
+  // A book read late comes at the rank its levels reached: Frost Nova at 4, rank 2 at 8.
+  const m = character("human", "mage");
+  setLevel(ctx, m, D("adventure"), 9);
+  check("a rank waits for its book", !knows(m, "frostNova"));
+  learn(ctx, m, G.skillIndex.get("frostNova"), "item");
+  check("the book teaches the rank reached", knows(m, "frostNova")?.level === 2, String(knows(m, "frostNova")?.level));
+
+  // Stat points: the curve's per level, all of them placed by the class's weights (`auto`).
+  const sp = P.config.statPoints;
+  check("stat points are automatic", sp?.mode === "auto" && P.disciplines[sp.discipline].id === "adventure");
+  let total = 0;
+  for (let l = 2; l <= 10; l++) total += sp.at(l);
+  check("37 stat points by ten (3 at 2 to 5 at 10)", total === 37 && sp.at(1) === 0 && sp.at(2) === 3 && sp.at(10) === 5, `${total}`);
+  const given = (e) => e.stats.modifiers.filter((x) => x.source === "points").reduce((a, x) => a + x.value, 0);
+  for (const klass of ["warrior", "ranger", "mage", "priest"]) {
+    const c = character("human", klass);
+    let ok = given(c) === 0;
+    let sum = 0;
+    for (let l = 2; l <= 10; l++) {
+      setLevel(ctx, c, D("adventure"), l);
+      sum += sp.at(l);
+      ok &&= given(c) === sum && c.progress.statTotal === sum;
+      const gains = levelGains(G, P, [...c.progress.origins.values()], D("adventure"), l);
+      const gained = gains.stats.reduce((a, g) => a + g.amount, 0);
+      ok &&= gained === sp.at(l) && gains.statPoints === sp.at(l);
+    }
+    check(`${klass}: automatic points add up at every level, and the screen's gains are each level's`, ok, `${given(c)} of ${sum}`);
+    const top = [...c.progress.statGiven].sort((a, b) => b[1] - a[1])[0];
+    const heaviest = [...P.origins[P.originIndex.get(klass)].statWeights].sort((a, b) => b[1] - a[1])[0][0];
+    check(`${klass}: most points to its heaviest weight`, top[0] === heaviest, `${G.stats[top[0]].id}`);
+  }
+  const w10 = character("human", "warrior");
+  setLevel(ctx, w10, D("adventure"), 10);
+  console.log(`warrior at 10: ${[...w10.progress.statGiven].map(([s, n]) => `${G.stats[s].id} +${n}`).join(", ")}; max health ${stat(w10, "maxHealth")} (curve 450, before gear)`);
+  check("no spending when automatic", spendStatPoint(ctx, w10, G.statIndex.get("strength")) === "statsAuto");
+  const gains5 = levelGains(G, P, [...w10.progress.origins.values()], D("adventure"), 5);
+  check("level 5's gains name Toughness and the ranks", gains5.skills.some((s) => s.skill === G.skillIndex.get("toughness") && s.rank === 1) && gains5.skills.some((s) => s.skill === G.skillIndex.get("heroicStrike") && s.rank === 2));
+
+  // Manual: the same rules with `mode: "manual"` - points wait, are spent one at a time, and are saved.
+  const manual = { ...P, config: { ...P.config, statPoints: { ...sp, mode: "manual" } } };
+  const mctx = { ...ctx, rules: manual };
+  const h = createEntity(G, G.templates.get(P.combinations.get("human.warrior")), nextId++, { dimension: "", x: 0, y: 0, z: 0, facing: 0 });
+  for (const s of h.template.spells) h.combat.spells.push({ skill: s.skill, level: s.level, source: "template", ready: 0, passive: null });
+  createProgress(mctx, h, new Map([["people", P.originIndex.get("human")], ["class", P.originIndex.get("warrior")]]));
+  setLevel(mctx, h, D("adventure"), 3);
+  check("manual: points wait", statPointsLeft(mctx, h.progress) === 6 && given(h) === 0, String(statPointsLeft(mctx, h.progress)));
+  const str0 = stat(h, "strength");
+  check("manual: a point spent", spendStatPoint(mctx, h, G.statIndex.get("strength")) === "" && stat(h, "strength") === str0 + 1 && statPointsLeft(mctx, h.progress) === 5);
+  check("manual: not on a stat outside the list", spendStatPoint(mctx, h, G.statIndex.get("armor")) === "noSuchStat");
+  for (let i = 0; i < 5; i++) spendStatPoint(mctx, h, G.statIndex.get("stamina"));
+  check("manual: none left", spendStatPoint(mctx, h, G.statIndex.get("stamina")) === "noPoints");
+  const saved = JSON.parse(JSON.stringify(exportProgress(mctx, h)));
+  check("manual: saved", saved.stats?.strength === 1 && saved.stats?.stamina === 5, JSON.stringify(saved.stats));
+  const back = createEntity(G, G.templates.get(P.combinations.get("human.warrior")), nextId++, { dimension: "", x: 0, y: 0, z: 0, facing: 0 });
+  for (const s of back.template.spells) back.combat.spells.push({ skill: s.skill, level: s.level, source: "template", ready: 0, passive: null });
+  createProgress(mctx, back, new Map([["people", P.originIndex.get("human")], ["class", P.originIndex.get("warrior")]]));
+  importProgress(mctx, back, saved);
+  check("manual: loaded the same", stat(back, "strength") === stat(h, "strength") && stat(back, "stamina") === stat(h, "stamina") && statPointsLeft(mctx, back.progress) === 0);
 });
 
 await section("talents", () => {
@@ -285,7 +356,7 @@ await section("saves", () => {
   const w = character("dwarf", "warrior");
   setLevel(ctx, w, D("adventure"), 7);
   addXp(ctx, w, D("adventure"), 123, "probe");
-  setLevel(ctx, w, D("class"), 3);
+  setLevel(ctx, w, D("adventure"), 8);
   learn(ctx, w, G.skillIndex.get("kick"), "trainer");
   for (const id of ["toughness", "toughness", "might", "might", "deepWounds"]) pickTalent(ctx, w, T("warriorArms"), node("warriorArms", id));
   pickTalent(ctx, w, T("milestones"), node("milestones", "vigour"));
@@ -429,14 +500,14 @@ await section("server", async () => {
   t.server.debug.progression.debugXp(b, R.disciplineIndex.get("adventure"), 1);
   check("banked class XP flows when the character levels", cls(b).banked === 0 && cls(b).xp > 0, JSON.stringify(cls(b)));
 
-  // A trainer: Kick at warrior class 3, for money, in range - from the warriors' class trainer in
+  // A trainer: Kick at warrior level 8 (SKILLBANK.md: class skills come by character level), for money, in range - from the warriors' class trainer in
   // the starting village (NPCS.md, *Trainers*); another class's trainer will not.
   const ownClass = R.origins[a.progress.origins.get("class")].id;
   const trainers = t.server.debug.npcs.debug.active("mainland").filter((e) => e.template.id === "classTrainer");
   const trainer = trainers.find((e) => e.trainerClass === ownClass);
   const other = trainers.find((e) => e.trainerClass !== ownClass);
   check("a class trainer for each class at the start", trainers.length === R.origins.filter((o) => o.slot === "class").length && trainer !== undefined, trainers.map((e) => e.trainerClass).join());
-  t.server.debug.progression.debugLevel(a, R.disciplineIndex.get("class"), 3);
+  t.server.debug.progression.debugLevel(a, R.disciplineIndex.get("adventure"), 8);
   const kick = t.rules.skillIndex.get("kick");
   check("another class's trainer does not teach", t.server.debug.progression.train(a, other, kick) === "otherClass");
   t.clients[0].send({ type: "learn", trainer: trainer.id, skill: kick });
@@ -461,7 +532,7 @@ await section("server", async () => {
   t.clients[1].send({ type: "itemUse", from: { container: 0, slot: bagSlot() } });
   await t.pump(2);
   check("book: refused before its level, kept", !b.combat.spells.some((s) => s.skill === frostNova) && bagSlot() >= 0);
-  t.server.debug.progression.debugLevel(b, R.disciplineIndex.get("class"), 3);
+  t.server.debug.progression.debugLevel(b, R.disciplineIndex.get("adventure"), 4);
   t.clients[1].send({ type: "itemUse", from: { container: 0, slot: bagSlot() } });
   await t.pump(3);
   check("book: teaches, and is used up", b.combat.spells.some((s) => s.skill === frostNova && s.source === "learn:item") && bagSlot() < 0);

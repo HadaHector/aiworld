@@ -1,0 +1,139 @@
+// The skill bank (SLICE.md 3b, task I6; SKILLBANK.md): every skill tagged, so class templates
+// (classTemplates/) can pick from it by ratios.
+//
+// What a skill does (its effects), how it is cast (timing, shape, reach, target), its cooldown,
+// school and resource are READ FROM THE SKILL FILE: a strike that applies a burn is "attack +
+// debuff.dot", a cast state makes it "cast". Only what the file cannot say is written here:
+//   pool    who it is for: class (players' class skills), creature, item (an item's use), effect
+//           (a part another skill applies: a burn, a stun), test.
+//   levels  the levels it is learned at, earliest to latest (default by cooldown class, below).
+//   power   how its power splits between purposes, when the even split of its effects is not right.
+// A `draft` is a planned skill with no file yet: its tags are written by hand until it is made.
+{
+  // What a class template's ratios are made of.
+  purposes: ["damage", "control", "defence", "healing", "mobility", "support"],
+  // Skills every character has, which no template counts.
+  free: ["autoAttack"],
+  // Cooldown classes by the cooldown's seconds, up to (a passive is "passive", a long buff "none").
+  cooldowns: { spammer: 3, short: 12, long: 60, ultimate: 100000 },
+  // The levels a skill is learned at when its entry says nothing, by cooldown class.
+  // A skill learned at L gains a rank every `every` levels after (rank 2 at L+4...), up to `max`: its
+  // formulas read the rank as `level`, so effect and cost rise with it (the owner, 2026-11-27).
+  ranks: { every: 4, max: 4 },
+  levels: { spammer: [1, 4], short: [1, 6], long: [3, 10], ultimate: [10, 10], none: [2, 10], passive: [4, 10] },
+  // Which purpose an effect serves; buffs and passives serve the purpose of the stat they raise.
+  effectPurpose: {
+    attack: "damage", "debuff.dot": "damage", "debuff.stat": "damage", "debuff.special": "damage", summon: "damage",
+    "debuff.flag": "control", taunt: "control",
+    "buff.aura": "defence",
+    heal: "healing", "heal.hot": "healing",
+    mobility: "mobility",
+    resource: "support", resurrect: "support",
+  },
+  statPurpose: {
+    strength: "damage", agility: "damage", intellect: "damage", weaponMax: "damage", weaponMin: "damage", weaponSpeed: "damage", fireCastTime: "damage", dotDuration: "damage",
+    armor: "defence", stamina: "defence", maxHealth: "defence",
+    // Defence (B8): avoidance, block, absorbs, crowd-control avoidance, resistances.
+    dodge: "defence", parry: "defence", blockChance: "defence", blockValue: "defence", ward: "defence", controlAvoid: "defence",
+    arcaneResist: "defence", fireResist: "defence", frostResist: "defence", holyResist: "defence", natureResist: "defence", shadowResist: "defence",
+    spirit: "healing",
+    speed: "mobility",
+    maxMana: "support", maxRage: "support",
+  },
+
+  skills: {
+    // --- class skills that exist ---
+    autoAttack: { pool: "class", levels: [1, 1] },
+    // Warrior
+    heroicStrike: { pool: "class", levels: [1, 1] },
+    charge: { pool: "class", levels: [1, 2], power: { mobility: 0.6, control: 0.4 } },
+    thunderClap: { pool: "class", levels: [3, 5], power: { damage: 0.6, control: 0.4 } },
+    kick: { pool: "class", levels: [4, 8], power: { control: 1 } },
+    mortalStrike: { pool: "class", levels: [10, 10], combo: "sunder" },
+    deepWounds: { pool: "class", levels: [8, 10], school: "physical" },
+    // Mage
+    fireball: { pool: "class", levels: [1, 1] },
+    frostNova: { pool: "class", levels: [3, 5], power: { control: 0.7, damage: 0.3 } },
+    searingTotem: { pool: "class", levels: [5, 8] },
+    // Priest
+    smite: { pool: "class", levels: [1, 1] },
+    renew: { pool: "class", levels: [1, 2] },
+    shield: { pool: "class", levels: [3, 6] },
+
+    // --- the class skills made for the slice (2026-11-27, agreed with the owner) ---
+    // Warrior
+    battleShout: { pool: "class", levels: [2, 2] },
+    shieldWall: { pool: "class", levels: [6, 8] },
+    toughness: { pool: "class", levels: [4, 6] },
+    // Mage
+    arcaneIntellect: { pool: "class", levels: [2, 2] },
+    fireBlast: { pool: "class", levels: [1, 2], combo: "burn" },
+    frostbolt: { pool: "class", levels: [3, 6], combo: "frozen", power: { damage: 0.6, control: 0.4 } },
+    blizzard: { pool: "class", levels: [10, 10], power: { damage: 0.7, control: 0.3 } },
+    arcaneMind: { pool: "class", levels: [4, 6] },
+    frostWard: { pool: "class", levels: [8, 10] },
+    // Priest
+    fortitude: { pool: "class", levels: [2, 2], power: { defence: 0.5, support: 0.5 } },
+    heal: { pool: "class", levels: [4, 6], combo: "renew" },
+    holyFire: { pool: "class", levels: [5, 8] },
+    holyNova: { pool: "class", levels: [10, 10], power: { damage: 0.5, healing: 0.5 } },
+    meditation: { pool: "class", levels: [4, 6] },
+    devotion: { pool: "class", levels: [8, 10] },
+    // Ranger (bow)
+    steadyShot: { pool: "class", levels: [1, 1], weapon: "bow", combo: "poison" },
+    poisonArrow: { pool: "class", levels: [1, 2], weapon: "bow" },
+    hawkEye: { pool: "class", levels: [2, 2] },
+    concussiveShot: { pool: "class", levels: [3, 8], weapon: "bow", power: { damage: 0.3, control: 0.7 } },
+    disengage: { pool: "class", levels: [3, 6], cooldown: 20 },
+    entanglingShot: { pool: "class", levels: [5, 8], weapon: "bow", power: { damage: 0.3, control: 0.7 } },
+    rapidFire: { pool: "class", levels: [10, 10], weapon: "bow" },
+    keenEye: { pool: "class", levels: [4, 6] },
+    swiftFeet: { pool: "class", levels: [8, 10] },
+
+    // --- creatures' skills: tagged, not picked by classes (yet) ---
+    acid: { pool: "creature" },
+    bash: { pool: "creature" },
+    bite: { pool: "creature" },
+    evade: { pool: "creature" },
+    frostBite: { pool: "creature" },
+    gore: { pool: "creature" },
+    hexBolt: { pool: "creature" },
+    maul: { pool: "creature" },
+    rabidBite: { pool: "creature" },
+    venom: { pool: "creature" },
+    web: { pool: "creature" },
+
+    // --- items' uses ---
+    applySalve: { pool: "item" },
+    applyWard: { pool: "item" },
+    drinkDraught: { pool: "item" },
+    drinkHealthPotion: { pool: "item" },
+    drinkManaPotion: { pool: "item" },
+    drinkWater: { pool: "item" },
+    eatBread: { pool: "item" },
+    eatRoastMeat: { pool: "item" },
+    readFrostNova: { pool: "item" },
+    useBandage: { pool: "item" },
+
+    // --- parts other skills apply (a new skill reuses these: a poison arrow applies `poison`) ---
+    battleShouted: { pool: "effect" },
+    bleed: { pool: "effect" },
+    dazed: { pool: "effect" },
+    entangled: { pool: "effect" },
+    burn: { pool: "effect" },
+    chargeStun: { pool: "effect" },
+    chilled: { pool: "effect" },
+    frozen: { pool: "effect" },
+    goreStun: { pool: "effect" },
+    poison: { pool: "effect" },
+    sunder: { pool: "effect" },
+    thunderClapSlow: { pool: "effect" },
+    totemBolt: { pool: "effect" },
+    weakenedSoul: { pool: "effect" },
+    webbed: { pool: "effect" },
+
+    // --- the training dummy's ---
+    dummyBolt: { pool: "test" },
+    dummyCaster: { pool: "test" },
+  },
+}

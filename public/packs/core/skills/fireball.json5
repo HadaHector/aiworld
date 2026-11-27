@@ -19,9 +19,9 @@
     travel: { commit: true, length: { travel: 24 }, next: "impact", enter: [{ do: "animation", name: "castForward" }] },
     impact: {
       enter: [
-        { do: "damage", group: "target", amount: { add: [40, { mul: ["random", 10] }, { mul: ["caster.intellect", 0.8] }] } },
+        { do: "damage", group: "target", amount: { mul: [{ add: [40, { mul: ["random", 10] }, { mul: ["caster.intellect", 0.8] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
         // The burn is its own skill: fireball says how hard it burns, the burn how burns stack.
-        { do: "cast", skill: "burn", group: "target", vars: { perTick: { add: [3, { mul: ["caster.intellect", 0.25] }] } } },
+        { do: "cast", skill: "burn", group: "target", vars: { perTick: { mul: [{ add: [3, { mul: ["caster.intellect", 0.25] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } } },
       ],
     },
   },

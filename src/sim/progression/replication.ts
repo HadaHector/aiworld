@@ -1,6 +1,6 @@
 import type { Entity } from "../entity";
 import type { Progress, ProgressEvents } from "../protocol";
-import { capOf, nextOf, type ProgressContext, type ProgressEvent } from "./progress";
+import { capOf, nextOf, statPointsLeft, type ProgressContext, type ProgressEvent } from "./progress";
 
 /**
  * What a client is told of its own player's progress (PROGRESSION.md, *Messages*): the whole of it
@@ -25,6 +25,9 @@ export function progressMessages(ctx: ProgressContext, entity: Entity, events: r
       talents: [...part.talents].flatMap(([tree, ranks]) => [...ranks].filter(([, rank]) => rank > 0).map(([node, rank]) => ({ tree, node, rank }))),
       learned: [...part.learned].map(([skill, how]) => ({ skill, how })),
       available: [...part.available].map(([skill, unlock]) => ({ skill, how: unlock.how, cost: unlock.cost })),
+      stats: rules.config.statPoints
+        ? { mode: rules.config.statPoints.mode, total: part.statTotal, left: statPointsLeft(ctx, part), given: [...part.statGiven].filter(([, n]) => n > 0).map(([stat, amount]) => ({ stat, amount })) }
+        : null,
     });
   }
   if (events && events.length > 0) out.push({ type: "progressEvents", events: events.map((e) => ({ ...e })) });

@@ -1,0 +1,25 @@
+// The priest's big moment (SKILLBANK.md, level 10): a burst of light - damage to every enemy within
+// 10 m, healing for every ally there, the priest too.
+{
+  name: "Holy Nova",
+  icon: "spell-holy-nova",
+  type: "spell",
+  tags: ["school.holy"],
+  target: "none",
+  cost: { mana: { mul: [60, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  cooldown: 30,
+  areas: { around: { shape: "circle", radius: 10 } },
+  groups: {
+    foes: { from: "area:around", filter: { relation: "enemy" }, max: 10 },
+    friends: { from: "area:around", filter: { relation: "ally" }, max: 10 },
+  },
+  states: {
+    burst: {
+      enter: [
+        { do: "animation", name: "castSlam" },
+        { do: "damage", group: "foes", amount: { mul: [{ add: [15, { mul: ["caster.intellect", 0.3] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "heal", group: "friends", amount: { mul: [{ add: [20, { mul: ["caster.spirit", 0.5] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+      ],
+    },
+  },
+}

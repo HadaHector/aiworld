@@ -1,0 +1,2 @@
+// A warrior's passive (SKILLBANK.md, level 5): armour +10%.
+{ name: "Toughness", icon: "weapon-sword-steel-guard", passive: true, type: "physical", states: { held: { hold: [{ do: "modifier", stat: "armor", kind: "percent", value: 10 }] } } }

@@ -1,0 +1,2 @@
+// A ranger's passive (SKILLBANK.md, level 9): movement speed +8%.
+{ name: "Swift Feet", icon: "spell-nature-wind-slash", passive: true, type: "physical", states: { held: { hold: [{ do: "modifier", stat: "speed", kind: "percent", value: 8 }] } } }

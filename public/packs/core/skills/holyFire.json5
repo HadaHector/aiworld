@@ -1,0 +1,26 @@
+// Holy flame (SKILLBANK.md: an attack and a debuff in one): a short cast, damage, and the target burns.
+{
+  name: "Holy Fire",
+  icon: "spell-fire-sun-flare",
+  cues: { projectile: "bolt" },
+  type: "spell",
+  tags: ["school.holy"],
+  target: "enemy",
+  range: 30,
+  los: true,
+  facing: true,
+  cost: { mana: { mul: [35, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  cooldown: 10,
+  start: "cast",
+  states: {
+    cast: { length: 2, bar: "cast", breakOnMove: true, interruptible: true, next: "hit" },
+    hit: {
+      commit: true,
+      enter: [
+        { do: "animation", name: "castOverhead" },
+        { do: "damage", group: "target", amount: { mul: [{ add: [25, { mul: ["random", 6] }, { mul: ["caster.intellect", 0.6] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "cast", skill: "burn", group: "target", vars: { perTick: { mul: [{ add: [4, { mul: ["caster.intellect", 0.2] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } } },
+      ],
+    },
+  },
+}

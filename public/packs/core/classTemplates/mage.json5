@@ -1,0 +1,16 @@
+// The mage (SKILLBANK.md): fire for damage, frost to hold enemies off; fragile, deadly at range.
+{
+  name: "Mage",
+  axis: 0.85,
+  distance: "holds",
+  resources: ["mana"],
+  schools: ["fire", "frost", "arcane"],
+  stats: ["intellect", "armor"],
+  reach: { ranged: 1, melee: 0.4 },
+  ratios: {
+    "1": { damage: 1 },
+    "10": { damage: 0.7, control: 0.15, defence: 0.15 },
+  },
+  limits: { long: 2, ultimate: 1 },
+  combos: 1,
+}

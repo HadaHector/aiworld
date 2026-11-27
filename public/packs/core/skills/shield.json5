@@ -19,7 +19,7 @@
     shielded: {
       length: 30,
       enter: [{ do: "animation", name: "empower" }, { do: "cast", skill: "weakenedSoul" }],
-      hold: [{ do: "absorb", amount: { add: [40, { mul: ["caster.intellect", 2] }] } }],
+      hold: [{ do: "absorb", amount: { mul: [{ add: [40, { mul: ["caster.intellect", 2] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } }],
       on: { absorbedOut: "end" },
     },
   },

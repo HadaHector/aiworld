@@ -40,7 +40,7 @@ check("income 270 at 1, 2000 at 10", near(balance.income(1), 270, 0.001) && near
 check("potion costs 3 minutes of income", balance.potionPrice(1) === Math.round(270 / 60 * 3));
 check("sell rate 25%", balance.sellRate === 0.25);
 check("regeneration 2% after 6 s", balance.regen.share === 0.02 && balance.regen.delay === 6);
-check("skill count 3 to 8", near(balance.curve("skillCount", 1), 3, 0.001) && near(balance.curve("skillCount", 10), 8, 0.001));
+check("skills: 2 active at 1, 7 active and 2 passive at 10", balance.curve("skillsActive", 1) === 2 && balance.curve("skillsActive", 10) === 7 && balance.curve("skillsPassive", 10) === 2);
 check("tactics: 1 at level 1, 2 at level 4", balance.curve("tactics", 1) === 1 && balance.curve("tactics", 4) === 2);
 check("quest effort: kill 4 early, 12 late", balance.curve("questEffortMin", 1) === 4 && balance.curve("questEffortMax", 10) === 12);
 check("an unknown curve throws", (() => { try { balance.curve("nope", 1); return false; } catch { return true; } })());

@@ -1,0 +1,13 @@
+// The ranger's long buff (SKILLBANK.md, level 2): its own agility +10% (+3% a rank) for 30 minutes.
+{
+  name: "Hawk Eye",
+  icon: "spell-nature-light-beam",
+  type: "spell",
+  tags: ["school.nature"],
+  target: "self",
+  cost: { mana: 20 },
+  display: "buff",
+  dispel: "magic",
+  stacking: { per: "host", add: "replace", value: "stronger" },
+  states: { on: { length: 1800, enter: [{ do: "animation", name: "empower" }], hold: [{ do: "modifier", stat: "agility", kind: "percent", value: { add: [10, { mul: [3, { sub: ["level", 1] }] }] } }] } },
+}

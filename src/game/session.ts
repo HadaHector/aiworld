@@ -40,6 +40,7 @@ import type { CommandDef } from "../sim/chat/chat";
 import { createFloatingText, type FloatingText } from "./floatingText";
 import { createProgressMirror } from "./progressMirror";
 import { createProgressPanel } from "../ui/progressPanel";
+import { createLevelUpScreen } from "../ui/levelUpScreen";
 import { createRuleBook } from "../ui/ruleBook";
 import { createMenuBar } from "../ui/menuBar";
 import { createActionBar } from "../ui/actionBar";
@@ -931,6 +932,14 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     send: (message) => client.send(message),
     openBook: (key) => (key ? ruleBook.open(key) : ruleBook.toggle()),
   });
+  // The level-up screen (SKILLBANK.md, SLICE.md P9): what the level gave, by the rules.
+  const levelUpScreen = createLevelUpScreen({
+    game: gameRules,
+    rules: progressionRules,
+    progress: progressMirror,
+    send: (message) => client.send(message),
+    ownStat: (stat) => mirror.entities.get(playerId)?.stats.get(stat) ?? null,
+  });
   progressMirror.onEvents((events) => {
     const context = { source: playerId, target: playerId, skill: null, crit: false, periodic: false };
     const skillName = (skill: number): string => gameRules.skills[skill]?.name ?? "a skill";
@@ -948,8 +957,12 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         if (learned.length > 0) parts.push(`Learned: ${learned.join(", ")}.`);
         const waiting = events.filter((x) => x.kind === "unlocked" && x.level === e.level && x.discipline === e.discipline).map((x) => `${skillName(x.skill)} (${x.source === "item" ? "a book" : x.source === "trainer" ? "a trainer" : x.source})`);
         if (waiting.length > 0) parts.push(`Can now be learned from: ${waiting.join(", ")}.`);
+        const ranked = gains.skills.filter((s) => s.how === "auto" && s.rank > 1).map((s) => `${skillName(s.skill)} ${s.rank}`);
+        if (ranked.length > 0) parts.push(`Rank up: ${ranked.join(", ")}.`);
+        if (gains.statMode === "manual" && gains.statPoints > 0) parts.push(`${gains.statPoints} stat point${gains.statPoints === 1 ? "" : "s"} to spend.`);
         if (gains.points > 0) parts.push(`${gains.points} talent point${gains.points === 1 ? "" : "s"} to spend.`);
         combatHud.say(parts.join(" "));
+        if (e.discipline === progressionRules.config.level) levelUpScreen.show(e.level, gains);
       }
       const discipline = progressionRules.disciplines[e.discipline];
       if (e.kind === "xp" && e.discipline === progressionRules.config.level) floatingText?.say(playerId, `+${Math.round(e.amount)} XP`, "#c9a8ff");
@@ -1674,6 +1687,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     actionBar.dispose();
     spellBook.dispose();
     progressPanel.dispose();
+    levelUpScreen.dispose();
     npcWindow.dispose();
     questLog.dispose();
     ruleBook.dispose();

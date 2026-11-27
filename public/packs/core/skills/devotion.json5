@@ -1,0 +1,2 @@
+// A priest's passive (SKILLBANK.md, level 9): stamina +10%.
+{ name: "Devotion", icon: "spell-holy-star-burst", passive: true, type: "spell", tags: ["school.holy"], states: { held: { hold: [{ do: "modifier", stat: "stamina", kind: "percent", value: 10 }] } } }

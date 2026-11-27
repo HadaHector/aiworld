@@ -1,0 +1,26 @@
+// The ranger's plain shot (SKILLBANK.md): weapon damage at range, a third more on a poisoned
+// target (Poison Arrow sets it up).
+{
+  name: "Steady Shot",
+  icon: "spell-nature-arrow",
+  cues: { projectile: "bolt" },
+  type: "physical",
+  weapon: true,
+  tags: ["ranged", "shot"],
+  target: "enemy",
+  range: 30,
+  los: true,
+  facing: true,
+  cost: { mana: { mul: [8, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  cooldown: 2,
+  groups: { poisoned: { from: "target", filter: { has: ["poison"] } } },
+  states: {
+    shot: {
+      enter: [
+        { do: "animation", name: "swing" },
+        { do: "damage", group: "target", amount: { mul: [{ add: ["caster.weaponMax", 4, { div: ["caster.agility", 4] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "if", has: "poisoned", then: [{ do: "damage", group: "target", amount: { mul: [{ div: [{ add: ["caster.weaponMax", 4, { div: ["caster.agility", 4] }] }, 3] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } }] },
+      ],
+    },
+  },
+}

@@ -148,11 +148,13 @@ attachRun<MoveData>("move", {
     const aim = magic.target ? sys.world.entity(magic.target) : undefined;
     for (const t of targets) {
       const speed = Math.max(0.1, evaluate(sys, magic, data.speed, t));
-      const distance = Math.max(0, evaluate(sys, magic, data.distance, t));
+      // A negative distance goes backwards (a leap away, Disengage): the other way from the facing.
+      const signed = evaluate(sys, magic, data.distance, t);
+      const distance = Math.abs(signed);
       const height = evaluate(sys, magic, data.height, t);
       // Which way: at the target, away from or toward the caster, or along the facing.
-      let dx = Math.sin(t.facing);
-      let dz = Math.cos(t.facing);
+      let dx = Math.sin(t.facing) * (signed < 0 ? -1 : 1);
+      let dz = Math.cos(t.facing) * (signed < 0 ? -1 : 1);
       let length = distance;
       if (data.kind === "knockback" || data.kind === "pull") {
         if (from && from !== t) {

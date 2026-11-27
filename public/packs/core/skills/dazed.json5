@@ -1,0 +1,10 @@
+// Concussive Shot's slow: -50% movement speed for 4 s.
+{
+  name: "Dazed",
+  icon: "spell-nature-haste-arrow",
+  cues: { applied: "chillOn", aura: "slowed" },
+  tags: ["slow"],
+  display: "debuff",
+  stacking: { per: "host" },
+  states: { dazed: { length: 4, hold: [{ do: "modifier", stat: "speed", kind: "percent", value: -50 }] } },
+}

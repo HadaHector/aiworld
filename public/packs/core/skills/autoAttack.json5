@@ -8,7 +8,8 @@
   weapon: true,
   tags: ["melee"],
   groups: {
-    foe: { from: "attacking", filter: { relation: "enemy", range: 5, facing: true } },
+    // Reach from the weapon (stats/attackRange.json5): 5 m, a bow 30 m - then it is a shot, in sight.
+    foe: { from: "attacking", filter: { relation: "enemy", range: "caster.attackRange", facing: true, los: true } },
   },
   states: {
     ready: {

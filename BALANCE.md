@@ -33,7 +33,9 @@ optional `min` and `max`. Fractions of a level interpolate; levels under 1 read 
 | `xpToNext` | 250 … 5,130 | `40*L^2 + 210*L`; level 10 costs 20,850 XP (kills 55%, quests 45%, `xpSplit`). |
 | `income` | 270 → 2,000 copper an hour | Kills 40%, quests 35%, chests 25% (`incomeSplit`); 100 kills an hour (`killsPerHour`). |
 | `itemBudget` | 4 → 24 | Stat points of a common weapon-slot item; slots weigh `slotWeights`, rarities their own budget. |
-| `statPoints`, `tactics`, `questEffortMin/Max`, `skillCount` | | Data for the tasks that use them (level-up, creature complexity, quests, class ladders). |
+| `statPoints` | 3 at 2 → 5 at 10 | Level-up stat points (37 by ten), placed by class weights (SKILLBANK.md). |
+| `skillsActive`, `skillsPassive` | 2 → 7; 0 → 2 | Class skills known by level, auto-attack not counted (SKILLBANK.md). |
+| `tactics`, `questEffortMin/Max` | | Data for the tasks that use them (creature complexity, quests). |
 | `cellLevel` | 1 … 9 over 14 cells | Creature level of a land cell by its place in order of distance from the start, where a dimension sets levels by cell (the vale; CREATURES.md, *Zones*). |
 
 Beside the curves: `roles` (below), `priceMinutes` (potion 3, weapon 25), `sellRate` 0.25, `repairShare`

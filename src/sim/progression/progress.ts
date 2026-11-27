@@ -29,6 +29,11 @@ export interface ProgressPart {
   trees: number[];
   /** Skills each slot's origin gives or unlocks - what a `cast` source's `spellSource: "origin:<slot>"` matches. */
   originSkills: Map<string, Set<number>>;
+  /** Stat points spent by hand, by stat index (`manual` stat points; SKILLBANK.md). Saved. */
+  statsSpent: Map<number, number>;
+  /** Worked out: stat points its levels gave, and where they went (by hand or by the class's weights). */
+  statTotal: number;
+  statGiven: Map<number, number>;
   /** What happened since the system last drained it. */
   events: ProgressEvent[];
   /** Set by any change the owner should be told of. */
@@ -43,7 +48,7 @@ export interface DisciplineProgress {
   banked: number;
 }
 
-export const PROGRESS_EVENT_KINDS = ["xp", "levelUp", "learned", "unlocked", "talent", "refused"] as const;
+export const PROGRESS_EVENT_KINDS = ["xp", "levelUp", "learned", "unlocked", "talent", "refused", "rank"] as const;
 export type ProgressEventKind = (typeof PROGRESS_EVENT_KINDS)[number];
 
 export interface ProgressEvent {
@@ -89,6 +94,9 @@ export function createProgress(ctx: ProgressContext, entity: Entity, origins: Ma
     left: new Map(),
     trees: [],
     originSkills: new Map(),
+    statsSpent: new Map(),
+    statTotal: 0,
+    statGiven: new Map(),
     events: [],
     dirty: true,
   };
@@ -146,7 +154,19 @@ function applyLevel(ctx: ProgressContext, entity: Entity, discipline: number, le
   const part = entity.progress!;
   for (const unlock of unlocksOf(ctx, part, discipline)) {
     if (!unlockAt(unlock, level)) continue;
-    if (unlock.skill >= 0 && !part.learned.has(unlock.skill)) {
+    // A rank (SKILLBANK.md): an `auto` unlock of a skill the character already has, at a higher
+    // spell level, raises the spell's level - which its formulas read as `level`. A passive keeps
+    // the level its magic started with.
+    const known = unlock.skill >= 0 ? entity.combat?.spells.find((sp) => sp.skill === unlock.skill) : undefined;
+    if (known && unlock.how === "auto") {
+      if (known.level < unlock.spellLevel && !known.passive) {
+        known.level = unlock.spellLevel;
+        part.events.push({ kind: "rank", discipline, amount: unlock.spellLevel, level, skill: unlock.skill, source: "auto" });
+        part.dirty = true;
+      }
+    } else if (unlock.skill >= 0 && unlock.spellLevel > 1 && unlock.how === "auto") {
+      // A rank of a skill not yet had (a book not yet read): it waits, and comes with the skill.
+    } else if (unlock.skill >= 0 && !part.learned.has(unlock.skill)) {
       if (unlock.how === "auto") learnSkill(ctx, entity, unlock.skill, "auto", unlock.spellLevel);
       else if (unlock.how !== "talent" && !part.available.has(unlock.skill)) {
         part.available.set(unlock.skill, unlock);
@@ -157,6 +177,87 @@ function applyLevel(ctx: ProgressContext, entity: Entity, discipline: number, le
     for (const knows of unlock.knows) part.knows.add(knows);
     for (const d of unlock.disciplines) startDiscipline(ctx, entity, d.discipline, d.level);
   }
+}
+
+/** The modifier source of level-up stat points. */
+export const STAT_POINTS_SOURCE = "points";
+
+/** Stat points the levels up to `level` give, all told (none at the first). */
+export function statPointTotal(rules: ProgressionRules, level: number): number {
+  const config = rules.config.statPoints;
+  if (!config) return 0;
+  let total = 0;
+  for (let l = 2; l <= level; l++) total += config.at(l);
+  return total;
+}
+
+/** A character's stat weights: its origins' together (a class's mostly), even over the stats points
+ *  may go to when none has any. */
+export function statWeightsOf(rules: ProgressionRules, origins: Iterable<number>): Map<number, number> {
+  const weights = new Map<number, number>();
+  for (const o of origins) for (const [stat, w] of rules.origins[o]?.statWeights ?? []) weights.set(stat, (weights.get(stat) ?? 0) + w);
+  if (weights.size === 0) for (const stat of rules.config.statPoints?.stats ?? []) weights.set(stat, 1);
+  return weights;
+}
+
+/**
+ * Where `total` automatic stat points go, by weight: one at a time, each to the stat furthest behind
+ * its share (ties in the weights' order). So a stat never loses a point when the total grows, and a
+ * level's gain is the difference of two of these.
+ */
+export function autoStatPoints(weights: ReadonlyMap<number, number>, total: number): Map<number, number> {
+  const sum = [...weights.values()].reduce((a, b) => a + b, 0);
+  const given = new Map<number, number>([...weights.keys()].map((s) => [s, 0]));
+  if (sum <= 0) return given;
+  for (let n = 1; n <= total; n++) {
+    let best = -1;
+    let gap = -Infinity;
+    for (const [stat, w] of weights) {
+      const g = (w / sum) * n - given.get(stat)!;
+      if (g > gap + 1e-9) {
+        gap = g;
+        best = stat;
+      }
+    }
+    given.set(best, given.get(best)! + 1);
+  }
+  return given;
+}
+
+/** Puts the level-up stat points on the character: by hand (`manual`) or by its weights (`auto`). */
+export function syncStatPoints(ctx: ProgressContext, entity: Entity): void {
+  const part = entity.progress!;
+  const config = ctx.rules.config.statPoints;
+  if (!config || !entity.stats) return;
+  const level = part.disciplines.get(config.discipline)?.level ?? 0;
+  part.statTotal = statPointTotal(ctx.rules, level);
+  part.statGiven = config.mode === "auto" ? autoStatPoints(statWeightsOf(ctx.rules, part.origins.values()), part.statTotal) : new Map(part.statsSpent);
+  removeSource(entity.stats, STAT_POINTS_SOURCE);
+  const flat = ctx.game.modifierKinds.findIndex((k) => k.id === "flat");
+  for (const [stat, n] of part.statGiven) if (n > 0) addModifier(entity.stats, { stat, kind: flat, value: n, source: STAT_POINTS_SOURCE });
+}
+
+/** Stat points not yet spent: only `manual` points wait. */
+export function statPointsLeft(ctx: ProgressContext, part: ProgressPart): number {
+  if (ctx.rules.config.statPoints?.mode !== "manual") return 0;
+  let spent = 0;
+  for (const n of part.statsSpent.values()) spent += n;
+  return Math.max(0, part.statTotal - spent);
+}
+
+/** Spends a `manual` stat point on a stat. Returns why not, or "". */
+export function spendStatPoint(ctx: ProgressContext, entity: Entity, stat: number): string {
+  const part = entity.progress;
+  const config = ctx.rules.config.statPoints;
+  const why = !part || !config ? "cannot" : config.mode !== "manual" ? "statsAuto" : !config.stats.includes(stat) ? "noSuchStat" : statPointsLeft(ctx, part) <= 0 ? "noPoints" : "";
+  if (why) {
+    part?.events.push({ kind: "refused", discipline: -1, amount: 0, level: 0, skill: -1, source: why });
+    return why;
+  }
+  part!.statsSpent.set(stat, (part!.statsSpent.get(stat) ?? 0) + 1);
+  syncStatPoints(ctx, entity);
+  part!.dirty = true;
+  return "";
 }
 
 /** Sets a discipline's stat to its level and its unlocks' modifiers to their value at it. */
@@ -175,6 +276,7 @@ function syncDiscipline(ctx: ProgressContext, entity: Entity, discipline: number
     if (level < first) continue;
     for (const m of unlock.modifiers) addModifier(entity.stats, { stat: m.stat, kind: m.kind, value: m.value.run(own), source });
   }
+  if (ctx.rules.config.statPoints?.discipline === discipline) syncStatPoints(ctx, entity);
 }
 
 /** The values a discipline's `cap` and `next` read. */
@@ -292,9 +394,24 @@ function learnSkill(ctx: ProgressContext, entity: Entity, skill: number, how: Ho
   const part = entity.progress!;
   part.learned.set(skill, how);
   part.available.delete(skill);
-  ctx.grant(entity, skill, level, learnSource(how));
+  ctx.grant(entity, skill, Math.max(level, rankReached(ctx, entity, skill)), learnSource(how));
   part.events.push({ kind: "learned", discipline: -1, amount: 0, level, skill, source: how });
   part.dirty = true;
+}
+
+/** The highest rank of a skill the character's levels have reached (its `auto` unlocks at a spell
+ *  level), 1 if none: a skill learned late from a trainer or a book comes at it. */
+function rankReached(ctx: ProgressContext, entity: Entity, skill: number): number {
+  const part = entity.progress!;
+  let rank = 1;
+  for (const [discipline, progress] of part.disciplines) {
+    for (const u of unlocksOf(ctx, part, discipline)) {
+      if (u.skill !== skill || u.how !== "auto") continue;
+      const first = u.at ? Math.min(...u.at) : u.from;
+      if (progress.level >= first) rank = Math.max(rank, u.spellLevel);
+    }
+  }
+  return rank;
 }
 
 /** Why a character cannot learn a skill this way, or "" if it can. */

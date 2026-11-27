@@ -126,7 +126,7 @@ export const ITEM_FOLDERS = ["items", "itemTemplates", "rarities", "equipSlots",
 export const CREATURE_FOLDERS = ["creatures", "creatureTraits", "camps"] as const;
 
 /** The folders progression is defined in (see PROGRESSION.md) - read by the progression rules. */
-export const PROGRESSION_FOLDERS = ["disciplines", "disciplineTemplates", "origins", "originTemplates", "talentTrees", "talentPools"] as const;
+export const PROGRESSION_FOLDERS = ["disciplines", "disciplineTemplates", "origins", "originTemplates", "talentTrees", "talentPools", "classTemplates"] as const;
 
 /** The folders gameplay content lives in - stats, resources, templates (see ENTITIES.md), skills and
  *  game rules files (ABILITIES.md). Not world content: the world's resolver passes over them, and

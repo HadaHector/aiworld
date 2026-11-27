@@ -1,0 +1,31 @@
+// The mage's big moment (SKILLBANK.md, level 10): channel ice on the target's spot for 6 s - damage
+// every second to every enemy within 8 m of it, chilling them.
+{
+  name: "Blizzard",
+  icon: "spell-frost-tidal-wave",
+  type: "spell",
+  tags: ["school.frost"],
+  target: "enemy",
+  range: 30,
+  los: true,
+  cost: { mana: { mul: [80, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  cooldown: 90,
+  areas: { storm: { shape: "circle", radius: 8, at: "target" } },
+  groups: { hit: { from: "area:storm", filter: { relation: "enemy" }, max: 10 } },
+  start: "storm",
+  states: {
+    storm: {
+      length: 6,
+      period: 1,
+      bar: "channel",
+      breakOnMove: true,
+      interruptible: true,
+      refill: ["hit"],
+      enter: [{ do: "animation", name: "castLoop" }],
+      tick: [
+        { do: "damage", group: "hit", amount: { mul: [{ add: [8, { mul: ["caster.intellect", 0.15] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "cast", skill: "chilled", group: "hit" },
+      ],
+    },
+  },
+}

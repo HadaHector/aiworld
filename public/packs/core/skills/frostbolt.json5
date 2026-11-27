@@ -1,0 +1,27 @@
+// A bolt of ice (SKILLBANK.md): damage and the target chilled; double damage on a frozen (rooted)
+// target (Frost Nova sets it up).
+{
+  name: "Frostbolt",
+  icon: "spell-frost-spike",
+  cues: { projectile: "bolt" },
+  type: "spell",
+  tags: ["school.frost"],
+  target: "enemy",
+  range: 30,
+  los: true,
+  facing: true,
+  cost: { mana: { mul: [25, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  start: "cast",
+  groups: { frozen: { from: "target", filter: { has: ["frozen"] } } },
+  states: {
+    cast: { length: 2, bar: "cast", breakOnMove: true, interruptible: true, next: "travel" },
+    travel: { commit: true, length: { travel: 24 }, next: "impact", enter: [{ do: "animation", name: "castForward" }] },
+    impact: {
+      enter: [
+        { do: "damage", group: "target", amount: { mul: [{ add: [30, { mul: ["random", 8] }, { mul: ["caster.intellect", 0.7] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "if", has: "frozen", then: [{ do: "damage", group: "target", amount: { mul: [{ add: [30, { mul: ["caster.intellect", 0.7] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } }] },
+        { do: "cast", skill: "chilled", group: "target" },
+      ],
+    },
+  },
+}

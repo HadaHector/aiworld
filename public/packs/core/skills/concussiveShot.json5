@@ -1,0 +1,24 @@
+// A blunt arrow (SKILLBANK.md): little damage, the target dazed (slowed by half) for 4 s.
+{
+  name: "Concussive Shot",
+  icon: "spell-nature-haste-arrow",
+  cues: { projectile: "bolt" },
+  type: "physical",
+  weapon: true,
+  tags: ["ranged", "shot"],
+  target: "enemy",
+  range: 30,
+  los: true,
+  facing: true,
+  cost: { mana: { mul: [15, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  cooldown: 12,
+  states: {
+    shot: {
+      enter: [
+        { do: "animation", name: "swing" },
+        { do: "damage", group: "target", amount: { mul: ["caster.weaponMin", { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "cast", skill: "dazed", group: "target" },
+      ],
+    },
+  },
+}
