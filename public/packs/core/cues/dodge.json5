@@ -1,0 +1,6 @@
+// A blow dodged: the swing goes by and the target is not there - a whiff, no flinch.
+{
+  parts: [
+    { sound: "whiff", at: "source", bone: "weapon" },
+  ],
+}

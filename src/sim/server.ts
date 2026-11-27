@@ -1141,6 +1141,10 @@ export function createServer(options: ServerOptions): Server {
         const key = there?.id ?? `${siteKey(dimension.id, site)}/${site.style}/dungeon`;
         if (current === key) continue;
         if (current && !nearMouth.has(entity.id)) continue;
+        // Inside a lair it is in, under another's mouth (a crypt's far rooms can reach under a
+        // hillside's cave): it stays in its own, not switched to the one whose mouth is overhead.
+        const standing = dimension.dungeons.at(feet.x, feet.y, feet.z) ?? dimension.dungeons.at(feet.x, feet.y + 1, feet.z);
+        if (current && standing?.id === current) continue;
         const dungeon = there ?? mouthDungeon(dimension, site);
         inDungeon.set(entity.id, dungeon.id);
         nearMouth.add(entity.id);

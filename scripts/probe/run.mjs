@@ -19,7 +19,7 @@ const CATEGORIES = {
   placement: ["vale", "starts", "abandonedCamp"],
   dungeons: ["dungeons", "navigation"],
   "terrain-water": ["water", "riverLevels", "mapTiles", "swim", "vale"],
-  gameplay: ["lairSave", "lairLogin", "abilities", "entities", "collision", "creatures", "beast", "chat", "feedback", "ambience"],
+  gameplay: ["lairSave", "lairLogin", "defence", "abilities", "entities", "collision", "creatures", "beast", "chat", "feedback", "ambience"],
   rules: ["balance", "skillBank", "items", "progression", "quests", "npcs", "saves", "starts"],
   art: ["body", "beast", "icons", "feedback"],
 };

@@ -19,7 +19,7 @@
   },
   // No crude rarity, no plain ornament.
   never: [{ make: "crude", rarity: "rare" }, { make: "ornate", rarity: "common" }],
-  stats: { armor: [8, 10], stamina: [0, 1] },
+  stats: { armor: [8, 10], stamina: [0, 1], blockChance: [9, 11], blockValue: [5, 8] },
   rarities: ["common", "uncommon", "rare"],
   extra: { stamina: [1, 3], strength: [1, 2], agility: [1, 2], spirit: [1, 2], intellect: [1, 2] },
   requires: { ge: ["level", { sub: ["itemLevel", 8] }] },

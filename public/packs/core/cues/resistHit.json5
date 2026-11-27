@@ -1,0 +1,7 @@
+// A spell partly resisted: its impact, with the fizzle of what did not take.
+{
+  parts: [
+    { sound: "impact" },
+    { sound: "fizzle" },
+  ],
+}

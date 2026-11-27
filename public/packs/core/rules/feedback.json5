@@ -7,8 +7,11 @@
     castDone: [{ type: "spell", cue: "spellRelease" }],
     castFailed: [{ role: "dealt", cue: "error" }],
     interrupted: [{ cue: "interrupt" }],
-    hit: [{ periodic: true, cue: "dotTick" }, { tags: ["melee"], cue: "meleeHit" }, { type: "spell", cue: "spellHit" }, { cue: "meleeHit" }],
+    hit: [{ periodic: true, cue: "dotTick" }, { blocked: true, cue: "blockHit" }, { tags: ["melee"], cue: "meleeHit" }, { type: "spell", resisted: true, cue: "resistHit" }, { type: "spell", cue: "spellHit" }, { cue: "meleeHit" }],
     miss: [{ tags: ["melee"], cue: "whiff" }, { cue: "spellMiss" }],
+    // The defence (rules/combat.json5): a blow dodged is a whiff and a sidestep; parried, steel on steel.
+    dodge: [{ cue: "dodge" }],
+    parry: [{ cue: "parry" }],
     heal: [{ periodic: true, cue: "healTick" }, { cue: "heal" }],
     animation: [{ name: "swing", cue: "swing" }],
     death: [{ cue: "death" }],

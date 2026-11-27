@@ -8,12 +8,14 @@ export const COMBAT_EVENT_KINDS = [
   "auraOn", "auraOff", "auraStacks", "dispelled", "death", "summon", "animation", "effect", "resisted", "respawn",
   // A character's discipline went up a level (PROGRESSION.md): `amount` the level, `name` the discipline.
   "levelUp",
+  // A blow avoided by the defence (rules/combat.json5, *defence*): dodged, or parried.
+  "dodge", "parry",
 ] as const;
 export type CombatEventKind = (typeof COMBAT_EVENT_KINDS)[number];
 export const EVENT_KIND: Readonly<Record<CombatEventKind, number>> = Object.fromEntries(COMBAT_EVENT_KINDS.map((k, i) => [k, i])) as Record<CombatEventKind, number>;
 
 /** Bits of `flags`. */
-export const EVENT_FLAG = { crit: 1, periodic: 2, immune: 4 } as const;
+export const EVENT_FLAG = { crit: 1, periodic: 2, immune: 4, blocked: 8, resisted: 16 } as const;
 
 /** Why a cast failed or stopped, or why an aura went: `reason`. */
 export const REASONS = [
@@ -32,6 +34,9 @@ export interface CombatEvent {
   amount: number;    // f64: damage, healing, a cast's length, a stack count
   extra: number;     // f64: overkill, or how much was mitigated
   absorbed: number;  // f64
+  /** A hit's share stopped by a shield's block, and by the target's resistance (the defence). */
+  blocked?: number;  // f64
+  resisted?: number; // f64
   flags: number;     // u8: EVENT_FLAG bits
   reason: number;    // u8: REASONS
   name: string;      // short string: an animation's or an effect's name, else ""

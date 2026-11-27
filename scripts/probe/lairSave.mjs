@@ -110,7 +110,10 @@ for (const [kind, site] of sites) {
   const deep = [Math.max(1, dungeon.layout.boss - 1), dungeon.layout.boss, parts.length - 1].map((i) => parts[i] && placedSpots(parts[i], "spawns")[0]).find(Boolean) ?? dungeon.arrival;
   const floor = dungeon.floorAt ? dungeon.floorAt(deep.x, deep.y, deep.z) : deep.y;
   me.body.teleportTo({ x: deep.x, y: floor + 0.3, z: deep.z });
-  await t.pump(30);
+  // A few seconds in it, the mouths looked for each second: it stays the one drawn, though another
+  // lair's mouth may be overhead (a crypt's far rooms under a hillside's cave).
+  await t.pump(90);
+  check(`${kind}: still the lair drawn, standing deep in it`, t.c.last("dungeon")?.id === dungeon.id, `last told: ${t.c.last("dungeon")?.id}`);
   const left = { x: me.x, y: me.y, z: me.z };
   const inside = (e) => t.dim().dungeons.at(e.x, e.y, e.z) ?? t.dim().dungeons.at(e.x, e.y + 1, e.z);
   check(`${kind}: standing in it before logging out`, inside(me) === dungeon, `${left.x.toFixed(1)}, ${left.y.toFixed(1)}, ${left.z.toFixed(1)}; terrain ${world.heightAt(left.x, left.z).toFixed(1)}`);
@@ -130,7 +133,7 @@ for (const [kind, site] of sites) {
   check(`${kind}: the lair laid out again, the same`, !!back && back.seed === dungeon.seed && back.layout.parts.length === parts.length);
   check(`${kind}: back where it was left`, Math.hypot(me.x - left.x, me.z - left.z) < 1 && Math.abs(me.y - left.y) < 1.5, `${me.x.toFixed(1)}, ${me.y.toFixed(1)}, ${me.z.toFixed(1)} vs ${left.x.toFixed(1)}, ${left.y.toFixed(1)}, ${left.z.toFixed(1)}`);
   check(`${kind}: inside the lair, not on the terrain above`, !!back && inside(me) === back && me.y < world.heightAt(me.x, me.z) - 2, `y ${me.y.toFixed(1)}, terrain ${world.heightAt(me.x, me.z).toFixed(1)}`);
-  check(`${kind}: its client told to draw it`, t.c.last("dungeon")?.id === dungeon.id);
+  check(`${kind}: its client told to draw it`, t.c.last("dungeon")?.id === dungeon.id, `last told: ${t.c.last("dungeon")?.id}`);
   await t.pump(90);
   check(`${kind}: still on its floor a few seconds on`, inside(me) === back && Math.abs(me.y - left.y) < 1.5, `y ${me.y.toFixed(1)}`);
   t.c.send({ type: "logout" });

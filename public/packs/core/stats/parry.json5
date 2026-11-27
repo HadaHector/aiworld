@@ -1,0 +1,3 @@
+// Parry rating, in percent: a melee blow turned aside; the Defence discipline adds to it
+// (rules/combat.json5, `defence.parts.parry`).
+{ name: "Parry", default: 0, min: 0, visible: "owner" }

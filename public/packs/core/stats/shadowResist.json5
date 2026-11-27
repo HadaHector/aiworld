@@ -1,0 +1,3 @@
+// Resistance to shadow spells: rated as armour is, against the attacker's level (rules/combat.json5,
+// `defence.parts.resist`).
+{ name: "Shadow resistance", default: 0, min: 0, visible: "owner" }

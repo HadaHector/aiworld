@@ -1,0 +1,7 @@
+// A melee blow parried: steel on steel at the target, sparks, no flinch.
+{
+  parts: [
+    { sound: "hit.blade.metal" },
+    { particles: "hit.metal" },
+  ],
+}

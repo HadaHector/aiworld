@@ -51,6 +51,9 @@ export interface CueContext {
   skill: SkillDef | null;
   crit: boolean;
   periodic: boolean;
+  /** A hit a shield blocked part of, or a resistance took part of (the defence). */
+  blocked?: boolean;
+  resisted?: boolean;
   /** A point, for `at: "point"` and for a cue with no units. */
   point?: Vec3;
   /** Placeholders the event fills beyond the units' traits: `surface`, a rarity. */
@@ -281,6 +284,8 @@ export function createCuePlayer(
       if (rule.role === "taken" && c.target !== me) continue;
       if (rule.crit !== undefined && rule.crit !== c.crit) continue;
       if (rule.periodic !== undefined && rule.periodic !== c.periodic) continue;
+      if (rule.blocked !== undefined && rule.blocked !== (c.blocked ?? false)) continue;
+      if (rule.resisted !== undefined && rule.resisted !== (c.resisted ?? false)) continue;
       return rule.cue;
     }
     return undefined;
@@ -361,6 +366,8 @@ export function createCuePlayer(
           skill,
           crit: (event.flags & EVENT_FLAG.crit) !== 0,
           periodic: (event.flags & EVENT_FLAG.periodic) !== 0,
+          blocked: (event.flags & EVENT_FLAG.blocked) !== 0,
+          resisted: (event.flags & EVENT_FLAG.resisted) !== 0,
           amount: event.amount,
         };
         switch (kind) {
@@ -400,6 +407,18 @@ export function createCuePlayer(
               const lasting = play(cue, { ...c, travel: path.travel });
               if (lasting) projectiles.push({ source: c.source, target: c.target, skill: event.skill, until: now() + path.seconds + 0.3, cue: lasting });
             }
+            break;
+          }
+          case "dodge":
+          case "parry": {
+            // Avoided: a projectile's flight ends, and the table says what it sounds like (a skill's
+            // own impact cue is for a blow that lands).
+            const i = projectiles.findIndex((p) => p.source === c.source && p.skill === event.skill && p.target === c.target);
+            if (i >= 0) {
+              projectiles[i].cue.stop(0.08);
+              projectiles.splice(i, 1);
+            }
+            playPhase(null, kind, c);
             break;
           }
           case "hit":

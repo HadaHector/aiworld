@@ -1,0 +1,3 @@
+// A ward that takes damage before health and fills again out of combat (rules/combat.json5,
+// `defence.parts.absorb`, off in core).
+{ name: "Ward", default: 0, min: 0, visible: "owner" }

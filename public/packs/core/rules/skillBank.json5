@@ -30,6 +30,9 @@
   statPurpose: {
     strength: "damage", agility: "damage", intellect: "damage", weaponMax: "damage", weaponMin: "damage", weaponSpeed: "damage", fireCastTime: "damage", dotDuration: "damage",
     armor: "defence", stamina: "defence", maxHealth: "defence",
+    // Defence (B8): avoidance, block, absorbs, crowd-control avoidance, resistances.
+    dodge: "defence", parry: "defence", blockChance: "defence", blockValue: "defence", ward: "defence", controlAvoid: "defence",
+    arcaneResist: "defence", fireResist: "defence", frostResist: "defence", holyResist: "defence", natureResist: "defence", shadowResist: "defence",
     spirit: "healing",
     speed: "mobility",
     maxMana: "support", maxRage: "support",
