@@ -1384,8 +1384,9 @@ const RAIL_PROP_CLEARANCE = 1.8;
 const RAIL_CART_STEP = 0.5;
 /** And stand this far back from the track's end at the mouth, clear of the adit's portal. */
 const RAIL_CART_MOUTH_GAP = 5;
-/** A mine's level ground reaches out along its track to its adit's mouth this wide either side. */
-const RAIL_APRON = 3;
+/** A mine's level ground reaches out along its track to its adit's mouth this wide either side there:
+ *  the whole of its slip's foot, so the face's opening stands on the yard's level. */
+const RAIL_APRON = CAVE_MOUTH.width / 2;
 
 /** A mine's pads' stop line (CompoundLayout.padStop): its adit's slip's foot, facing into the hill. */
 function padStopOf(site: CompoundSite): CompoundLayout["padStop"] {

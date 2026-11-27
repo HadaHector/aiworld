@@ -1,4 +1,5 @@
-import { mouthApproachable, mouthAt } from "../dungeons/caveMouths";
+import { CAVE_MOUTH, type CaveMouthSite } from "../dungeons/caveMouths";
+import { SEA_LEVEL } from "../cells/areaField";
 import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { SettlementSite } from "../settlements/settlementSites";
@@ -52,31 +53,57 @@ const MIN_FEATURE_SPACING = 300;
  *  yard's middle lies past the yard's radius, and how far the yard's ground may stand off its floor. */
 const ADIT_CANDIDATES = 600;
 const ADIT_REACH = 380;
-export const ADIT_GAP = 24;
+export const ADIT_GAP = 14;
 const ADIT_STEP = 9;
-/** And its banks: the yard is levelled to the adit's floor, and banks back to the ground round it over
- *  this far (mine.json5's `pads`), so out there - in front of the slip's foot, round the hill - the
- *  ground must lie within ADIT_BANK_RISE of that floor: banks no steeper than that over this run. */
-const ADIT_BANK_RUN = 30;
-const ADIT_BANK_RISE = 0.3;
-const ADIT_BANK_DIRECTIONS = 24;
-/** A yard is tried this much further out than ADIT_GAP too, nearest first: on ground the hill has
- *  flattened out into, its banks gentle where one closer in would stand on the slope. */
-const ADIT_FURTHER = [0, 8, 16];
+/** How steep a slope a mine's yard is levelled into (rise over run across it). */
+const ADIT_SLOPE: [number, number] = [0.2, 0.6];
+/** The face its levelling cuts at the adit's foot: the ground there at least this far over the floor. */
+const ADIT_CUT = 4;
 
-/** Whether a mine's yard at (x, z), its circle `radius`, levelled to its mouth's floor, banks back
- *  gently enough to the ground round it (see ADIT_BANK_RUN). The hill past the slip's foot is the
- *  adit's own and stays steep. */
-function aditBanksGentle(sampleTerrain: TerrainSampler, x: number, z: number, radius: number, mouth: { x: number; y: number; z: number; ux: number; uz: number }, trace: Trace): boolean {
-  let worst = 0;
-  for (let k = 0; k < ADIT_BANK_DIRECTIONS; k++) {
-    const angle = (k / ADIT_BANK_DIRECTIONS) * Math.PI * 2;
-    const px = x + Math.cos(angle) * (radius + ADIT_BANK_RUN);
-    const pz = z + Math.sin(angle) * (radius + ADIT_BANK_RUN);
-    if ((px - mouth.x) * mouth.ux + (pz - mouth.z) * mouth.uz > -1) continue;
-    worst = Math.max(worst, Math.abs(sampleTerrain(px, pz).height - mouth.y));
+/**
+ * A mine's adit for a yard at (x, z) of `yardRadius` levelled into the slope there, or null: the yard at
+ * the ground's height at its middle, and its adit ADIT_GAP past its uphill edge at that floor, driven into
+ * the face the levelling cuts. The hill there must stand as a cave mouth's does over its slip and beyond
+ * (CAVE_MOUTH: its back wall's rise, rock over and beside the way in) - from the yard's floor, so the cut
+ * makes up for a slope gentler than a cliff.
+ */
+function aditInto(sampleTerrain: TerrainSampler, x: number, z: number, yardRadius: number, t: Trace): (CaveMouthSite & { score: number }) | null {
+  const c = CAVE_MOUTH;
+  const h = (px: number, pz: number): number => sampleTerrain(px, pz).height;
+  const gx = h(x + 8, z) - h(x - 8, z), gz = h(x, z + 8) - h(x, z - 8);
+  const g = Math.hypot(gx, gz);
+  if (!t.test("slope", g / 16, ADIT_SLOPE[0], ADIT_SLOPE[1])) return null;
+  const ux = gx / g, uz = gz / g;
+  const sx = -uz, sz = ux;
+  const floor = h(x, z);
+  if (!t.test("floorHeight", floor, SEA_LEVEL + c.aboveSea, Infinity)) return null;
+  const away = yardRadius + ADIT_GAP;
+  const fx = x + ux * away, fz = z + uz * away;
+  if (!t.test("cut", h(fx, fz) - floor, ADIT_CUT, Infinity)) return null;
+  const bx = fx + ux * c.length, bz = fz + uz * c.length;
+  const back = h(bx, bz);
+  const rise = back - floor;
+  if (!t.test("backRise", rise, c.rise[0], c.rise[1])) return null;
+  const hw = c.width / 2;
+  const corner = Math.min(h(bx - sx * hw, bz - sz * hw), h(bx + sx * hw, bz + sz * hw)) - floor;
+  if (!t.test("backCorners", corner, c.rise[0] * 0.7, Infinity)) return null;
+  if (!t.test("risingBehind", h(fx + ux * (c.length + c.behind), fz + uz * (c.length + c.behind)) - back, c.behindRise, Infinity)) return null;
+  let deep = Infinity;
+  for (const d of c.deepAt) deep = Math.min(deep, h(fx + ux * (c.length + d), fz + uz * (c.length + d)) - floor);
+  if (!t.test("rockOver", deep, c.deepRise, Infinity)) return null;
+  const far = c.length + c.deepAt[c.deepAt.length - 1];
+  let side = Infinity;
+  for (const k of [-1, 1]) side = Math.min(side, h(fx + ux * far + sx * k * c.deepSide, fz + uz * far + sz * k * c.deepSide) - floor);
+  if (!t.test("rockBeside", side, c.deepRise, Infinity)) return null;
+  let wet = 0;
+  for (const [px, pz] of [[fx, fz], [bx, bz], [fx - sx * hw, fz - sz * hw], [fx + sx * hw, fz + sz * hw]]) {
+    const q = sampleTerrain(px, pz);
+    if (!q.isLand || q.lakeFactor > 0.01 || q.riverGap < c.waterClear) wet = 1;
   }
-  return trace.test("bankRise", worst / ADIT_BANK_RUN, 0, ADIT_BANK_RISE);
+  if (!t.test("dry", wet, -Infinity, 0)) return null;
+  // Best on a middling slope: enough cut for a face, not so much fill before it.
+  const score = -Math.abs(g / 16 - 0.35);
+  return { id: 0, x: fx, y: floor, z: fz, facing: (Math.atan2(-ux, -uz) * 180) / Math.PI, ux, uz, score };
 }
 
 const FEATURE_ROLL_SALT = 901;
@@ -159,30 +186,23 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
     const kind = kinds[index];
     const site = cellSites[cell];
     if (kind.type === "compound" && kind.compound?.adit) {
-      // A mine: first the ground for its adit, then its yard before it, level with the adit's floor.
+      // A mine, sited the other way round (the owner's sketch, 2026-11-27): a yard levelled into a slope
+      // - cut at its back, filled at its front - and the adit driven into the face the cut leaves.
       const plan = planCompound(kind, seed, rng);
-      const found: { mouth: NonNullable<ReturnType<typeof mouthAt>>; x: number; z: number; areaId: number }[] = [];
+      const found: { mouth: CaveMouthSite & { score: number }; x: number; z: number; areaId: number }[] = [];
       for (let attempt = 0; attempt < ADIT_CANDIDATES; attempt++) {
         const radius = Math.sqrt(rng()) * ADIT_REACH;
         const angle = rng() * Math.PI * 2;
-        const fx = site.x + Math.cos(angle) * radius;
-        const fz = site.z + Math.sin(angle) * radius;
+        const x = site.x + Math.cos(angle) * radius;
+        const z = site.z + Math.sin(angle) * radius;
         begin();
-        const mouth = mouthAt(sampleTerrain, fx, fz, trace);
+        if (!clearOfOthers(x, z, trace)) continue;
+        const mouth = aditInto(sampleTerrain, x, z, plan.yardRadius, trace);
         if (!mouth) continue;
-        // Its yard before it - further out, where the ground in front of the hill lets it bank gently.
-        for (const further of ADIT_FURTHER) {
-          const away = plan.yardRadius + ADIT_GAP + further;
-          const x = fx - mouth.ux * away, z = fz - mouth.uz * away;
-          if (!clearOfOthers(x, z, trace)) continue;
-          const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover, trace);
-          if (scored && Math.abs(scored.height - mouth.y) <= ADIT_STEP && aditBanksGentle(sampleTerrain, x, z, plan.radius, mouth, trace)) {
-            found.push({ mouth, x, z, areaId: scored.areaId });
-            break;
-          }
-        }
+        const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover, trace);
+        if (scored && Math.abs(scored.height - mouth.y) <= ADIT_STEP) found.push({ mouth, x, z, areaId: scored.areaId });
       }
-      const best = found.sort((a, b) => b.mouth.score - a.mouth.score).find((f) => mouthApproachable(sampleTerrain, f.mouth));
+      const best = found.sort((a, b) => b.mouth.score - a.mouth.score)[0];
       if (!best) return null;
       const { score: _score, ...mouth } = best.mouth;
       return {
@@ -282,7 +302,8 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
       const rng = mulberry32(deriveSeed(seed, FALLBACK_SALT + cell));
       const chances = sampleTerrain(cellSites[cell].x, cellSites[cell].z).primaryBiome.features.filter((chance) => {
         const other = kindIndex.get(chance.featureId);
-        return other !== undefined && other !== index && (kinds[other].type === "quarry" || (kinds[other].type === "compound" && kinds[other].compound?.arrangement !== "roadside"));
+        // (Not a mine: sited into almost any slope, it would stand in for everything that did not suit.)
+        return other !== undefined && other !== index && (kinds[other].type === "quarry" || (kinds[other].type === "compound" && kinds[other].compound?.arrangement !== "roadside" && !kinds[other].compound?.adit));
       });
       while (!placed && chances.length > 0) {
         let pick = rng() * chances.reduce((sum, chance) => sum + chance.odds, 0);

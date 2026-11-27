@@ -31,8 +31,8 @@ export interface Pad {
   stop?: { x: number; z: number; ux: number; uz: number };
 }
 
-/** A pad's pull fades out from a metre before its `stop` line to this far past it. */
-const STOP_FADE = 3;
+/** A pad's pull fades out from its `stop` line to this far past it (a mine's slip, hidden). */
+const STOP_FADE = 4;
 
 /**
  * How a pad's ground blends back to the ground round it: over a margin as wide as `slope` needs -
@@ -126,7 +126,7 @@ export function propPads(layouts: CompoundLayout[]): Pad[] {
   return layouts.flatMap((layout) =>
     layout.props
       .filter((prop) => !prop.on && prop.prop.ground === "level")
-      .map((prop) => ({ x: prop.x, z: prop.z, y: prop.y, ux: -prop.frontZ, uz: prop.frontX, hw: prop.halfWidth + 0.3, hd: prop.halfDepth + 0.3, radius: 0, firm: true, blend: layout.padBlend, unpainted: true })),
+      .map((prop) => ({ x: prop.x, z: prop.z, y: prop.y, ux: -prop.frontZ, uz: prop.frontX, hw: prop.halfWidth + 0.3, hd: prop.halfDepth + 0.3, radius: 0, firm: true, blend: layout.padBlend, unpainted: true, stop: layout.padStop })),
   );
 }
 
@@ -205,7 +205,7 @@ export function createPadField(pads: Pad[]): PadField {
       if (!pad.unpainted) nearest = Math.min(nearest, gap);
       const margin = padMargin(pad.blend ?? DEFAULT_PAD_BLEND, height - pad.y);
       if (gap >= margin) continue;
-      const stopped = pad.stop ? 1 - smoothstep(-1, STOP_FADE, (x - pad.stop.x) * pad.stop.ux + (z - pad.stop.z) * pad.stop.uz) : 1;
+      const stopped = pad.stop ? 1 - smoothstep(0, STOP_FADE, (x - pad.stop.x) * pad.stop.ux + (z - pad.stop.z) * pad.stop.uz) : 1;
       const pull = (1 - smoothstep(0, margin, gap)) * (pad.firm ? 1 : roadClear) * stopped;
       if (pull <= 0) continue;
       // Nearer pads weigh more, without bound at their own edge - so on a pad its own level holds -

@@ -976,3 +976,24 @@ run, 14-39% of it over 0.4.
   Half the mines go (2 in the 8 vale test worlds against 4): the others had nowhere to bank back gently.
 - After (walkable ground in front of the slip's foot, out to 50 m from the pad, roads aside): 95% of it at
   0.32-0.34, 0.7-2.9% over 0.4; the steepest single points 0.86-1.28 (crags the banks reach).
+
+### Mines the other way round (2026-11-27, the owner's sketch)
+
+The owner's idea: "find a large enough slope, cut a dip in it with the flattening, that creates an
+opportunity for the mine entrance". A mine no longer looks for a natural cliff and builds a yard out in
+front of it (deep fills, few sites, the 0.3 bank rule all but ruling mines out):
+
+- **Siting (`aditInto`, featureSites.ts):** a candidate is a yard on a slope of 0.2-0.6, levelled to the
+  ground at its middle: cut at its back, filled at its front. Its adit's foot is 14 m (`ADIT_GAP`) past
+  the yard's uphill edge at that floor, where the cut leaves a face at least 4 m high (`ADIT_CUT`); the hill
+  there must stand as a cave mouth's does over its slip (CAVE_MOUTH: back wall 10-30 m over the floor, rock
+  over and beside the way in), all judged from the yard's floor. Best on a slope near 0.35. The 0.3 bank
+  rule and the natural-cliff search are gone.
+- **The face:** the yard's level ground widens to the whole slip's foot at the mouth (`RAIL_APRON`, 11 m
+  either side), and nothing levels past the foot (`padStop`), its props' pads included: those had been
+  flattening the hill over the slip. The face now stands 7-17 m over the floor 6 m in.
+- **Its road** comes in at one of two gates at the yard's sides, along the slope, where the yard is at the
+  ground's own level (roads/places.ts, `fixedGates`): never over the hill, never up a trench in the fill.
+- **Not a fallback:** a cell whose roll did not suit never takes a mine instead (it would fit nearly
+  anywhere now and stand in for everything).
+- Mines in the 8 vale test worlds: 5 (4 before the 0.3 rule, 2 with it); lairSave's seed 6 has 5.
