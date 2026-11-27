@@ -1,0 +1,2 @@
+// A worker's jerkin and trousers, and a felling axe in hand: a forester at a logging camp (NPCS.md).
+{ name: "Forester", gear: ["jerkin", "trousers", "belt", "boots", "bracers", "axe.crude"] }

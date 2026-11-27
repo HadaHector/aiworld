@@ -606,7 +606,14 @@ export function createServer(options: ServerOptions): Server {
       const zone = zones[site.areaId];
       const places = data.features
         .filter((f) => f.kind.quest && !f.settlement && Math.hypot(f.x - site.x, f.z - site.z) <= reach)
-        .map((f) => ({ name: f.name ?? f.kind.name, x: f.x, z: f.z, radius: Math.max(12, f.footprint * 0.6), quest: f.kind.quest! }));
+        .map((f) => ({
+          name: f.name ?? f.kind.name,
+          x: f.x,
+          z: f.z,
+          radius: Math.max(12, f.footprint * 0.6),
+          quest: f.kind.quest!,
+          props: (data.compoundLayouts.find((l) => l.featureId === f.id)?.props ?? []).filter((p) => !p.on).map((p) => ({ id: p.prop.id, x: p.x, z: p.z, reach: Math.min(p.halfWidth, p.halfDepth) })),
+        }));
       // Down the road: the settlements nearest first, the next ring's before the same ring's.
       const ring = zone?.ring ?? 0;
       const others = settlements

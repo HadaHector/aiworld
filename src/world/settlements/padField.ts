@@ -26,7 +26,13 @@ export interface Pad {
   /** A polygon of level ground (a polygon yard's - see yardShape.ts), its corners in the world: the
    *  pad is inside it, and `radius` reaches round it from (x, z). */
   polygon?: CellPoint[];
+  /** A line it never levels past: from (x, z) on along (ux, uz) its pull fades out over a few metres -
+   *  a mine's pads stop at its adit's slip's foot, leaving the hill the adit goes into as it is. */
+  stop?: { x: number; z: number; ux: number; uz: number };
 }
+
+/** A pad's pull fades out from a metre before its `stop` line to this far past it. */
+const STOP_FADE = 3;
 
 /**
  * How a pad's ground blends back to the ground round it: over a margin as wide as `slope` needs -
@@ -126,13 +132,13 @@ export function propPads(layouts: CompoundLayout[]): Pad[] {
 
 /** Every compound's yard and the ground under its buildings. */
 export function compoundPads(layouts: CompoundLayout[]): Pad[] {
-  return layouts.flatMap(({ yard, buildings, padBlend }) => [
+  return layouts.flatMap(({ yard, buildings, padBlend, padStop }) => [
     // A roadside one has no yard of its own.
-    ...(yard.level > 0 ? [{ x: yard.x, z: yard.z, y: yard.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: yard.level, blend: padBlend, unpainted: true, polygon: yard.levelOutline }] : []),
+    ...(yard.level > 0 ? [{ x: yard.x, z: yard.z, y: yard.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: yard.level, blend: padBlend, unpainted: true, polygon: yard.levelOutline, stop: padStop }] : []),
     // A roadside one's buildings each have a path up to the door, which would otherwise keep its own
     // grade across the pad's front: they hold their level beside it - standing back far enough from
     // the road not to reach it.
-    ...buildings.map((house) => ({ ...housePad(house), blend: padBlend, unpainted: true, firm: yard.level === 0 })),
+    ...buildings.map((house) => ({ ...housePad(house), blend: padBlend, unpainted: true, firm: yard.level === 0, stop: padStop })),
   ]);
 }
 
@@ -199,7 +205,8 @@ export function createPadField(pads: Pad[]): PadField {
       if (!pad.unpainted) nearest = Math.min(nearest, gap);
       const margin = padMargin(pad.blend ?? DEFAULT_PAD_BLEND, height - pad.y);
       if (gap >= margin) continue;
-      const pull = (1 - smoothstep(0, margin, gap)) * (pad.firm ? 1 : roadClear);
+      const stopped = pad.stop ? 1 - smoothstep(-1, STOP_FADE, (x - pad.stop.x) * pad.stop.ux + (z - pad.stop.z) * pad.stop.uz) : 1;
+      const pull = (1 - smoothstep(0, margin, gap)) * (pad.firm ? 1 : roadClear) * stopped;
       if (pull <= 0) continue;
       // Nearer pads weigh more, without bound at their own edge - so on a pad its own level holds -
       // and a firm one (a prop's, on a yard) more again.

@@ -41,7 +41,7 @@ export interface CastNpc {
   /** Who it is tied to, and what it calls them ("brother", "rival"). */
   relations: { to: number; relation: string; call: string }[];
   /** Where a quest person stands (QUESTS.md, *Quest people*): out at a place, not in the settlement. */
-  spot?: { x: number; z: number };
+  spot?: { x: number; z: number; look?: { x: number; z: number } };
 }
 
 export interface Household {
@@ -286,7 +286,7 @@ export function castOf(input: CastInput): Cast {
  * standing at a place. Appended to the cast, so its id carries on the cast's numbering; made from
  * `salt`, so the same quest makes the same person.
  */
-export function addPerson(cast: Cast, input: Pick<CastInput, "seed" | "dimension" | "site" | "layout" | "voices" | "rules">, role: NpcRoleDef, at: { x: number; z: number }, salt: number): CastNpc {
+export function addPerson(cast: Cast, input: Pick<CastInput, "seed" | "dimension" | "site" | "layout" | "voices" | "rules">, role: NpcRoleDef, at: { x: number; z: number; look?: { x: number; z: number } }, salt: number): CastNpc {
   const { rules } = input;
   const rng = mulberry32(deriveSeed(input.seed, CAST_SALT * 7 + hashString(input.dimension) + input.site.id * 131 + salt));
   const race = weighted(rng, rules.peoples[input.layout.styleId] ?? rules.peoples.default) || "human";

@@ -1,11 +1,14 @@
 // A quest person (QUESTS.md, *Quest people*): Works the woods at a logging camp. Held by nobody until a quest needs one.
 {
   title: "Forester",
-  outfit: "worker",
+  // Its axe in hand (outfits/forester.json5).
+  outfit: "forester",
   settlement: { count: 0 },
   ages: ["adult", "old"],
   questGiver: 0.3,
   barks: "villager",
-  // At its work while it stands at its place (animations/work.json5).
+  // At its work while it stands at its place (animations/work.json5): at a chopping block, or a felled
+  // log, facing it - the first of these its place has.
   idle: "work",
+  workAt: ["choppingBlock", "felledLog", "rottedFelledLog"],
 }

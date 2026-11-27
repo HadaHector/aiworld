@@ -50,6 +50,10 @@ export interface NpcRoleDef {
   /** The animation it works at while it stands at its place (animations/<id>.json5): a smith's
    *  hammer, a forester's axe - or null to stand idle. */
   idle: string | null;
+  /** Props it works at (their ids, the first the place has): a quest person out at a place stands at
+   *  the nearest of them there, facing it - a forester at a chopping block - rather than anywhere.
+   *  Empty: anywhere. */
+  workAt: string[];
 }
 
 export interface RelationSide {
@@ -165,7 +169,7 @@ function readWeights(reader: Reader, obj: RawObject, key: string, path: string, 
 function readRole(entry: Entry, issues: ContentIssue[]): NpcRoleDef {
   const reader = new Reader(issues, entry.file);
   const obj = reader.object(entry.data, "");
-  reader.onlyKeys(obj, "", ["title", "template", "outfit", "buildings", "count", "settlement", "perClass", "stand", "services", "questGiver", "barks", "patrol", "ages", "livesAtWork", "idle"]);
+  reader.onlyKeys(obj, "", ["title", "template", "outfit", "buildings", "count", "settlement", "perClass", "stand", "services", "questGiver", "barks", "patrol", "ages", "livesAtWork", "idle", "workAt"]);
   const outfits = obj.outfit === undefined ? [] : typeof obj.outfit === "string" ? [obj.outfit] : reader.stringList(obj, "outfit", "");
   let settlement: NpcRoleDef["settlement"] = null;
   if (obj.settlement !== undefined) {
@@ -209,6 +213,7 @@ function readRole(entry: Entry, issues: ContentIssue[]): NpcRoleDef {
     ages: readAges(reader, obj, "ages", ""),
     livesAtWork: reader.boolean(obj, "livesAtWork", "", false),
     idle: reader.optionalString(obj, "idle", "") ?? null,
+    workAt: obj.workAt === undefined ? [] : reader.stringList(obj, "workAt", ""),
   };
 }
 
