@@ -762,3 +762,8 @@ Not started; to be sized and put into sessions.
 - **The logging camp's yard is a polygon** of 5 to 7 corners (cf34bbf). Rerouting its road showed two road
   walls, a bridge approach and a lifted gate, now banked down at the side slope (8c97b5b).
 - **The workbench's asset list is in 6 tabs** grouping its categories (9301f27, 173d684; owner's ask).
+
+- **Bug, owner 2026-11-27: a road dams a river with no bridge.** At x=-1715.8 z=-1655.6 (Sedesh, autumn wood;
+  `__aiworld.goto({ x: -1715.8, z: -1655.6, alpha: -3.663, beta: 0.754, radius: 21.7 })`) a road's raised bed
+  runs straight across a river and cuts it in two: no bridge, the water stops at both sides. Field: terrain,
+  water and roads (the roads session's river clearance work).
