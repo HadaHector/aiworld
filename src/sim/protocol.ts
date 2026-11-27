@@ -10,7 +10,7 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 16;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -195,6 +195,12 @@ export interface TalentPick {
   node: number; // u16
 }
 
+/** Spends a level-up stat point on a stat (only when the game's stat points are `manual`). */
+export interface StatSpend {
+  type: "statSpend";
+  stat: number; // u16
+}
+
 /** Gives back every point spent in a tree, for its cost. */
 export interface TalentReset {
   type: "talentReset";
@@ -369,6 +375,7 @@ export type ClientMessage =
   | DebugItem
   | DebugWear
   | TalentPick
+  | StatSpend
   | TalentReset
   | Learn
   | DebugXp
@@ -984,6 +991,9 @@ export interface Progress {
   talents: TalentState[];
   learned: LearnedState[];
   available: AvailableState[];
+  /** Level-up stat points (SKILLBANK.md): `auto` or `manual`, how many the levels gave, how many wait
+   *  to be spent, and where they went. Null when the game has none. */
+  stats: { mode: string; total: number; left: number; given: { stat: number; amount: number }[] } | null; // short string, u16, u16, (u16, u16)s
 }
 
 /** What happened to the own progress this step: XP, level-ups, learning, talents, refusals. */
@@ -992,7 +1002,7 @@ export interface ProgressEvents {
   events: ProgressEventState[];
 }
 export interface ProgressEventState {
-  kind: string; // short string: xp, levelUp, learned, unlocked, talent, refused
+  kind: string; // short string: xp, levelUp, learned, unlocked, talent, refused, rank
   discipline: number; // i16
   amount: number; // f64
   level: number; // u16

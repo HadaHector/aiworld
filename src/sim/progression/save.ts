@@ -1,6 +1,6 @@
 import type { Entity } from "../entity";
 import { HOWS, type How } from "../rules/progressionRules";
-import { applyTalents, recount, setLevel, startDiscipline, teach, type ProgressContext } from "./progress";
+import { applyTalents, recount, setLevel, startDiscipline, syncStatPoints, teach, type ProgressContext } from "./progress";
 
 /**
  * A character's progress as it will be saved (GAMEPLAY.md, *Saved state*; PROGRESSION.md): ids and
@@ -13,6 +13,8 @@ export interface SavedProgress {
   talents: Record<string, Record<string, number>>;
   learned: Record<string, string>;
   knows: string[];
+  /** Stat points spent by hand (`manual` stat points), by stat id; absent when none. */
+  stats?: Record<string, number>;
 }
 
 export function exportProgress(ctx: ProgressContext, entity: Entity): SavedProgress | null {
@@ -27,6 +29,7 @@ export function exportProgress(ctx: ProgressContext, entity: Entity): SavedProgr
     saved.talents[def.id] = Object.fromEntries([...ranks].map(([node, rank]) => [def.nodes[node].id, rank]));
   }
   for (const [skill, how] of part.learned) if (how !== "talent") saved.learned[game.skills[skill].id] = how;
+  if (part.statsSpent.size > 0) saved.stats = Object.fromEntries([...part.statsSpent].map(([stat, n]) => [game.stats[stat].id, n]));
   return saved;
 }
 
@@ -74,6 +77,12 @@ export function importProgress(ctx: ProgressContext, entity: Entity, saved: Save
     else teach(ctx, entity, skill, how as How);
   }
   for (const knows of saved.knows ?? []) part.knows.add(knows);
+  for (const [statId, n] of Object.entries(saved.stats ?? {})) {
+    const stat = game.statIndex.get(statId);
+    if (stat === undefined || !rules.config.statPoints?.stats.includes(stat)) skipped.push(`stat points ${statId}`);
+    else part.statsSpent.set(stat, Math.max(0, Math.floor(n)));
+  }
+  syncStatPoints(ctx, entity);
   recount(ctx, entity);
   part.events.length = 0;
   part.dirty = true;

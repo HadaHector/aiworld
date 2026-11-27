@@ -9,7 +9,7 @@ import type { ItemHooks } from "../items/itemHooks";
 import type { KillRecord } from "../creatures/system";
 import { statValues } from "../stats";
 import {
-  addXp, createProgress, learn, pickTalent, recount, resetTree, setLevel, spentIn, teach, whyNotLearn,
+  addXp, createProgress, learn, pickTalent, recount, resetTree, setLevel, spendStatPoint, spentIn, teach, whyNotLearn,
   type ProgressContext, type ProgressEvent,
 } from "./progress";
 import { bindProgression } from "./actions";
@@ -50,6 +50,8 @@ export interface ProgressionSystem {
    *  source of this kind (of one discipline only, when it is given). */
   award(entity: Entity, on: SourceKind, amount: number, discipline?: number, tags?: readonly string[]): void;
   pick(entity: Entity, tree: number, node: number): string;
+  /** A `manual` stat point spent on a stat (SKILLBANK.md). */
+  spendStat(entity: Entity, stat: number): string;
   reset(entity: Entity, tree: number): string;
   /** A trainer teaches an available skill, for its cost. */
   train(entity: Entity, trainer: Entity, skill: number): string;
@@ -284,6 +286,7 @@ export function createProgressionSystem(game: GameRules, rules: ProgressionRules
       }
     },
     pick: (entity, tree, node) => pickTalent(ctx, entity, tree, node),
+    spendStat: (entity, stat) => spendStatPoint(ctx, entity, stat),
     reset(entity, tree) {
       const part = entity.progress;
       if (!part || !part.talents.has(tree)) return "nothing";

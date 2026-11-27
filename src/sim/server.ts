@@ -1491,6 +1491,10 @@ export function createServer(options: ServerOptions): Server {
         if (player && progression) progression.pick(player.entity, message.tree >>> 0, message.node >>> 0);
         return;
       }
+      case "statSpend": {
+        if (player && progression) progression.spendStat(player.entity, message.stat >>> 0);
+        return;
+      }
       case "talentReset": {
         if (player && progression) progression.reset(player.entity, message.tree >>> 0);
         return;

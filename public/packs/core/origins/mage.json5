@@ -7,6 +7,8 @@
   description: "A scholar of the arcane who hurls fire from afar and freezes those who come too close. Fragile, and deadly at range.",
   resources: ["mana"],
   stats: { intellect: 4, stamina: -1 },
+  // Where its level-up stat points go (rules/progression.json5 `statPoints`).
+  statWeights: { intellect: 0.5, stamina: 0.3, spirit: 0.2 },
   spells: [{ skill: "autoAttack" }, { skill: "fireball" }, { skill: "fireBlast" }],
   disciplines: { class: 1 },
   unlocks: {

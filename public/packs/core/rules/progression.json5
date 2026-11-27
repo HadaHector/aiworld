@@ -12,4 +12,8 @@
   respec: { cost: 0 },
   // Who teaches: the placed trainer anything; a class trainer (NPCS.md) its own class's characters.
   trainers: { trainer: { teaches: "*" }, classTrainer: { teaches: "class" } },
+  // Level-up stat points (SLICE.md I7; SKILLBANK.md): how many each Adventure level gives is the balance
+  // curve; `auto` puts them where the class's `statWeights` say (the slice: the owner's call), `manual`
+  // leaves them to spend on the level-up screen.
+  statPoints: { mode: "auto", discipline: "adventure", curve: "statPoints", stats: ["strength", "agility", "stamina", "intellect", "spirit"] },
 }

@@ -8,6 +8,8 @@
   description: "A hunter of the wild wood who keeps their distance: poisoned arrows, snares and a quick leap away. Deadly while the gap holds.",
   resources: ["mana"],
   stats: { agility: 3, stamina: 1 },
+  // Where its level-up stat points go (rules/progression.json5 `statPoints`).
+  statWeights: { agility: 0.5, stamina: 0.3, strength: 0.2 },
   spells: [{ skill: "autoAttack" }, { skill: "steadyShot" }, { skill: "poisonArrow" }],
   disciplines: { class: 1 },
   unlocks: {

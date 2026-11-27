@@ -10,6 +10,8 @@
   description: "A fighter of steel and fury who charges in, strikes hard and grows angrier with every blow taken. Built to stand in front.",
   resources: ["rage"],
   stats: { strength: 3, stamina: 2 },
+  // Where its level-up stat points go (rules/progression.json5 `statPoints`).
+  statWeights: { strength: 0.4, stamina: 0.4, agility: 0.2 },
   spells: [{ skill: "autoAttack" }, { skill: "heroicStrike" }, { skill: "charge" }],
   disciplines: { class: 1 },
   unlocks: {

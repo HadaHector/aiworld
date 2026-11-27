@@ -7,6 +7,8 @@
   description: "A servant of the light who mends wounds, shields allies and smites the wicked. Best beside others, never helpless alone.",
   resources: ["mana"],
   stats: { spirit: 3, intellect: 2 },
+  // Where its level-up stat points go (rules/progression.json5 `statPoints`).
+  statWeights: { spirit: 0.4, intellect: 0.3, stamina: 0.3 },
   spells: [{ skill: "autoAttack" }, { skill: "smite" }, { skill: "renew" }],
   disciplines: { class: 1 },
   unlocks: {

@@ -6,6 +6,7 @@ import { makeTemplate, mergeTemplate, PLAYER_TEMPLATE, type GameRules, type Temp
 import type { Action } from "../skills/actions";
 import type { ItemRules } from "./itemRules";
 import { expandTemplates } from "./progressionTemplates";
+import { readBalanceRules } from "./balanceRules";
 
 /**
  * Progression (see PROGRESSION.md): disciplines with their curves, XP sources and unlocks, talent
@@ -149,6 +150,8 @@ export interface OriginDef {
   trees: number[];
   only: string[];
   never: string[];
+  /** Stat index to weight: how its automatic stat points split (SKILLBANK.md); empty for none. */
+  statWeights: Map<number, number>;
   /** Where character creation lists it among its slot's (lower first; ties by id). */
   order: number;
   template: string;
@@ -174,6 +177,20 @@ export interface ProgressionConfig {
    *  class trainer's class teaches, to characters of that class (NPCS.md, *Trainers*). */
   trainers: Map<string, Set<number> | null | "class">;
   never: string[];
+  /** Stat points a level gives (SLICE.md I7; SKILLBANK.md), or null for none. */
+  statPoints: StatPointsConfig | null;
+}
+
+/** Level-up stat points: how many a level of a discipline gives (a balance curve), and whether the
+ *  player spends them (`manual`) or they go by the class's weights (`auto`). */
+export interface StatPointsConfig {
+  mode: "manual" | "auto";
+  /** The discipline whose levels give them. */
+  discipline: number;
+  /** Points reaching this level gives (0 at the first). */
+  at(level: number): number;
+  /** Stats they may go to, in order. */
+  stats: number[];
 }
 
 /** Value layouts of the formula scopes. */
@@ -231,7 +248,7 @@ const SOURCE_KEYS = ["on", "amount", "when", "rate", "credit", "tags", "notTags"
 const UNLOCK_KEYS = ["at", "from", "to", "every", "skill", "level", "how", "cost", "modifiers", "points", "resource", "disciplines", "knows"];
 const TREE_KEYS = ["name", "points", "discipline", "tiers", "nodes"];
 const NODE_KEYS = ["name", "tier", "ranks", "cost", "requires", "modifiers", "skill", "resource", "points"];
-export const ORIGIN_KEYS = ["slot", "name", "description", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "only", "never", "items", "order"];
+export const ORIGIN_KEYS = ["slot", "name", "description", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "only", "never", "items", "order", "statWeights"];
 /** The highest level any discipline may have: levels are sent as u16. */
 const LEVEL_LIMIT = 1000;
 
@@ -310,7 +327,7 @@ export function resolveProgressionRules(packs: PackSource[], game: GameRules, se
   const trees = treeEntries.map((entry, index) => readTree(entry, index, ctx));
   const origins = originEntries.map((entry, index) => readOrigin(entry, index, ctx));
   const originIndex = new Map(origins.map((o) => [o.id, o.index]));
-  const config = readConfig(configEntry, ctx, origins);
+  const config = readConfig(configEntry, ctx, origins, packs);
 
   // Origins name each other in `only` and `never`, and fill slots the config has.
   const slotIds = new Set(config.slots.map((s) => s.id));
@@ -734,17 +751,28 @@ function readOrigin(entry: Entry & { template: string }, index: number, ctx: Rea
     only: obj.only === undefined ? [] : reader.stringList(obj, "only", ""),
     never: obj.never === undefined ? [] : reader.stringList(obj, "never", ""),
     order: reader.optionalNumber(obj, "order", "", 100),
+    statWeights: (() => {
+      const out = new Map<number, number>();
+      if (obj.statWeights === undefined) return out;
+      const raw = reader.object(obj.statWeights, "statWeights");
+      for (const id of Object.keys(raw)) {
+        const stat = ctx.game.statIndex.get(id);
+        if (stat === undefined) reader.fail(`statWeights.${id}`, `no stat "${id}"`);
+        else out.set(stat, reader.number(raw, id, "statWeights", { min: 0 }));
+      }
+      return out;
+    })(),
     template: entry.template,
     file: entry.file,
   };
 }
 
-function readConfig(entry: Entry | undefined, ctx: ReadContext, origins: OriginDef[]): ProgressionConfig {
-  const config: ProgressionConfig = { slots: [], base: PLAYER_TEMPLATE, level: -1, trainRange: 4, respecCost: compileFormula(0, "", new Reader([], ""), new Map()), trainers: new Map(), never: [] };
+function readConfig(entry: Entry | undefined, ctx: ReadContext, origins: OriginDef[], packs: PackSource[]): ProgressionConfig {
+  const config: ProgressionConfig = { slots: [], base: PLAYER_TEMPLATE, level: -1, trainRange: 4, respecCost: compileFormula(0, "", new Reader([], ""), new Map()), trainers: new Map(), never: [], statPoints: null };
   if (!entry) return config;
   const reader = new Reader(ctx.issues, entry.file);
   const obj = reader.object(entry.data, "");
-  reader.onlyKeys(obj, "", ["slots", "base", "level", "trainRange", "respec", "trainers", "never"]);
+  reader.onlyKeys(obj, "", ["slots", "base", "level", "trainRange", "respec", "trainers", "never", "statPoints"]);
   config.base = reader.optionalString(obj, "base", "") ?? PLAYER_TEMPLATE;
   if (!ctx.game.rawTemplates.has(config.base)) reader.fail("base", `no entity template "${config.base}" (known: ${known(ctx.game.rawTemplates.keys())})`);
   if (obj.slots !== undefined) {
@@ -791,7 +819,32 @@ function readConfig(entry: Entry | undefined, ctx: ReadContext, origins: OriginD
     }
   }
   config.never = obj.never === undefined ? [] : reader.stringList(obj, "never", "");
-  void origins;
+  if (obj.statPoints !== undefined) {
+    const at = "statPoints";
+    const raw = reader.object(obj.statPoints, at);
+    reader.onlyKeys(raw, at, ["mode", "discipline", "curve", "stats"]);
+    const mode = reader.oneOf(raw, "mode", at, ["manual", "auto"] as const);
+    const disciplineId = reader.string(raw, "discipline", at);
+    const discipline = ctx.disciplineIndex.get(disciplineId);
+    if (discipline === undefined) reader.fail(`${at}.discipline`, `no discipline "${disciplineId}"`);
+    const curveName = reader.string(raw, "curve", at);
+    const balance = readBalanceRules(packs);
+    if (!balance || !balance.curveNames.includes(curveName)) reader.fail(`${at}.curve`, `no balance curve "${curveName}" (rules/balance.json5)`);
+    const stats = reader.stringList(raw, "stats", at).flatMap((id, i) => {
+      const stat = ctx.game.statIndex.get(id);
+      if (stat === undefined) reader.fail(`${at}.stats[${i}]`, `no stat "${id}"`);
+      return stat === undefined ? [] : [stat];
+    });
+    config.statPoints = {
+      mode,
+      discipline: discipline ?? -1,
+      at: (level) => (level <= 1 || !balance || !balance.curveNames.includes(curveName) ? 0 : Math.max(0, Math.round(balance.curve(curveName, level)))),
+      stats,
+    };
+    for (const o of origins) {
+      for (const stat of o.statWeights.keys()) if (!stats.includes(stat)) ctx.issues.push({ file: o.file, path: "statWeights", message: `"${ctx.game.stats[stat].id}" is not a stat points may go to (rules/progression.json5 statPoints.stats)` });
+    }
+  }
   return config;
 }
 
