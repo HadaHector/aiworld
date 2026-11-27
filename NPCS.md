@@ -559,3 +559,10 @@ Each leaves the game working: the dev server (`?play`), `npm run probe`, `npm ru
 - NPCs in towns' other interiors as more buildings gain them.
 - Pickpocketing (GAMEPLAY.md, *Later*).
 - A dev page: the NPC inspector (GAMEPLAY.md's *Later* list).
+
+### A quest person at work (2026-11-27)
+
+A role's `workAt` (prop ids, in order of preference) stands a quest person made out at a place before the
+nearest such prop there, facing it (the place carries its compound's props - server.ts; quests/generator.ts
+`workSpot`; the cast's `spot.look`). The forester works at a chopping block, else a felled log, with an axe
+in hand: its outfit `forester` is the worker's with `axe.crude` (a weapon is a gear piece, as the knight's sword).

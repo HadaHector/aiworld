@@ -960,3 +960,19 @@ plane through the four corners' heights - `footprintSlope` in compound.ts).
 - Not covered: a cemetery's graves (their own limit, `GRAVE_MAX_SLOPE` 0.35 - headstones on a
   hillside churchyard), a boundary's gates (across their lanes) and a mine's portal (at its adit's floor).
 - The featureReach probe checks every one of the props in the list on the finished ground.
+
+### Gentle ground round a mine (2026-11-27, the owner's note)
+
+"The slope the feature has is too steep, should be around 0.2-0.4." The yard is levelled to the adit's
+floor, so on a hillside it was filled or cut by up to ~10 m (one by 27 m, on a spur over a valley), and its
+banks back to the ground were capped at 12 m wide: 95% of the ground round a mine was at 1.1-1.9 rise over
+run, 14-39% of it over 0.4.
+
+- **Banks:** `pads: { slope: 0.25, blend: [2, 40] }`: as wide as 0.25 needs, up to 40 m.
+- **The hill stays:** a mine's pads level nothing past its slip's foot (`CompoundLayout.padStop`, padField's
+  `Pad.stop`), so the wide banks never shave the hill the adit goes into.
+- **Siting:** a mine's yard is only sited where, 30 m out past its circle in front of the slip's foot, the
+  ground lies within 0.3 x 30 m of the adit's floor (`aditBanksGentle`, trace test `bankRise`, featureSites.ts).
+  Half the mines go (2 in the 8 vale test worlds against 4): the others had nowhere to bank back gently.
+- After (walkable ground in front of the slip's foot, out to 50 m from the pad, roads aside): 95% of it at
+  0.32-0.34, 0.7-2.9% over 0.4; the steepest single points 0.86-1.28 (crags the banks reach).

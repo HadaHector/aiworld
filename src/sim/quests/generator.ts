@@ -1,3 +1,4 @@
+import type { NpcRoleDef } from "../rules/npcRules";
 import { deriveSeed, mulberry32 } from "../../world/rng";
 import { hashString } from "../../world/content/dimensions";
 import type { SettlementLayout } from "../../world/settlements/settlementLayout";
@@ -39,6 +40,26 @@ export interface ContextPlace {
   z: number;
   radius: number;
   quest: QuestPlaceDef;
+  /** The props standing there (a compound's): what a person made there may work at (NpcRoleDef.workAt). */
+  props?: { id: string; x: number; z: number; reach: number }[];
+}
+
+/** A person who works at a prop stands this far off its edge, on its side toward the place's middle. */
+const WORK_STAND_OFF = 0.7;
+
+/** Where a person of `role` made at `place` stands to work: before the work prop nearest the place's
+ *  middle - of the first kind in its list the place has - looking at it; or null when it works at
+ *  none there. */
+function workSpot(role: NpcRoleDef, place: ContextPlace): { x: number; z: number; look: { x: number; z: number } } | null {
+  const id = role.workAt.find((w) => place.props?.some((p) => p.id === w));
+  const props = (place.props ?? []).filter((p) => p.id === id);
+  if (props.length === 0) return null;
+  const prop = props.reduce((a, b) => (Math.hypot(b.x - place.x, b.z - place.z) < Math.hypot(a.x - place.x, a.z - place.z) ? b : a));
+  const dx = place.x - prop.x;
+  const dz = place.z - prop.z;
+  const length = Math.hypot(dx, dz) || 1;
+  const off = prop.reach + WORK_STAND_OFF;
+  return { x: prop.x + (dx / length) * off, z: prop.z + (dz / length) * off, look: { x: prop.x, z: prop.z } };
 }
 
 /** Another settlement down the road. */
@@ -274,7 +295,8 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       if (!person && want.make.length > 0) {
         const role = want.make.map(roleOf).find((r) => r && (!place || place.quest.people.length === 0 || place.quest.people.includes(r.id)));
         if (role) {
-          const at = place ? { x: place.x + (local() - 0.5) * place.radius, z: place.z + (local() - 0.5) * place.radius } : { x: layout.square.x, z: layout.square.z };
+          const anywhere = place ? { x: place.x + (local() - 0.5) * place.radius, z: place.z + (local() - 0.5) * place.radius } : { x: layout.square.x, z: layout.square.z };
+          const at = (place && workSpot(role, place)) || anywhere;
           person = addPerson(cast, input.castInput, role, at, hashString(`${plot.id}/${name}`) + quests.length);
         }
       }

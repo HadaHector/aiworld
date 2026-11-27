@@ -54,6 +54,27 @@ const ADIT_CANDIDATES = 600;
 const ADIT_REACH = 380;
 export const ADIT_GAP = 24;
 const ADIT_STEP = 9;
+/** And its banks: the yard is levelled to the adit's floor, and banks back to the ground round it over
+ *  this far (mine.json5's `pads`), so out there - in front of the slip's foot, round the hill - the
+ *  ground must lie within ADIT_BANK_RISE of that floor: banks no steeper than that over this run. */
+const ADIT_BANK_RUN = 30;
+const ADIT_BANK_RISE = 0.3;
+const ADIT_BANK_DIRECTIONS = 24;
+
+/** Whether a mine's yard at (x, z), its circle `radius`, levelled to its mouth's floor, banks back
+ *  gently enough to the ground round it (see ADIT_BANK_RUN). The hill past the slip's foot is the
+ *  adit's own and stays steep. */
+function aditBanksGentle(sampleTerrain: TerrainSampler, x: number, z: number, radius: number, mouth: { x: number; y: number; z: number; ux: number; uz: number }, trace: Trace): boolean {
+  let worst = 0;
+  for (let k = 0; k < ADIT_BANK_DIRECTIONS; k++) {
+    const angle = (k / ADIT_BANK_DIRECTIONS) * Math.PI * 2;
+    const px = x + Math.cos(angle) * (radius + ADIT_BANK_RUN);
+    const pz = z + Math.sin(angle) * (radius + ADIT_BANK_RUN);
+    if ((px - mouth.x) * mouth.ux + (pz - mouth.z) * mouth.uz > -1) continue;
+    worst = Math.max(worst, Math.abs(sampleTerrain(px, pz).height - mouth.y));
+  }
+  return trace.test("bankRise", worst / ADIT_BANK_RUN, 0, ADIT_BANK_RISE);
+}
 
 const FEATURE_ROLL_SALT = 901;
 const FEATURE_PLACE_SALT = 902;
@@ -150,7 +171,7 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
         const x = fx - mouth.ux * away, z = fz - mouth.uz * away;
         if (!clearOfOthers(x, z, trace)) continue;
         const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover, trace);
-        if (scored && Math.abs(scored.height - mouth.y) <= ADIT_STEP) found.push({ mouth, x, z, areaId: scored.areaId });
+        if (scored && Math.abs(scored.height - mouth.y) <= ADIT_STEP && aditBanksGentle(sampleTerrain, x, z, plan.radius, mouth, trace)) found.push({ mouth, x, z, areaId: scored.areaId });
       }
       const best = found.sort((a, b) => b.mouth.score - a.mouth.score).find((f) => mouthApproachable(sampleTerrain, f.mouth));
       if (!best) return null;

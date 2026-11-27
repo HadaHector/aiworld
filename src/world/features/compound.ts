@@ -118,6 +118,8 @@ export interface CompoundLayout {
    *  Laid as a line prop once the ground is final; its carts stand on it (`at: "rails"`) and every
    *  other prop keeps off it. */
   rails?: CellPoint[];
+  /** A mine's: its pads level nothing past its adit's slip's foot (see Pad.stop) - the hill it goes into. */
+  padStop?: { x: number; z: number; ux: number; uz: number };
   /** The props its kind's list set down (placeProps) - not its gates, graves or portal: each on ground
    *  no steeper than PROP_MAX_SLOPE (see dropSteepProps). */
   looseProps?: PlacedProp[];
@@ -560,7 +562,7 @@ export function layoutCompound(
   const padBlend = { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] };
   const ground = groundAhead(sampleTerrain, { x, z, y, radius: yardRadius, level }, buildings, padBlend);
   const { props, droppedProps, looseProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim }, boundary, rails, ground);
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend, padSpill: kind.compound!.pads.spill, walls: boundary.walls, rails, looseProps };
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend, padSpill: kind.compound!.pads.spill, walls: boundary.walls, rails, looseProps, padStop: padStopOf(site) };
 }
 
 /** A building keeps this far from a lane's middle - a polygon yard's buildings are found by where
@@ -735,7 +737,7 @@ function layoutPolygonRing(
 
   const boundary = kind.compound!.boundary ? layoutBoundary(kind.compound!.boundary, worldSeed, rng, buildings, lanes, trails, sampleTerrain, translated(gateRel, x, z)) : { walls: [], gates: [] };
   const padBlend = { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] };
-  const ground = groundAhead(sampleTerrain, { x, z, y, radius: site.yardReach, level: reachOf(levelRel), levelOutline: translated(levelRel, x, z) }, buildings, padBlend);
+  const ground = groundAhead(sampleTerrain, { x, z, y, radius: site.yardReach, level: reachOf(levelRel), levelOutline: translated(levelRel, x, z) }, buildings, padBlend, padStopOf(site));
   const { props, droppedProps, looseProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius: site.yardReach, rim: reachOf(rimRel), shape: { yard: yardRel, rim: rimRel, gate: gateRel } }, boundary, rails, ground);
   return {
     featureId, kindId: kind.id, x, z,
@@ -746,6 +748,7 @@ function layoutPolygonRing(
     walls: boundary.walls,
     rails,
     looseProps,
+    padStop: padStopOf(site),
   };
 }
 
@@ -1348,8 +1351,8 @@ export function footprintSlope(box: { x: number; z: number; ax: number; az: numb
 
 /** The ground a compound's props will stand on, judged before the world's pads exist: the ground as it
  *  lies, brought to its own yard's and buildings' pads (as the world will bring it - padField). */
-function groundAhead(sampleTerrain: TerrainSampler, yard: CompoundLayout["yard"] | null, buildings: House[], padBlend: CompoundLayout["padBlend"]): (x: number, z: number) => number {
-  const pads = createPadField(compoundPads([{ yard: yard ?? { x: 0, z: 0, y: 0, radius: 0, level: 0 }, buildings, padBlend } as CompoundLayout]));
+function groundAhead(sampleTerrain: TerrainSampler, yard: CompoundLayout["yard"] | null, buildings: House[], padBlend: CompoundLayout["padBlend"], padStop?: CompoundLayout["padStop"]): (x: number, z: number) => number {
+  const pads = createPadField(compoundPads([{ yard: yard ?? { x: 0, z: 0, y: 0, radius: 0, level: 0 }, buildings, padBlend, padStop } as CompoundLayout]));
   return (x, z) => {
     const height = sampleTerrain(x, z).height;
     return pads.level(x, z, height, 1)?.height ?? height;
@@ -1383,6 +1386,12 @@ const RAIL_CART_STEP = 0.5;
 const RAIL_CART_MOUTH_GAP = 5;
 /** A mine's level ground reaches out along its track to its adit's mouth this wide either side. */
 const RAIL_APRON = 3;
+
+/** A mine's pads' stop line (CompoundLayout.padStop): its adit's slip's foot, facing into the hill. */
+function padStopOf(site: CompoundSite): CompoundLayout["padStop"] {
+  const mouth = site.adit;
+  return mouth ? { x: mouth.x, z: mouth.z, ux: mouth.ux, uz: mouth.uz } : undefined;
+}
 
 /** A mine's track (see CompoundLayout.rails): from the yard's middle to a metre short of its adit's
  *  mouth, or none. */

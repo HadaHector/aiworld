@@ -264,7 +264,13 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
       const role = roleOf(npc);
       let spot: Spot | null = null;
       // A quest person stands at its place (QUESTS.md, *Quest people*).
-      if (npc.spot) spot = outdoors(npc.spot.x, npc.spot.z, rng() * Math.PI * 2);
+      // (One at work faces what it works at - NpcRoleDef.workAt.)
+      if (npc.spot) {
+        const turn = rng() * Math.PI * 2;
+        spot = outdoors(npc.spot.x, npc.spot.z, turn);
+        const look = npc.spot.look;
+        if (spot && look) spot.facing = Math.atan2(look.x - spot.x, look.z - spot.z);
+      }
       for (const anchor of spot ? [] : (role?.stand ?? [])) {
         spot = tryAnchor(npc, role, anchor);
         if (spot) break;
