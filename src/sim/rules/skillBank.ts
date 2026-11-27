@@ -70,6 +70,10 @@ export interface BankSkill {
   /** Stats it raises on its caster or an ally (a passive's, a buff's): a class template takes it only
    *  if it lists one of them. */
   stats: string[];
+  /** Effect skills it puts on whoever it lands on (Heroic Strike: sunder) - what a combo sets up. */
+  applies: string[];
+  /** The effect skill whose presence on the target this skill pays off (Mortal Strike: sunder), "" for none. */
+  combo: string;
   /** The levels it is learned at, at the earliest and the latest (a class template picks it there). */
   levels: [number, number];
   /** Purpose to share of its power, adding to 1: damage, control, defence, healing, mobility, support. */
@@ -84,12 +88,14 @@ export interface SkillBank {
   /** Named groups of purposes a template's ratios may use ("defence" might be shield + armour later). */
   free: readonly string[];
   cooldownClasses: { id: string; upTo: number }[];
+  /** Levels between a skill's ranks once learned, and the most ranks it has. */
+  ranks: { every: number; max: number };
   /** The levels a cooldown class is learned at when a skill says nothing. */
   defaultLevels: ReadonlyMap<string, [number, number]>;
 }
 
-const TOP_KEYS = ["purposes", "free", "cooldowns", "levels", "statPurpose", "effectPurpose", "skills"];
-const ENTRY_KEYS = ["pool", "levels", "power", "weapon", "effects", "draft", "name", "timing", "shape", "reach", "target", "cooldown", "school", "resources", "passive", "stats"];
+const TOP_KEYS = ["purposes", "free", "cooldowns", "levels", "ranks", "statPurpose", "effectPurpose", "skills"];
+const ENTRY_KEYS = ["pool", "levels", "power", "weapon", "effects", "draft", "name", "timing", "shape", "reach", "target", "cooldown", "school", "resources", "passive", "stats", "applies", "combo"];
 
 /** Reads `rules/skillBank.json5` over the game's skills. Null for packs without one. */
 export function readSkillBank(packs: PackSource[], game: GameRules): SkillBank | null {
@@ -131,6 +137,9 @@ function makeBank(data: unknown, file: string, game: GameRules, issues: ContentI
     }
     return out;
   };
+  const ranksRaw = reader.object(obj.ranks ?? {}, "ranks");
+  reader.onlyKeys(ranksRaw, "ranks", ["every", "max"]);
+  const ranks = { every: reader.optionalNumber(ranksRaw, "every", "ranks", 0, { min: 0, integer: true }), max: reader.optionalNumber(ranksRaw, "max", "ranks", 1, { min: 1, integer: true }) };
   const statPurpose = purposeMap("statPurpose");
   const effectPurpose = purposeMap("effectPurpose");
   for (const e of effectPurpose.keys()) if (!(EFFECTS as readonly string[]).includes(e)) reader.fail(`effectPurpose.${e}`, `not an effect (known: ${EFFECTS.join(", ")})`);
@@ -184,7 +193,8 @@ function makeBank(data: unknown, file: string, game: GameRules, issues: ContentI
       }
       if (Math.abs(sum - 1) > 0.01) reader.fail(`${path}.power`, `shares add to ${sum}, not 1`);
     } else {
-      const served = [...new Set([...(derived?.purposes ?? []), ...effects.map((e) => effectPurpose.get(e)).filter((p): p is string => !!p)])];
+      const handStats = raw.stats === undefined ? [] : reader.stringList(raw, "stats", path);
+      const served = [...new Set([...(derived?.purposes ?? []), ...handStats.map((st) => statPurpose.get(st)).filter((p): p is string => !!p), ...effects.map((e) => effectPurpose.get(e)).filter((p): p is string => !!p)])];
       for (const p of served) power.set(p, 1 / served.length);
     }
     skills.push({
@@ -204,14 +214,20 @@ function makeBank(data: unknown, file: string, game: GameRules, issues: ContentI
       resources: raw.resources === undefined ? (derived?.resources ?? []) : reader.stringList(raw, "resources", path),
       weapon: raw.weapon === undefined ? "" : reader.string(raw, "weapon", path),
       stats: raw.stats === undefined ? (derived?.stats ?? []) : reader.stringList(raw, "stats", path),
+      applies: [...new Set([...(derived?.applies ?? []), ...(raw.applies === undefined ? [] : reader.stringList(raw, "applies", path))])],
+      combo: raw.combo === undefined ? "" : reader.string(raw, "combo", path),
       levels,
       power,
       passive,
     });
     if (pool === "class" && power.size === 0) reader.fail(path, "a class skill needs a purpose: give it `power` or effects that map to one");
   }
+  for (const s of skills) {
+    if (s.combo && !(s.combo in entries)) reader.fail(`skills.${s.id}.combo`, `no skill "${s.combo}" in the bank to pay off`);
+    for (const a of s.applies) if (!(a in entries)) reader.fail(`skills.${s.id}.applies`, `no skill "${a}" in the bank`);
+  }
   for (const s of game.skills) if (!(s.id in entries)) reader.fail("skills", `skill "${s.id}" is not in the bank: give it at least a pool`);
-  return { skills, byId: new Map(skills.map((s) => [s.id, s])), purposes, free, cooldownClasses, defaultLevels };
+  return { skills, byId: new Map(skills.map((s) => [s.id, s])), purposes, free, cooldownClasses, ranks, defaultLevels };
 }
 
 /** What a skill's file says of it, read from its fields and actions. */
@@ -227,6 +243,7 @@ export interface DerivedTags {
   school: string;
   resources: string[];
   stats: string[];
+  applies: string[];
   passive: boolean;
 }
 
@@ -243,6 +260,7 @@ export function deriveTags(game: GameRules, skill: SkillDef, statPurpose: Readon
   const purposes = new Set<string>();
   const shapes = new Set<Shape>();
   const raised = new Set<string>();
+  const appliedIds = new Set<string>();
   const resources = new Set(skill.cost.map((c) => game.resources[c.resource]?.id ?? "?"));
   const seen = new Set<number>();
   const relationOf = (s: SkillDef, groupIndex: number, hostRelation: string): string => {
@@ -332,6 +350,7 @@ export function deriveTags(game: GameRules, skill: SkillDef, statPurpose: Readon
             case "cast": {
               const c = a.data as CastData;
               const other = game.skills[c.skill];
+              if (other && s === skill && to !== "self") appliedIds.add(other.id);
               if (other) walk(other, to, true);
               break;
             }
@@ -370,6 +389,7 @@ export function deriveTags(game: GameRules, skill: SkillDef, statPurpose: Readon
     school,
     resources: [...resources],
     stats: [...raised],
+    applies: [...appliedIds],
     passive: skill.passive,
   };
 }
@@ -379,5 +399,7 @@ export function bankLine(s: BankSkill): string {
   const power = [...s.power].map(([p, v]) => (s.power.size > 1 ? `${p} ${Math.round(v * 100)}%` : p)).join(" + ");
   const what = s.effects.join(" + ") || "-";
   const how = s.passive ? "passive" : `${s.timing}, ${s.shape === "single" ? s.reach : s.shape}${s.cooldownClass ? `, ${s.cooldownClass}` : ""}`;
-  return `${s.name}${s.skill ? "" : " (draft)"}: ${what} | ${how} | ${power} | levels ${s.levels[0]}-${s.levels[1]}`;
+  const combo = s.combo ? ` | pays off ${s.combo}` : "";
+  const sets = s.applies.length ? ` | applies ${s.applies.join(", ")}` : "";
+  return `${s.name}${s.skill ? "" : " (draft)"}: ${what} | ${how} | ${power} | levels ${s.levels[0]}-${s.levels[1]}${sets}${combo}`;
 }

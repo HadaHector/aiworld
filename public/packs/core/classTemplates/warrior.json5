@@ -17,4 +17,5 @@
   },
   // At most, by level 10.
   limits: { long: 2, ultimate: 1 },
+  combos: 1,
 }

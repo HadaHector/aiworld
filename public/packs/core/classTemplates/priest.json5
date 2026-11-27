@@ -9,7 +9,8 @@
   reach: { ranged: 1, melee: 0.5 },
   ratios: {
     "1": { damage: 0.5, healing: 0.5 },
-    "10": { healing: 0.45, defence: 0.35, damage: 0.2 },
+    "10": { healing: 0.4, defence: 0.3, damage: 0.25, support: 0.05 },
   },
   limits: { long: 2, ultimate: 1 },
+  combos: 1,
 }

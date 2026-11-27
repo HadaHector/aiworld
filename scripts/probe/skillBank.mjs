@@ -57,6 +57,7 @@ for (const t of [...templates].sort((a, b) => order.indexOf(a.id) - order.indexO
     console.log(`\n${t.name} (axis ${t.axis}, ${t.distance}):`);
     for (const line of progressionLines(c)) console.log(line);
     for (const level of [1, 10]) console.log(`  at ${level}: ${percent(c.sharesAt(level))}   (asked: ${percent(ratiosAt(t, level))}, off by ${c.errorAt(level).toFixed(2)})`);
+    console.log(`  combinations: ${c.combos.map(([pay, set]) => `${set.name} -> ${pay.name}`).join(", ") || "none"}`);
     console.log(`  power shares: ${c.picks.map((p) => `${p.skill.name} ${Math.round(p.share * 100)}%`).join(", ")}`);
   }
 }
@@ -67,7 +68,7 @@ const mixed = {
   resources: ["rage", "mana"], schools: ["physical", "fire"], weapon: "", stats: ["strength", "intellect"],
   reach: new Map([["melee", 1], ["ranged", 0.6]]),
   ratios: [{ level: 1, shares: new Map([["damage", 0.7], ["mobility", 0.3]]) }, { level: 10, shares: new Map([["damage", 0.6], ["control", 0.2], ["mobility", 0.1], ["defence", 0.1]]) }],
-  limits: new Map([["long", 2], ["ultimate", 1]]), picks: [],
+  limits: new Map([["long", 2], ["ultimate", 1]]), combos: 0, picks: [],
 };
 const made = generateClass(mixed, bank, balance);
 // Not a check: it shows where the bank is too thin for a description, which is for the owner to read.

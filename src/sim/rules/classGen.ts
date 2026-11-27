@@ -25,11 +25,13 @@ export interface ClassTemplate {
   ratios: { level: number; shares: Map<string, number> }[];
   /** Cooldown class to the most a class may have by its last level. */
   limits: Map<string, number>;
+  /** Set-up and pay-off pairs it should have by its last level (Heroic Strike's sunder and Mortal Strike). */
+  combos: number;
   /** Hand picks: skill and the level it is learned at. */
   picks: { skill: string; at: number }[];
 }
 
-const TEMPLATE_KEYS = ["name", "axis", "distance", "resources", "schools", "weapon", "stats", "reach", "ratios", "limits", "picks"];
+const TEMPLATE_KEYS = ["name", "axis", "distance", "resources", "schools", "weapon", "stats", "reach", "ratios", "limits", "combos", "picks"];
 
 /** Reads `classTemplates/*.json5` against the bank. */
 export function readClassTemplates(packs: PackSource[], bank: SkillBank): ClassTemplate[] {
@@ -96,6 +98,7 @@ export function readClassTemplates(packs: PackSource[], bank: SkillBank): ClassT
       reach,
       ratios,
       limits,
+      combos: reader.optionalNumber(obj, "combos", "", 0, { min: 0, integer: true }),
       picks,
     });
   }
@@ -130,6 +133,10 @@ export interface ClassPick {
 export interface GeneratedClass {
   template: ClassTemplate;
   picks: ClassPick[];
+  /** Each active's later ranks: the level it reaches each (bank `ranks`). */
+  ranks: { skill: BankSkill; level: number; rank: number }[];
+  /** Pay-offs whose set-up the class has: [pay-off, the skill that sets it up]. */
+  combos: [BankSkill, BankSkill][];
   /** Level to how many actives and passives it knows there. */
   counts: { level: number; active: number; passive: number }[];
   /** The class's purpose shares at a level, from its picks. */
@@ -212,7 +219,10 @@ export function generateClass(template: ClassTemplate, bank: SkillBank, balance:
           const reach = s.reach === "self" ? 0.5 : (template.reach.get(s.reach) ?? 0);
           const closing = 1 / (s.levels[1] - level + 1);
           const repeat = shapes.has(shapeOf(s)) ? 0.3 : 0;
-          return -e + 0.15 * reach + 0.1 * closing - repeat;
+          // A pay-off whose set-up the class has (or a set-up for a pay-off it has) makes a combination.
+          const sets = (k: BankSkill, effect: string): boolean => k.applies.includes(effect) || k.id === effect;
+          const combo = (s.combo && known.some((k) => sets(k, s.combo))) || known.some((k) => k.combo && sets(s, k.combo)) ? 0.2 : 0;
+          return -e + 0.15 * reach + 0.1 * closing - repeat + combo;
         };
         candidates.sort((a, b) => score(b) - score(a) || (a.id < b.id ? -1 : 1));
         add(candidates[0], level, false);
@@ -233,8 +243,27 @@ export function generateClass(template: ClassTemplate, bank: SkillBank, balance:
   const totalShare = picks.reduce((a, p) => a + p.share, 0) || 1;
   for (const p of picks) p.share /= totalShare;
   for (const [k, v] of want) if (v > 0 && !served.has(k)) problems.push(`nothing serves ${k}, which the template asks ${Math.round(v * 100)}% of`);
+  const ranks: GeneratedClass["ranks"] = [];
+  if (bank.ranks.every > 0) {
+    for (const p of picks) {
+      if (p.passive) continue;
+      for (let rank = 2; rank <= bank.ranks.max; rank++) {
+        const level = p.at + (rank - 1) * bank.ranks.every;
+        if (level > top) break;
+        ranks.push({ skill: p.skill, level, rank });
+      }
+    }
+    ranks.sort((a, b) => a.level - b.level);
+  }
+  const combos: [BankSkill, BankSkill][] = [];
+  for (const p of picks) {
+    if (!p.skill.combo) continue;
+    const setup = picks.find((q) => q !== p && (q.skill.applies.includes(p.skill.combo) || q.skill.id === p.skill.combo));
+    if (setup) combos.push([p.skill, setup.skill]);
+  }
+  if (combos.length < template.combos) problems.push(`${combos.length} combination${combos.length === 1 ? "" : "s"}, the template asks ${template.combos}`);
   const sharesAt = (level: number): Map<string, number> => sum(picks.filter((p) => p.at <= level).map((p) => p.skill));
-  return { template, picks, counts, sharesAt, errorAt: (level) => error(sharesAt(level), ratiosAt(template, level)), problems };
+  return { template, picks, ranks, combos, counts, sharesAt, errorAt: (level) => error(sharesAt(level), ratiosAt(template, level)), problems };
 }
 
 /** A class's progression in lines: per level, what it learns. */
@@ -242,9 +271,10 @@ export function progressionLines(c: GeneratedClass): string[] {
   const lines: string[] = [];
   const top = c.counts.length;
   for (let level = 1; level <= top; level++) {
-    const now = c.picks.filter((p) => p.at === level);
-    if (now.length === 0) continue;
-    lines.push(`  ${String(level).padStart(2)}  ${now.map((p) => `${p.skill.name}${p.skill.skill ? "" : "*"}${p.passive ? " (passive)" : ""}${p.pinned ? " [pinned]" : ""}`).join(", ")}`);
+    const now = c.picks.filter((p) => p.at === level).map((p) => `${p.skill.name}${p.skill.skill ? "" : "*"}${p.passive ? " (passive)" : ""}${p.pinned ? " [pinned]" : ""}`);
+    const ranked = c.ranks.filter((r) => r.level === level).map((r) => `${r.skill.name} ${r.rank}`);
+    if (now.length === 0 && ranked.length === 0) continue;
+    lines.push(`  ${String(level).padStart(2)}  ${now.join(", ")}${ranked.length ? `${now.length ? "   " : ""}ranks: ${ranked.join(", ")}` : ""}`);
   }
   return lines;
 }
