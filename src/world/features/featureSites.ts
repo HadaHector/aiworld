@@ -60,6 +60,9 @@ const ADIT_STEP = 9;
 const ADIT_BANK_RUN = 30;
 const ADIT_BANK_RISE = 0.3;
 const ADIT_BANK_DIRECTIONS = 24;
+/** A yard is tried this much further out than ADIT_GAP too, nearest first: on ground the hill has
+ *  flattened out into, its banks gentle where one closer in would stand on the slope. */
+const ADIT_FURTHER = [0, 8, 16];
 
 /** Whether a mine's yard at (x, z), its circle `radius`, levelled to its mouth's floor, banks back
  *  gently enough to the ground round it (see ADIT_BANK_RUN). The hill past the slip's foot is the
@@ -158,7 +161,6 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
     if (kind.type === "compound" && kind.compound?.adit) {
       // A mine: first the ground for its adit, then its yard before it, level with the adit's floor.
       const plan = planCompound(kind, seed, rng);
-      const away = plan.yardRadius + ADIT_GAP;
       const found: { mouth: NonNullable<ReturnType<typeof mouthAt>>; x: number; z: number; areaId: number }[] = [];
       for (let attempt = 0; attempt < ADIT_CANDIDATES; attempt++) {
         const radius = Math.sqrt(rng()) * ADIT_REACH;
@@ -168,10 +170,17 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
         begin();
         const mouth = mouthAt(sampleTerrain, fx, fz, trace);
         if (!mouth) continue;
-        const x = fx - mouth.ux * away, z = fz - mouth.uz * away;
-        if (!clearOfOthers(x, z, trace)) continue;
-        const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover, trace);
-        if (scored && Math.abs(scored.height - mouth.y) <= ADIT_STEP && aditBanksGentle(sampleTerrain, x, z, plan.radius, mouth, trace)) found.push({ mouth, x, z, areaId: scored.areaId });
+        // Its yard before it - further out, where the ground in front of the hill lets it bank gently.
+        for (const further of ADIT_FURTHER) {
+          const away = plan.yardRadius + ADIT_GAP + further;
+          const x = fx - mouth.ux * away, z = fz - mouth.uz * away;
+          if (!clearOfOthers(x, z, trace)) continue;
+          const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover, trace);
+          if (scored && Math.abs(scored.height - mouth.y) <= ADIT_STEP && aditBanksGentle(sampleTerrain, x, z, plan.radius, mouth, trace)) {
+            found.push({ mouth, x, z, areaId: scored.areaId });
+            break;
+          }
+        }
       }
       const best = found.sort((a, b) => b.mouth.score - a.mouth.score).find((f) => mouthApproachable(sampleTerrain, f.mouth));
       if (!best) return null;
