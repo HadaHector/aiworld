@@ -1,4 +1,5 @@
 import { ContentError, isObject, joinPath, Reader, describe, type ContentIssue, type RawObject } from "../../world/content/contentReader";
+import { armourOnly, DEFENCE_AGAINST, readDefence, type DefenceAgainst, type DefenceRules } from "./defenceRules";
 import { actionKind, actionKinds, type Action, type CheckContext } from "../skills/actions";
 import { FLAG_INDEX, FLAG_NAMES } from "../skills/flags";
 import { compileFormula, type CompiledFormula } from "./formula";
@@ -53,8 +54,10 @@ export interface RollSet {
   hit: CompiledFormula;
   crit: CompiledFormula;
   critMultiplier: CompiledFormula;
-  /** The amount after armour or resistance, from `amount`. */
+  /** The amount after the defence parts, from `amount` (a pack's own last word on it). */
   mitigate: CompiledFormula;
+  /** Which defence parts its blows meet (rules/defenceRules.ts): weapons the physical, spells resistance. */
+  defence: DefenceAgainst;
 }
 
 export interface CombatRules {
@@ -67,6 +70,8 @@ export interface CombatRules {
   rollIndex: ReadonlyMap<string, number>;
   threat: { damage: number; heal: number; forgetAfter: number };
   combatTimeout: number;
+  /** The defence model's parts (SLICE.md B8): armour, block, dodge, parry, resistance, absorb, control. */
+  defence: DefenceRules;
   /** The scope roll expressions read: attributes and locals, no vars. */
   scope: ScopeLayout;
 }
@@ -254,15 +259,16 @@ export function readCombatRules(entry: Entry | undefined, stats: readonly StatDe
   const names = scopeNames(stats, []);
   const reader = new Reader(issues, entry?.file ?? "rules/combat.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["gcd", "queueWindow", "rangeLeeway", "losHeight", "rolls", "threat", "combatTimeout"]);
+  reader.onlyKeys(obj, "", ["gcd", "queueWindow", "rangeLeeway", "losHeight", "rolls", "threat", "combatTimeout", "defence"]);
   const rolls: RollSet[] = [];
   const rawRolls = obj.rolls === undefined ? {} : reader.object(obj.rolls, "rolls");
   for (const [id, value] of Object.entries(rawRolls)) {
     const path = joinPath("rolls", id);
     const raw = reader.object(value, path);
-    reader.onlyKeys(raw, path, ["hit", "crit", "critMultiplier", "mitigate"]);
+    reader.onlyKeys(raw, path, ["hit", "crit", "critMultiplier", "mitigate", "defence"]);
     const expr = (key: string, fallback: unknown): CompiledFormula => compileFormula(raw[key] ?? fallback, joinPath(path, key), reader, names);
-    rolls.push({ id, hit: expr("hit", 1), crit: expr("crit", 0), critMultiplier: expr("critMultiplier", 1.5), mitigate: expr("mitigate", "amount") });
+    const defence = raw.defence === undefined ? "none" : reader.oneOf(raw, "defence", path, DEFENCE_AGAINST);
+    rolls.push({ id, hit: expr("hit", 1), crit: expr("crit", 0), critMultiplier: expr("critMultiplier", 1.5), mitigate: expr("mitigate", "amount"), defence });
   }
   const threat = obj.threat === undefined ? {} : reader.object(obj.threat, "threat");
   reader.onlyKeys(threat, "threat", ["damage", "heal", "forgetAfter"]);
@@ -279,6 +285,8 @@ export function readCombatRules(entry: Entry | undefined, stats: readonly StatDe
       forgetAfter: reader.optionalNumber(threat, "forgetAfter", "threat", 6, { min: 0 }),
     },
     combatTimeout: reader.optionalNumber(obj, "combatTimeout", "", 5, { min: 0 }),
+    // A pack without `defence` keeps armour only (its rolls' own `mitigate` may do the rest).
+    defence: obj.defence === undefined ? armourOnly(stats) : readDefence(obj.defence, reader, stats),
     scope,
   };
 }

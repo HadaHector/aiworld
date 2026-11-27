@@ -167,6 +167,9 @@ export interface EventRule {
   role: CueWhen["role"];
   crit?: boolean;
   periodic?: boolean;
+  /** A hit a shield blocked part of, or a resistance took part of (the defence). */
+  blocked?: boolean;
+  resisted?: boolean;
   /** "" plays nothing (and stops the search). */
   cue: string;
 }
@@ -577,7 +580,7 @@ function readConfig(entry: Entry | undefined, issues: ContentIssue[], cues: Read
       events.set(name, list.map((r, i) => {
         const at = joinPath(path, i);
         const rule = reader.object(r, at);
-        reader.onlyKeys(rule, at, ["tags", "type", "name", "rarity", "role", "crit", "periodic", "cue"]);
+        reader.onlyKeys(rule, at, ["tags", "type", "name", "rarity", "role", "crit", "periodic", "blocked", "resisted", "cue"]);
         const cue = typeof rule.cue === "string" ? rule.cue : reader.string(rule, "cue", at);
         if (cue && !cues.has(cue)) reader.fail(joinPath(at, "cue"), `no cue "${cue}"`);
         return {
@@ -588,6 +591,8 @@ function readConfig(entry: Entry | undefined, issues: ContentIssue[], cues: Read
           role: rule.role === undefined ? undefined : reader.oneOf(rule, "role", at, ["dealt", "taken"] as const),
           crit: rule.crit === undefined ? undefined : reader.boolean(rule, "crit", at, false),
           periodic: rule.periodic === undefined ? undefined : reader.boolean(rule, "periodic", at, false),
+          blocked: rule.blocked === undefined ? undefined : reader.boolean(rule, "blocked", at, false),
+          resisted: rule.resisted === undefined ? undefined : reader.boolean(rule, "resisted", at, false),
           cue,
         };
       }));

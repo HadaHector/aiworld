@@ -16,6 +16,8 @@ export function describeEvent(rules: GameRules, event: CombatEvent, nameOf: (id:
   const notes: string[] = [];
   if (event.flags & EVENT_FLAG.crit) notes.push("crit");
   if (event.absorbed >= 0.5) notes.push(`${n(event.absorbed)} absorbed`);
+  if ((event.blocked ?? 0) >= 0.5) notes.push(`${n(event.blocked ?? 0)} blocked`);
+  if ((event.resisted ?? 0) >= 0.5) notes.push(`${n(event.resisted ?? 0)} resisted`);
   const kind = COMBAT_EVENT_KINDS[event.kind];
   if (event.extra >= 0.5 && kind === "hit") notes.push(`${n(event.extra)} overkill`);
   if (event.extra >= 0.5 && kind === "heal") notes.push(`${n(event.extra)} overheal`);
@@ -52,6 +54,10 @@ export function describeEvent(rules: GameRules, event: CombatEvent, nameOf: (id:
       return `${source} summons ${target}`;
     case "resisted":
       return `${target} resists ${by}`;
+    case "dodge":
+      return `${target} dodges ${by}`;
+    case "parry":
+      return `${target} parries ${by}`;
     case "respawn":
       return `${target} comes back to life`;
     case "animation":

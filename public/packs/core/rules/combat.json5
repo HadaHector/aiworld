@@ -1,28 +1,57 @@
-// The combat rules (see ABILITIES.md, *Rolls*): the global cooldown, the queue window, the rolls
-// damage and healing go through, and how threat is counted. Roll expressions read the attacker as
-// `caster.<stat>`, the defender as `target.<stat>`, and the amount so far as `amount`.
+// The combat rules (see ABILITIES.md, *Rolls* and *Defence*): the global cooldown, the queue window,
+// the rolls damage and healing go through, the defence a blow meets, and how threat is counted. Roll
+// expressions read the attacker as `caster.<stat>`, the defender as `target.<stat>`, and the amount so
+// far as `amount`. A roll set's `defence` says which defence parts its blows meet; `mitigate` is
+// applied after them (a pack's own last word).
 {
   gcd: 1.5,
   queueWindow: 0.4,
   rangeLeeway: 1,
   losHeight: 1.6,
   rolls: {
-    // Weapons: a miss chance growing with the level gap, crits from agility, armour mitigating.
+    // Weapons: a miss chance growing with the level gap, crits from agility, then the physical parts
+    // (dodge, parry, block, armour).
     default: {
       hit: { clamp: [{ sub: [0.95, { mul: [{ sub: ["target.level", "caster.level"] }, 0.01] }] }, 0.6, 1] },
       crit: { add: [0.05, { div: ["caster.agility", 2000] }] },
       critMultiplier: 2,
-      mitigate: { mul: ["amount", { sub: [1, { div: ["target.armor", { add: ["target.armor", 400, { mul: ["caster.level", 85] }] }] }] }] },
+      defence: "physical",
     },
-    // Spells: rarely miss, crit from intellect, not mitigated by armour.
+    // Spells: rarely miss, crit from intellect, then the target's resistance to their school.
     spell: {
       hit: { clamp: [{ sub: [0.96, { mul: [{ sub: ["target.level", "caster.level"] }, 0.01] }] }, 0.6, 1] },
       crit: { add: [0.02, { div: ["caster.intellect", 3000] }] },
       critMultiplier: 1.5,
-      mitigate: "amount",
+      defence: "spell",
     },
     // Damage over time and the like: always lands, never crits.
     noCrit: { hit: 1, crit: 0, mitigate: "amount" },
+  },
+  // The defence model (SLICE.md 3a, B8; ABILITIES.md, *Defence*). Each part can be turned off (`on:
+  // false`); the balance curves share a unit's effective-health budget (a role's mitigation, the
+  // player's curve) out among the parts that are on by `weight`, so the product holds whichever are on.
+  // A part's `cap` is the most its chance or share can be.
+  //   armor    physical: armor / (armor + base + perLevel * the attacker's level) of the blow stopped
+  //   dodge    physical: dodge / 100 + agility * perAgility, the chance a blow (not over time) misses
+  //   parry    melee only: parry / 100 + defenceSkill * perDefence, after dodge; never while stunned
+  //   block    physical: blockChance / 100 to stop blockValue of the blow - a shield's (gear only)
+  //   resist   spells: <school>Resist against the attacker's level, as armour, by the spell's school
+  //   absorb   a ward of `ward` points taking damage first, filled again out of combat (off: shields
+  //            from skills already absorb)
+  //   control  controlAvoid / 100, the chance a stun, root, silence or disarm does not take; worth
+  //            `damageShare` of a fight's damage
+  // spellBudget: spells meet the physical budget to this power (0.5: half the share stopped, in log).
+  defence: {
+    parts: {
+      armor: { on: true, weight: 1, base: 400, perLevel: 85, cap: 0.75 },
+      dodge: { on: true, weight: 0.12, perAgility: 0.0005, cap: 0.3 },
+      parry: { on: true, weight: 0.08, perDefence: 0.005, cap: 0.25 },
+      block: { on: true, cap: 0.6 },
+      resist: { on: true, base: 400, perLevel: 85, cap: 0.75, schools: ["fire", "frost", "nature", "arcane", "shadow", "holy"] },
+      absorb: { on: false, weight: 0.1 },
+      control: { on: true, weight: 0.04, damageShare: 0.2, cap: 0.5 },
+    },
+    spellBudget: 0.5,
   },
   threat: { damage: 1, heal: 0.5, forgetAfter: 6 },
   // Seconds after the last blow before it is out of combat: regeneration starts then (= rules/balance.json5 `regen.delay`).

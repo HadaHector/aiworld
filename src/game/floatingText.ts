@@ -75,8 +75,19 @@ export function createFloatingText(scene: Scene, mirror: EntityMirror, rules: Ga
         case EVENT_KIND.hit: {
           if (n > 0) spawn(e.target, `${taken ? "-" : ""}${n}${crit ? "!" : ""}`, hitColour, crit, periodic);
           if (absorbed > 0) spawn(e.target, n > 0 ? `(${absorbed} absorbed)` : "Absorb", "#c8c8c8", false, true);
+          // What the defence took off (rules/combat.json5, *defence*): a shield's block, a resistance.
+          const blocked = Math.round(e.blocked ?? 0);
+          const resisted = Math.round(e.resisted ?? 0);
+          if (blocked > 0) spawn(e.target, n > 0 ? `(${blocked} blocked)` : "Block", "#c8c8c8", false, true);
+          if (resisted > 0) spawn(e.target, `(${resisted} resisted)`, "#c8c8c8", false, true);
           break;
         }
+        case EVENT_KIND.dodge:
+          spawn(e.target, "Dodge", "#e0e0e0", false, false);
+          break;
+        case EVENT_KIND.parry:
+          spawn(e.target, "Parry", "#e0e0e0", false, false);
+          break;
         case EVENT_KIND.miss:
           spawn(e.target, e.flags & EVENT_FLAG.immune ? "Immune" : "Miss", "#e0e0e0", false, false);
           break;
