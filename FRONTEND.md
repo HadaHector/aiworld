@@ -319,6 +319,16 @@ instead. Lair creatures killed stay dead until their respawn time, since their k
 delta, which the world record keeps; a boss is no different. Check: `scripts/probe/lairSave.mjs`
 (a cave, a mine and a crypt of the vale, seed 6).
 
+The game still put them on the terrain (2026-11-27): entering, the page went back to its last view
+(`aiworld.lastView` in localStorage, the dev convenience that a reload shows the same spot) by
+teleporting the player to that x, z - onto the ground above the lair, and anywhere else to wherever
+the page last looked, even another character's spot. Now only a quick `?play` game resumes the last
+view; a saved character is where its save says. Check: `scripts/probe/lairLogin.mjs`, the game in
+headless Chrome through the menu: into a lair by `/dungeon`, *Exit to menu* and *Continue*, then the
+page saved as a hidden tab and reloaded, each time back on the lair's floor with it drawn. A save
+from before 2026-11-25 has no `travel.lair` and cannot be told from one standing on that ground: it
+comes back on the hillside over the lair, by its entrance.
+
 ## Pack data
 
 `rules/frontend.json5`, replaced whole by a later pack as the other rules files are:
