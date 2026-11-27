@@ -15,18 +15,28 @@ import { createMemoryStore } from "../../src/save/memoryStore.ts";
 import { createWorldRecord } from "../../src/save/records.ts";
 
 const CONFIG = "vale";
-// A seed whose vale has a cave, a mine and a crypt (the default seed has no mine).
-const SEED = 6;
+// The first of these seeds whose vale has a cave, a mine and a crypt (the default seed has no mine; feature
+// placement changes move them, so the probe looks rather than pinning one seed).
+const SEEDS = [16, 6, 18, 3, 7, 11, 21, 27, 33, 42, 48, 55, 64, 77, 90, 101];
 let failures = 0, checks = 0;
 const check = (what, ok, detail = "") => { checks++; if (!ok) { failures++; console.log(`FAIL ${what}${detail ? `: ${detail}` : ""}`); } };
 
 const { content, packs } = loadContentFromDisk(CONFIG);
+const caveOf = (w, style) => w.caveMouths.find((m) => (m.style ?? "cave") === style);
+const cryptOf = (w) => w.compoundLayouts.flatMap((l) => l.buildings.map((b) => mouthSite(w, b)).filter(Boolean))[0];
+let SEED = SEEDS[0];
+let world = null;
+for (const seed of SEEDS) {
+  const w = createWorldData(seed, content);
+  if (caveOf(w, "cave") && caveOf(w, "mine") && cryptOf(w)) { SEED = seed; world = w; break; }
+}
+world ??= createWorldData(SEED, content);
+console.log(`seed ${SEED}`);
 const rules = loadRulesFromDisk(CONFIG);
 const creatures = loadCreatureRulesFromDisk(CONFIG, rules, SEED);
 const items = loadItemRulesFromDisk(CONFIG, rules, SEED);
 const progression = loadProgressionRulesFromDisk(CONFIG, rules, SEED);
 const dungeons = resolveDungeons(packSourcesFromDisk(readConfigFromDisk(CONFIG)).sources);
-const world = createWorldData(SEED, content);
 
 const EXPECTED = [/the start ".*" dropped .* to find a settlement/, /left in a lair that is not there/];
 
@@ -76,11 +86,10 @@ const characterId = t.c.last("characters")?.list[0]?.id;
 check("a character made", !!characterId);
 
 // A lair of each kind the vale has: the first cave, the first mine, the first crypt.
-const caveOf = (style) => world.caveMouths.find((m) => (m.style ?? "cave") === style);
-const crypt = world.compoundLayouts.flatMap((l) => l.buildings.map((b) => mouthSite(world, b)).filter(Boolean))[0];
+const crypt = cryptOf(world);
 const sites = [
-  ["cave", caveOf("cave") && caveMouthSite(caveOf("cave"))],
-  ["mine", caveOf("mine") && caveMouthSite(caveOf("mine"))],
+  ["cave", caveOf(world, "cave") && caveMouthSite(caveOf(world, "cave"))],
+  ["mine", caveOf(world, "mine") && caveMouthSite(caveOf(world, "mine"))],
   ["crypt", crypt && { ...crypt, style: "crypt" }],
 ].filter(([, s]) => s);
 console.log(`vale: ${sites.map(([k]) => k).join(", ")} to log out in`);
