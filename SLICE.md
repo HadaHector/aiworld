@@ -774,3 +774,6 @@ Not started; to be sized and put into sessions.
 - **14 Defence (B8)** to the gameplay, combat and HUD session; **16 Skill bank (I6, I7, P9)** to a new rules and
   balance session. The rest of wave 2 (15 Duel tool to tools, 17 Items and 19 Quest curves to rules and
   balance, 18 Creature roles to dungeons, 20 Lights and 21 G1 to terrain) waits until these land.
+- **14 Defence merged** (24e53a2): seven switchable parts with effective-health multipliers. Owner's call
+  (2026-11-27): **spells keep meeting creature resistance** (`spellBudget` 0.5; a mage does about 11% less to a
+  level 1 creature). Players are fitted to the curve by the Duel tool (B7).
