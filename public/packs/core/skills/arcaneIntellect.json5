@@ -1,0 +1,16 @@
+// The mage's long buff (SKILLBANK.md, level 2): an ally's intellect +10% (+3% a rank) for 30 minutes.
+{
+  name: "Arcane Intellect",
+  icon: "spell-arcane-orb",
+  type: "spell",
+  tags: ["school.arcane"],
+  target: "ally",
+  hostOn: "target",
+  range: 30,
+  los: true,
+  cost: { mana: 30 },
+  display: "buff",
+  dispel: "magic",
+  stacking: { per: "host", add: "replace", value: "stronger" },
+  states: { on: { length: 1800, enter: [{ do: "animation", name: "empower" }], hold: [{ do: "modifier", stat: "intellect", kind: "percent", value: { add: [10, { mul: [3, { sub: ["level", 1] }] }] } }] } },
+}

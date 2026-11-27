@@ -14,7 +14,7 @@
     clap: {
       enter: [
         { do: "animation", name: "castSlam" },
-        { do: "damage", group: "hit", amount: { add: [10, { div: ["caster.strength", 4] }] } },
+        { do: "damage", group: "hit", amount: { mul: [{ add: [10, { div: ["caster.strength", 4] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
         { do: "cast", skill: "thunderClapSlow", group: "hit" },
       ],
     },

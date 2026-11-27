@@ -1,0 +1,13 @@
+// The ranger's way out (SKILLBANK.md): a leap backwards, 12 m away from where it faces (a negative
+// distance); the cooldown shortens by 2 s a rank.
+{
+  name: "Disengage",
+  icon: "spell-nature-wind-slash",
+  cues: { release: "rush" },
+  type: "physical",
+  target: "self",
+  cost: { mana: 10 },
+  cooldown: { add: [20, { mul: [-2, { sub: ["level", 1] }] }] },
+  gcd: false,
+  states: { leap: { enter: [{ do: "move", group: "caster", kind: "leap", speed: 20, distance: -12, height: 2 }] } },
+}

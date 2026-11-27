@@ -15,7 +15,7 @@
     strike: {
       enter: [
         { do: "animation", name: "swing" },
-        { do: "damage", group: "target", amount: { add: ["caster.weaponMax", 12, { div: ["caster.strength", 5] }] }, threat: 1.5 },
+        { do: "damage", group: "target", amount: { mul: [{ add: ["caster.weaponMax", 12, { div: ["caster.strength", 5] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] }, threat: 1.5 },
         { do: "cast", skill: "sunder", group: "target" },
       ],
     },

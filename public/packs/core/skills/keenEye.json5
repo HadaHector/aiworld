@@ -1,0 +1,2 @@
+// A ranger's passive (SKILLBANK.md, level 5): agility +10%.
+{ name: "Keen Eye", icon: "spell-nature-light-beam", passive: true, type: "physical", states: { held: { hold: [{ do: "modifier", stat: "agility", kind: "percent", value: 10 }] } } }

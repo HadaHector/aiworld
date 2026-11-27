@@ -1,0 +1,25 @@
+// A slow, big heal (SKILLBANK.md): a quarter more on a target with Renew (Renew sets it up).
+{
+  name: "Heal",
+  icon: "spell-holy-sunburst",
+  cues: { applied: "heal" },
+  type: "spell",
+  tags: ["school.holy"],
+  target: "ally",
+  range: 40,
+  los: true,
+  cost: { mana: { mul: [40, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  start: "cast",
+  groups: { renewed: { from: "target", filter: { has: ["renew"] } } },
+  states: {
+    cast: { length: 3, bar: "cast", breakOnMove: true, interruptible: true, next: "mend" },
+    mend: {
+      commit: true,
+      enter: [
+        { do: "animation", name: "heal" },
+        { do: "heal", group: "target", amount: { mul: [{ add: [45, { mul: ["caster.spirit", 1.2] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "if", has: "renewed", then: [{ do: "heal", group: "target", amount: { mul: [{ add: [11, { mul: ["caster.spirit", 0.3] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } }] },
+      ],
+    },
+  },
+}

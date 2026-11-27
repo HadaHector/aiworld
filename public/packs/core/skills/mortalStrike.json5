@@ -1,4 +1,4 @@
-// The top of the Arms tree: a heavy instant strike.
+// A heavy instant strike: the warrior's level-10 skill (SKILLBANK.md), and the top of the Arms tree.
 {
   name: "Mortal Strike",
   icon: "weapon-sword-ruby-edge",
@@ -10,11 +10,14 @@
   facing: true,
   cost: { rage: 25 },
   cooldown: 6,
+  // The pay-off for Heroic Strike's sunder (SKILLBANK.md, combinations): a quarter more on a sundered target.
+  groups: { sundered: { from: "target", filter: { has: ["sunder"] } } },
   states: {
     strike: {
       enter: [
         { do: "animation", name: "overhead" },
-        { do: "damage", group: "target", amount: { add: [{ mul: ["caster.weaponMax", 1.5] }, 20, { div: ["caster.strength", 3] }] } },
+        { do: "damage", group: "target", amount: { mul: [{ add: [{ mul: ["caster.weaponMax", 1.5] }, 20, { div: ["caster.strength", 3] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "if", has: "sundered", then: [{ do: "damage", group: "target", amount: { mul: [{ add: [{ mul: ["caster.weaponMax", 0.4] }, 5, { div: ["caster.strength", 12] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } }] },
       ],
     },
   },

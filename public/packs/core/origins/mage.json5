@@ -1,16 +1,31 @@
-// A class: mana and fire. Searing Totem comes at class level 2, Frost Nova from a book at 3.
+// A class: mana, fire and frost. Skills by character level from classTemplates/mage.json5 (SKILLBANK.md),
+// as the warrior's. Frost Nova comes from a book (the Tome of Frost Nova).
 {
   slot: "class",
   name: "Mage",
+  order: 3,
   description: "A scholar of the arcane who hurls fire from afar and freezes those who come too close. Fragile, and deadly at range.",
   resources: ["mana"],
   stats: { intellect: 4, stamina: -1 },
-  spells: [{ skill: "autoAttack" }, { skill: "fireball" }],
+  spells: [{ skill: "autoAttack" }, { skill: "fireball" }, { skill: "fireBlast" }],
   disciplines: { class: 1 },
   unlocks: {
-    class: [
-      { at: 2, skill: "searingTotem" },
-      { at: 3, skill: "frostNova", how: "item" },
+    adventure: [
+      { at: 2, skill: "arcaneIntellect" },
+      { at: 4, skill: "frostNova", how: "item" },
+      { at: 5, skill: "arcaneMind" },
+      { at: 5, skill: "fireball", level: 2 },
+      { at: 5, skill: "fireBlast", level: 2 },
+      { at: 6, skill: "frostbolt" },
+      { at: 6, skill: "arcaneIntellect", level: 2 },
+      { at: 8, skill: "searingTotem" },
+      { at: 8, skill: "frostNova", level: 2 },
+      { at: 9, skill: "frostWard" },
+      { at: 9, skill: "fireball", level: 3 },
+      { at: 9, skill: "fireBlast", level: 3 },
+      { at: 10, skill: "blizzard" },
+      { at: 10, skill: "arcaneIntellect", level: 3 },
+      { at: 10, skill: "frostbolt", level: 2 },
     ],
   },
   trees: ["mageFire"],

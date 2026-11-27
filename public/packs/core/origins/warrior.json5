@@ -1,17 +1,34 @@
-// A class (PROGRESSION.md, *Origins*): rage and a weapon. Thunder Clap comes at class level 2, Kick
-// from the trainer at 3.
+// A class (PROGRESSION.md, *Origins*): rage and a weapon. Its skills by character level are what its
+// class template gives (classTemplates/warrior.json5, SKILLBANK.md; `npm run probe --
+// scripts/probe/skillBank.mjs --report --unlocks` prints them): a skill at 2, 4, 6, 8 and 10, a
+// passive at 5 and 9, each skill a rank higher every 4 levels after it is learned. Kick comes from the
+// trainer.
 {
   slot: "class",
   name: "Warrior",
+  order: 1,
   description: "A fighter of steel and fury who charges in, strikes hard and grows angrier with every blow taken. Built to stand in front.",
   resources: ["rage"],
   stats: { strength: 3, stamina: 2 },
   spells: [{ skill: "autoAttack" }, { skill: "heroicStrike" }, { skill: "charge" }],
   disciplines: { class: 1 },
   unlocks: {
-    class: [
-      { at: 2, skill: "thunderClap" },
-      { at: 3, skill: "kick", how: "trainer", cost: 50 },
+    adventure: [
+      { at: 2, skill: "battleShout" },
+      { at: 4, skill: "thunderClap" },
+      { at: 5, skill: "toughness" },
+      { at: 5, skill: "heroicStrike", level: 2 },
+      { at: 5, skill: "charge", level: 2 },
+      { at: 6, skill: "shieldWall" },
+      { at: 6, skill: "battleShout", level: 2 },
+      { at: 8, skill: "kick", how: "trainer", cost: 50 },
+      { at: 8, skill: "thunderClap", level: 2 },
+      { at: 9, skill: "deepWounds" },
+      { at: 9, skill: "heroicStrike", level: 3 },
+      { at: 9, skill: "charge", level: 3 },
+      { at: 10, skill: "mortalStrike" },
+      { at: 10, skill: "battleShout", level: 3 },
+      { at: 10, skill: "shieldWall", level: 2 },
     ],
   },
   trees: ["warriorArms"],

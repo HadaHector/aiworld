@@ -1,0 +1,13 @@
+// The ranger's big moment (SKILLBANK.md, level 10): for 15 s the bow shoots 40% faster.
+{
+  name: "Rapid Fire",
+  icon: "spell-lightning-arc",
+  type: "physical",
+  target: "self",
+  cost: { mana: 25 },
+  cooldown: 120,
+  gcd: false,
+  display: "buff",
+  stacking: { per: "host", add: "replace" },
+  states: { rapid: { length: 15, enter: [{ do: "animation", name: "empower" }], hold: [{ do: "modifier", stat: "weaponSpeed", kind: "percent", value: -40 }] } },
+}

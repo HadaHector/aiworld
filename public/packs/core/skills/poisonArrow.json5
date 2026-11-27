@@ -1,0 +1,24 @@
+// A bow shot that leaves the spider's poison ticking (SKILLBANK.md: an attack and a debuff in one).
+{
+  name: "Poison Arrow",
+  icon: "spell-nature-poison-vortex",
+  cues: { projectile: "bolt" },
+  type: "physical",
+  weapon: true,
+  tags: ["ranged", "shot", "school.nature"],
+  target: "enemy",
+  range: 30,
+  los: true,
+  facing: true,
+  cost: { mana: { mul: [15, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  cooldown: 8,
+  states: {
+    shot: {
+      enter: [
+        { do: "animation", name: "swing" },
+        { do: "damage", group: "target", amount: { mul: [{ add: ["caster.weaponMin", 2] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "cast", skill: "poison", group: "target", vars: { perTick: { mul: [{ add: [3, { div: ["caster.agility", 8] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } } },
+      ],
+    },
+  },
+}

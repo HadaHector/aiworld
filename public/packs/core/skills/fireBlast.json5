@@ -1,0 +1,25 @@
+// An instant burst of flame (SKILLBANK.md): cast on the move; half again on a burning target
+// (Fireball sets it up).
+{
+  name: "Fire Blast",
+  icon: "spell-fire-burst",
+  cues: { impact: "fireLash" },
+  type: "spell",
+  tags: ["school.fire"],
+  target: "enemy",
+  range: 20,
+  los: true,
+  facing: true,
+  cost: { mana: { mul: [20, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  cooldown: 8,
+  groups: { burning: { from: "target", filter: { has: ["burn"] } } },
+  states: {
+    blast: {
+      enter: [
+        { do: "animation", name: "castForward" },
+        { do: "damage", group: "target", amount: { mul: [{ add: [20, { mul: ["random", 6] }, { mul: ["caster.intellect", 0.5] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "if", has: "burning", then: [{ do: "damage", group: "target", amount: { mul: [{ add: [10, { mul: ["caster.intellect", 0.25] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } }] },
+      ],
+    },
+  },
+}

@@ -18,7 +18,7 @@
       enter: [{ do: "animation", name: "heal" }],
       length: 15,
       period: 3,
-      tick: [{ do: "heal", amount: { add: [8, { div: ["caster.spirit", 4] }] } }],
+      tick: [{ do: "heal", amount: { mul: [{ add: [8, { div: ["caster.spirit", 4] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } }],
     },
   },
 }

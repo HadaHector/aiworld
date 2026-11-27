@@ -149,6 +149,8 @@ export interface OriginDef {
   trees: number[];
   only: string[];
   never: string[];
+  /** Where character creation lists it among its slot's (lower first; ties by id). */
+  order: number;
   template: string;
   file: string;
 }
@@ -229,7 +231,7 @@ const SOURCE_KEYS = ["on", "amount", "when", "rate", "credit", "tags", "notTags"
 const UNLOCK_KEYS = ["at", "from", "to", "every", "skill", "level", "how", "cost", "modifiers", "points", "resource", "disciplines", "knows"];
 const TREE_KEYS = ["name", "points", "discipline", "tiers", "nodes"];
 const NODE_KEYS = ["name", "tier", "ranks", "cost", "requires", "modifiers", "skill", "resource", "points"];
-export const ORIGIN_KEYS = ["slot", "name", "description", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "only", "never", "items"];
+export const ORIGIN_KEYS = ["slot", "name", "description", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "only", "never", "items", "order"];
 /** The highest level any discipline may have: levels are sent as u16. */
 const LEVEL_LIMIT = 1000;
 
@@ -731,6 +733,7 @@ function readOrigin(entry: Entry & { template: string }, index: number, ctx: Rea
     trees,
     only: obj.only === undefined ? [] : reader.stringList(obj, "only", ""),
     never: obj.never === undefined ? [] : reader.stringList(obj, "never", ""),
+    order: reader.optionalNumber(obj, "order", "", 100),
     template: entry.template,
     file: entry.file,
   };

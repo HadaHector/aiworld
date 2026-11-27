@@ -1,0 +1,14 @@
+// A war cry (SKILLBANK.md, the warrior's long buff at 2): strength up for the warrior and every ally
+// within 20 m, for 30 minutes (Battle Shout's effect, battleShouted). No cost: rage is empty out of a fight.
+{
+  name: "Battle Shout",
+  icon: "weapon-banner-purple",
+  type: "physical",
+  tags: ["shout"],
+  target: "none",
+  areas: { near: { shape: "circle", radius: 20 } },
+  groups: { allies: { from: "area:near", filter: { relation: "ally" }, max: 10 } },
+  states: {
+    shout: { enter: [{ do: "animation", name: "cheer" }, { do: "cast", skill: "battleShouted", group: "allies" }] },
+  },
+}

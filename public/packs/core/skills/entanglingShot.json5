@@ -1,0 +1,25 @@
+// An arrow that roots (SKILLBANK.md): small damage, the target entangled for 3 s (half a second
+// more a rank).
+{
+  name: "Entangling Shot",
+  icon: "spell-nature-serpent",
+  cues: { projectile: "bolt" },
+  type: "physical",
+  weapon: true,
+  tags: ["ranged", "shot", "school.nature"],
+  target: "enemy",
+  range: 30,
+  los: true,
+  facing: true,
+  cost: { mana: { mul: [20, { add: [1, { mul: [0.2, { sub: ["level", 1] }] }] }] } },
+  cooldown: 25,
+  states: {
+    shot: {
+      enter: [
+        { do: "animation", name: "swing" },
+        { do: "damage", group: "target", amount: { mul: [{ add: ["caster.weaponMin", 2] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
+        { do: "cast", skill: "entangled", group: "target" },
+      ],
+    },
+  },
+}

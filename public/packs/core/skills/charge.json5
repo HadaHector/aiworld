@@ -19,7 +19,7 @@
     },
     arrive: {
       enter: [
-        { do: "resource", group: "caster", resource: "rage", amount: 15 },
+        { do: "resource", group: "caster", resource: "rage", amount: { add: [15, { mul: [5, { sub: ["level", 1] }] }] } },
         { do: "cast", skill: "chargeStun", group: "target" },
       ],
     },

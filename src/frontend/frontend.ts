@@ -532,7 +532,8 @@ export function createFrontend(options: FrontendOptions): Frontend {
       for (const slot of progression.config.slots) {
         const list = slotRows.get(slot.id)!;
         list.replaceChildren();
-        for (const origin of progression.origins) {
+        // In their `order` (the class order warrior, ranger, mage, priest), then by id.
+        for (const origin of [...progression.origins].sort((x, y) => x.order - y.order || x.index - y.index)) {
           if (origin.slot !== slot.id) continue;
           const why = conflict(slot.id, origin.id);
           const b = button(list, origin.name, () => {

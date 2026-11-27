@@ -7,7 +7,7 @@
 import { readSkillBank, bankLine } from "../../src/sim/rules/skillBank.ts";
 import { readClassTemplates, generateClass, progressionLines, ratiosAt, percent } from "../../src/sim/rules/classGen.ts";
 import { readBalanceRules } from "../../src/sim/rules/balanceRules.ts";
-import { loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
+import { loadProgressionRulesFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
 
 let failures = 0;
 let checks = 0;
@@ -19,6 +19,13 @@ function check(what, ok, detail = "") {
   }
 }
 const report = process.argv.includes("--report");
+// What a class's `unlocks.adventure` would be, written out (`--report --unlocks`): its picks after level
+// 1 and every rank, for pasting into the origin; a trainer's or a book's skills keep their `how` by hand.
+function unlockLines(c) {
+  const rows = [...c.picks.filter((p) => p.at > 1).map((p) => ({ at: p.at, text: `{ at: ${p.at}, skill: "${p.skill.id}" },` })),
+    ...c.ranks.map((r) => ({ at: r.level, text: `{ at: ${r.level}, skill: "${r.skill.id}", level: ${r.rank} },` }))];
+  return rows.sort((a, b) => a.at - b.at).map((r) => r.text);
+}
 
 const packs = packSourcesFromDisk(readConfigFromDisk()).sources;
 const game = loadRulesFromDisk();
@@ -57,10 +64,31 @@ for (const t of [...templates].sort((a, b) => order.indexOf(a.id) - order.indexO
     console.log(`\n${t.name} (axis ${t.axis}, ${t.distance}):`);
     for (const line of progressionLines(c)) console.log(line);
     for (const level of [1, 10]) console.log(`  at ${level}: ${percent(c.sharesAt(level))}   (asked: ${percent(ratiosAt(t, level))}, off by ${c.errorAt(level).toFixed(2)})`);
+    if (process.argv.includes("--unlocks")) for (const line of unlockLines(c)) console.log(`      ${line}`);
     console.log(`  combinations: ${c.combos.map(([pay, set]) => `${set.name} -> ${pay.name}`).join(", ") || "none"}`);
     console.log(`  power shares: ${c.picks.map((p) => `${p.skill.name} ${Math.round(p.share * 100)}%`).join(", ")}`);
   }
 }
+
+// --- the hand-picked classes are what their templates give ---
+const progression = loadProgressionRulesFromDisk("default", game, 0);
+const adventure = progression.disciplineIndex.get("adventure");
+for (const [id, c] of classes) {
+  const origin = progression.origins.find((o) => o.id === id);
+  check(`a ${id} origin`, !!origin);
+  if (!origin) continue;
+  const have = [];
+  for (const s of origin.raw.spells ?? []) if (!bank.free.includes(s.skill)) have.push(`1 ${s.skill}`);
+  for (const u of origin.unlocks.get(adventure) ?? []) {
+    const name = game.skills[u.skill]?.id;
+    have.push(u.spellLevel > 1 ? `${u.at[0]} ${name} rank ${u.spellLevel}` : `${u.at[0]} ${name}`);
+  }
+  const want = [...c.picks.map((p) => `${p.at} ${p.skill.id}`), ...c.ranks.map((r) => `${r.level} ${r.skill.id} rank ${r.rank}`)];
+  const missing = want.filter((w) => !have.includes(w));
+  const extra = have.filter((h) => !want.includes(h));
+  check(`${id}: the origin's skills, levels and ranks are its template's`, missing.length === 0 && extra.length === 0, `missing ${missing.join(", ") || "-"}; extra ${extra.join(", ") || "-"}`);
+}
+check("classes listed warrior, ranger, mage, priest", progression.origins.filter((o) => order.includes(o.id)).sort((a, b) => a.order - b.order).map((o) => o.id).join() === order.join());
 
 // --- a class nobody wrote: the same generator over a mixed description ---
 const mixed = {

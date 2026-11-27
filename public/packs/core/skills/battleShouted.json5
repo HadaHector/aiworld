@@ -1,0 +1,8 @@
+// Battle Shout on whoever heard it: +10% strength (+3% a rank above the first) for 30 minutes.
+{
+  name: "Battle Shout",
+  icon: "weapon-banner-purple",
+  display: "buff",
+  stacking: { per: "host", add: "replace", value: "stronger" },
+  states: { roused: { length: 1800, hold: [{ do: "modifier", stat: "strength", kind: "percent", value: { add: [10, { mul: [3, { sub: ["level", 1] }] }] } }] } },
+}

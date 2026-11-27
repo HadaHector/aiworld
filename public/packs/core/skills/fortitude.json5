@@ -1,0 +1,16 @@
+// The priest's long buff (SKILLBANK.md, level 2): an ally's stamina +10% (+3% a rank) for 30 minutes.
+{
+  name: "Fortitude",
+  icon: "spell-holy-star-burst",
+  type: "spell",
+  tags: ["school.holy"],
+  target: "ally",
+  hostOn: "target",
+  range: 30,
+  los: true,
+  cost: { mana: 25 },
+  display: "buff",
+  dispel: "magic",
+  stacking: { per: "host", add: "replace", value: "stronger" },
+  states: { on: { length: 1800, enter: [{ do: "animation", name: "heal" }], hold: [{ do: "modifier", stat: "stamina", kind: "percent", value: { add: [10, { mul: [3, { sub: ["level", 1] }] }] } }] } },
+}

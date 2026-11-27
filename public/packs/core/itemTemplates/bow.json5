@@ -20,8 +20,9 @@
   },
   // No crude rarity, no plain ornament.
   never: [{ make: "crude", rarity: "rare" }, { make: "ornate", rarity: "common" }],
-  stats: { weaponMin: [2, 3], weaponMax: [4, 6], weaponSpeed: 0.6, agility: [1, 2] },
-  unscaled: ["weaponSpeed"],
+  stats: { weaponMin: [2, 3], weaponMax: [4, 6], weaponSpeed: 0.6, agility: [1, 2], attackRange: 25 },
+  // A bow shoots: auto-attack reaches 30 m with one (stats/attackRange.json5).
+  unscaled: ["weaponSpeed", "attackRange"],
   rarities: ["common", "uncommon", "rare"],
   extra: { stamina: [1, 3], strength: [1, 2], agility: [1, 2], spirit: [1, 2], intellect: [1, 2] },
   requires: { ge: ["level", { sub: ["itemLevel", 8] }] },

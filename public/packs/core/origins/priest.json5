@@ -1,16 +1,31 @@
-// A class: mana, light and mending. Shield comes at class level 2, Kick from the trainer at 4.
+// A class: mana, light and mending. Skills by character level from classTemplates/priest.json5
+// (SKILLBANK.md), as the warrior's.
 {
   slot: "class",
   name: "Priest",
+  order: 4,
   description: "A servant of the light who mends wounds, shields allies and smites the wicked. Best beside others, never helpless alone.",
   resources: ["mana"],
   stats: { spirit: 3, intellect: 2 },
   spells: [{ skill: "autoAttack" }, { skill: "smite" }, { skill: "renew" }],
   disciplines: { class: 1 },
   unlocks: {
-    class: [
-      { at: 2, skill: "shield" },
-      { at: 4, skill: "kick", how: "trainer", cost: 80 },
+    adventure: [
+      { at: 2, skill: "fortitude" },
+      { at: 4, skill: "heal" },
+      { at: 5, skill: "meditation" },
+      { at: 5, skill: "smite", level: 2 },
+      { at: 5, skill: "renew", level: 2 },
+      { at: 6, skill: "shield" },
+      { at: 6, skill: "fortitude", level: 2 },
+      { at: 8, skill: "holyFire" },
+      { at: 8, skill: "heal", level: 2 },
+      { at: 9, skill: "devotion" },
+      { at: 9, skill: "smite", level: 3 },
+      { at: 9, skill: "renew", level: 3 },
+      { at: 10, skill: "holyNova" },
+      { at: 10, skill: "fortitude", level: 3 },
+      { at: 10, skill: "shield", level: 2 },
     ],
   },
   trees: ["priestLight"],

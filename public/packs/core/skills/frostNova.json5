@@ -13,7 +13,7 @@
     burst: {
       enter: [
         { do: "animation", name: "castSlam" },
-        { do: "damage", group: "hit", amount: { add: [12, { mul: ["caster.intellect", 0.3] }] } },
+        { do: "damage", group: "hit", amount: { mul: [{ add: [12, { mul: ["caster.intellect", 0.3] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } },
         { do: "cast", skill: "frozen", group: "hit" },
       ],
     },

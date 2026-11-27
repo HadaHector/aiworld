@@ -1,0 +1,22 @@
+// The warrior's wall (SKILLBANK.md): an absorb on itself for 10 s, from stamina. Defence's block and
+// parry stats are the passive side of it.
+{
+  name: "Shield Wall",
+  icon: "spell-arcane-crystal-wall",
+  cues: { applied: "shieldOn", aura: "shielded", faded: "shieldBreak" },
+  type: "physical",
+  target: "self",
+  cost: { rage: 10 },
+  cooldown: 45,
+  gcd: false,
+  display: "buff",
+  stacking: { per: "host", add: "replace" },
+  states: {
+    walled: {
+      length: 10,
+      enter: [{ do: "animation", name: "block" }],
+      hold: [{ do: "absorb", amount: { mul: [{ add: [60, { mul: ["caster.stamina", 3] }] }, { add: [1, { mul: [0.35, { sub: ["level", 1] }] }] }] } }],
+      on: { absorbedOut: "end" },
+    },
+  },
+}

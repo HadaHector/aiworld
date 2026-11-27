@@ -1,0 +1,11 @@
+// Entangling Shot's root.
+{
+  name: "Entangled",
+  icon: "spell-nature-serpent",
+  cues: { applied: "frozenOn", aura: "frozen", faded: "frozenBreak" },
+  tags: ["root", "school.nature"],
+  display: "debuff",
+  dispel: "magic",
+  stacking: { per: "host", duration: "longer" },
+  states: { held: { length: { add: [3, { mul: [0.5, { sub: ["level", 1] }] }] }, hold: [{ do: "flag", flags: ["rooted"] }] } },
+}

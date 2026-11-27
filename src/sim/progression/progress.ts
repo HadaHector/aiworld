@@ -43,7 +43,7 @@ export interface DisciplineProgress {
   banked: number;
 }
 
-export const PROGRESS_EVENT_KINDS = ["xp", "levelUp", "learned", "unlocked", "talent", "refused"] as const;
+export const PROGRESS_EVENT_KINDS = ["xp", "levelUp", "learned", "unlocked", "talent", "refused", "rank"] as const;
 export type ProgressEventKind = (typeof PROGRESS_EVENT_KINDS)[number];
 
 export interface ProgressEvent {
@@ -146,7 +146,19 @@ function applyLevel(ctx: ProgressContext, entity: Entity, discipline: number, le
   const part = entity.progress!;
   for (const unlock of unlocksOf(ctx, part, discipline)) {
     if (!unlockAt(unlock, level)) continue;
-    if (unlock.skill >= 0 && !part.learned.has(unlock.skill)) {
+    // A rank (SKILLBANK.md): an `auto` unlock of a skill the character already has, at a higher
+    // spell level, raises the spell's level - which its formulas read as `level`. A passive keeps
+    // the level its magic started with.
+    const known = unlock.skill >= 0 ? entity.combat?.spells.find((sp) => sp.skill === unlock.skill) : undefined;
+    if (known && unlock.how === "auto") {
+      if (known.level < unlock.spellLevel && !known.passive) {
+        known.level = unlock.spellLevel;
+        part.events.push({ kind: "rank", discipline, amount: unlock.spellLevel, level, skill: unlock.skill, source: "auto" });
+        part.dirty = true;
+      }
+    } else if (unlock.skill >= 0 && unlock.spellLevel > 1 && unlock.how === "auto") {
+      // A rank of a skill not yet had (a book not yet read): it waits, and comes with the skill.
+    } else if (unlock.skill >= 0 && !part.learned.has(unlock.skill)) {
       if (unlock.how === "auto") learnSkill(ctx, entity, unlock.skill, "auto", unlock.spellLevel);
       else if (unlock.how !== "talent" && !part.available.has(unlock.skill)) {
         part.available.set(unlock.skill, unlock);
@@ -292,9 +304,24 @@ function learnSkill(ctx: ProgressContext, entity: Entity, skill: number, how: Ho
   const part = entity.progress!;
   part.learned.set(skill, how);
   part.available.delete(skill);
-  ctx.grant(entity, skill, level, learnSource(how));
+  ctx.grant(entity, skill, Math.max(level, rankReached(ctx, entity, skill)), learnSource(how));
   part.events.push({ kind: "learned", discipline: -1, amount: 0, level, skill, source: how });
   part.dirty = true;
+}
+
+/** The highest rank of a skill the character's levels have reached (its `auto` unlocks at a spell
+ *  level), 1 if none: a skill learned late from a trainer or a book comes at it. */
+function rankReached(ctx: ProgressContext, entity: Entity, skill: number): number {
+  const part = entity.progress!;
+  let rank = 1;
+  for (const [discipline, progress] of part.disciplines) {
+    for (const u of unlocksOf(ctx, part, discipline)) {
+      if (u.skill !== skill || u.how !== "auto") continue;
+      const first = u.at ? Math.min(...u.at) : u.from;
+      if (progress.level >= first) rank = Math.max(rank, u.spellLevel);
+    }
+  }
+  return rank;
 }
 
 /** Why a character cannot learn a skill this way, or "" if it can. */

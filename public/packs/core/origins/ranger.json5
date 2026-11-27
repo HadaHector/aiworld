@@ -1,0 +1,34 @@
+// A class (PROGRESSION.md, *Origins*; SLICE.md 3a): a bow, range and kiting - slows and roots to keep
+// enemies off, a leap back when they reach it. Its auto-attack is a shot (the bow's attack range).
+// Skills by character level from classTemplates/ranger.json5 (SKILLBANK.md), as the warrior's.
+{
+  slot: "class",
+  name: "Ranger",
+  order: 2,
+  description: "A hunter of the wild wood who keeps their distance: poisoned arrows, snares and a quick leap away. Deadly while the gap holds.",
+  resources: ["mana"],
+  stats: { agility: 3, stamina: 1 },
+  spells: [{ skill: "autoAttack" }, { skill: "steadyShot" }, { skill: "poisonArrow" }],
+  disciplines: { class: 1 },
+  unlocks: {
+    adventure: [
+      { at: 2, skill: "hawkEye" },
+      { at: 4, skill: "disengage" },
+      { at: 5, skill: "keenEye" },
+      { at: 5, skill: "steadyShot", level: 2 },
+      { at: 5, skill: "poisonArrow", level: 2 },
+      { at: 6, skill: "concussiveShot" },
+      { at: 6, skill: "hawkEye", level: 2 },
+      { at: 8, skill: "entanglingShot" },
+      { at: 8, skill: "disengage", level: 2 },
+      { at: 9, skill: "swiftFeet" },
+      { at: 9, skill: "steadyShot", level: 3 },
+      { at: 9, skill: "poisonArrow", level: 3 },
+      { at: 10, skill: "rapidFire" },
+      { at: 10, skill: "hawkEye", level: 3 },
+      { at: 10, skill: "concussiveShot", level: 2 },
+    ],
+  },
+  trees: [],
+  items: { start: [{ item: "bow.ash.crude.common" }, { item: "leatherShoulders" }, { item: "woolCloak" }, { item: "leatherGloves" }, { item: "leatherBracers" }, { item: "leatherBelt" }, { item: "leatherBoots" }, { item: "copperRing" }] },
+}
