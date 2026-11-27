@@ -23,6 +23,11 @@ How development sessions, worktrees, checks, browsers and merges are organised (
 - **The sessions from before this workflow are retired** (they are stuck on Sonnet): each finishes the
   task it has, then gets no more; its field goes to a new session.
 - **Models.** Design and code: Opus. Mechanical or read-only work: Sonnet.
+- **Say "ready to merge" by message.** When a session has committed work for the main session to merge, it
+  sends the main session a short message (SendMessage to the main session: branch, commit, checks run,
+  anything red and why), whoever started its turn. A session's end-of-turn note only reaches the main
+  session at once when the main session started that turn; when the owner talks to a session directly, the
+  note waits, so the message is what makes the merge happen.
 - **No ending a turn to wait.** A session that waits for a long probe or a generation run waits inside a
   background command that wakes it when it ends. It reports once, with the result.
 
