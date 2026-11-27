@@ -17,9 +17,9 @@
   // Cooldown classes by the cooldown's seconds, up to (a passive is "passive", a long buff "none").
   cooldowns: { spammer: 3, short: 12, long: 60, ultimate: 100000 },
   // The levels a skill is learned at when its entry says nothing, by cooldown class.
-  // A skill learned at L gains a rank every `every` levels after (rank 2 at L+3...), up to `max`: its
+  // A skill learned at L gains a rank every `every` levels after (rank 2 at L+4...), up to `max`: its
   // formulas read the rank as `level`, so effect and cost rise with it (the owner, 2026-11-27).
-  ranks: { every: 3, max: 4 },
+  ranks: { every: 4, max: 4 },
   levels: { spammer: [1, 4], short: [1, 6], long: [3, 10], ultimate: [10, 10], none: [2, 10], passive: [4, 10] },
   // Which purpose an effect serves; buffs and passives serve the purpose of the stat they raise.
   effectPurpose: {
