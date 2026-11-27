@@ -1,0 +1,3 @@
+// Crowd-control avoidance, in percent: a stun, root, silence or disarm not taking (rules/combat.json5,
+// `defence.parts.control`).
+{ name: "Control avoidance", default: 0, min: 0, visible: "owner" }

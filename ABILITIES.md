@@ -466,6 +466,41 @@ the same step.
 - **Every outcome is an event.** A miss, a crit, how much was mitigated and absorbed, and overkill
   all go in the combat event, so the log, floating text and quests need nothing more.
 
+## Defence
+
+Built 2026-11-27 (SLICE.md 3a, task B8). Between the crit roll and `mitigate`, a blow meets the
+target's **defence**: the parts in `rules/combat.json5` `defence.parts`, each switchable (`on`), with a
+`weight` (its share of the balance budget) and a `cap`. A roll set's `defence` says which parts its
+blows meet: `default` (weapons) `"physical"`, `spell` `"spell"`, `noCrit` (over time) `"none"`. A pack
+without `defence` has armour only, and its rolls' own `mitigate` as before.
+
+| Part | Against | What it does | Stats |
+|---|---|---|---|
+| `dodge` | physical, not over time, not while stunned | `dodge`/100 + agility x 0.0005: the blow misses (a `dodge` event) | `dodge` |
+| `parry` | melee (the `melee` tag), after dodge | `parry`/100 + Defence discipline x 0.005 (a `parry` event) | `parry` |
+| `block` | physical, not while stunned | `blockChance`/100 to stop `blockValue` of the blow (hit flag `blocked`, `blocked` amount) | a shield's `blockChance`, `blockValue` |
+| `armor` | physical | armour / (armour + 400 + 85 x the attacker's level) of it stopped | `armor` |
+| `resist` | spells, by their `school.<x>` tag | as armour, of `<school>Resist` (hit flag `resisted`, `resisted` amount) | `fireResist`, `frostResist`, `natureResist`, `arcaneResist`, `shadowResist`, `holyResist` |
+| `absorb` | everything, after skills' shields (off in core) | a ward of `ward` points, whole again out of combat (`absorbed`) | `ward` |
+| `control` | a hostile stun, root, silence, pacify or disarm | `controlAvoid`/100: it does not take (a `resisted` event) | `controlAvoid` |
+
+**Effective health.** `src/sim/rules/defenceRules.ts` is pure. `defenceMultiplier(rules, stats, level)`
+gives each part's effective-health multiplier (how many times more raw damage it takes to kill with
+it), and the physical and spell products: the number the balance curves and the duel tool (B7) read.
+`defenceFor(rules, level, target)` goes the other way: it shares a target multiplier out among the
+physical parts that are on as powers by weight (dodge 0.12, parry 0.08, control 0.04, armour 1), raising
+the others where a cap bites, and gives resistance what spells need for `target^spellBudget` (0.5).
+A creature with a balance role gets its defence stats so (`applyCreature`): its role's mitigation
+(`1 / (1 - mitigation)`) is the target, so turning a part off moves its share to the others and the
+fight takes as long. Block is gear only (shields: the wooden shield 10%, 6; round shields 9-11%, 5-8;
+bucklers 6-8%, 3-5), on top of the curve: the tank's side of the axis. Players' armour is their gear's;
+their dodge and parry come from agility and the Defence discipline (landing them on the curve is B7).
+
+**What it looks like.** Floating text says *Dodge*, *Parry*, *(N blocked)*, *(N resisted)*, *Resist*
+for a stun shaken off; the combat log "Wolf dodges Heroic Strike", "hits ... for 39 (20 blocked)".
+Cues (`rules/feedback.json5`): `dodge` (a whiff), `parry` (steel on steel, sparks), `blockHit` (a knock
+on the shield, a small flinch), `resistHit` (the impact and a fizzle). Check: `scripts/probe/defence.mjs`.
+
 ## Death
 
 - **At 0 health** an entity dies: a `death` event, the `dead` flag, which stops movement and casting, and its magics end except those whose skill says `keepOnDeath`.

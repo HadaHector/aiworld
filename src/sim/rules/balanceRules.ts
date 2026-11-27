@@ -1,4 +1,5 @@
 import { ContentError, Reader, isObject, type ContentIssue, type RawObject } from "../../world/content/contentReader";
+import { defenceFor } from "./defenceRules";
 import { orderPacks, parseFile, type PackSource } from "../../world/content/resolveContent";
 import type { GameRules } from "./gameRules";
 import { addModifier, explainStat, removeSource, setBase, statValue, type StatBlock } from "../stats";
@@ -322,8 +323,17 @@ function makeBalance(data: unknown, file: string, issues: ContentIssue[]): Balan
         removeSource(block, BALANCE_SOURCE);
         if (raw < 0 && flat !== undefined) addModifier(block, { stat: maxHealth, kind: flat, value: b.health - base, source: BALANCE_SOURCE });
       }
-      const armor = stat("armor");
-      if (armor !== undefined) setBase(block, armor, b.armor);
+      // Defence (rules/combat.json5, *defence*): the role's mitigation as an effective-health target,
+      // shared out among the parts that are on - armour alone in a pack without the model, as before.
+      const own = (id: string): number => {
+        const i = stat(id);
+        return i === undefined ? 0 : statValue(block, i);
+      };
+      const defence = defenceFor(game.combat.defence, level, 1 / (1 - b.mitigation), { health: b.health, base: own });
+      for (const [id, value] of Object.entries(defence)) {
+        const i = stat(id);
+        if (i !== undefined && !game.stats[i].formula) setBase(block, i, value);
+      }
       const xpValue = stat("xpValue");
       if (xpValue !== undefined) setBase(block, xpValue, b.xp);
       // Weapon: auto-attack damage a swing is the kind's `dps` less its tactics' share, times the

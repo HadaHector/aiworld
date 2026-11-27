@@ -1,0 +1,9 @@
+// A blow on a shield: a dull knock and a smaller flinch than a clean hit (the defence's block).
+{
+  parts: [
+    { sound: "thud" },
+    { particles: "hit.metal" },
+    { flinch: 0.25, scale: "amount" },
+    { shake: 0.1, scale: "amount" },
+  ],
+}

@@ -1,0 +1,2 @@
+// How much of a blow a block stops.
+{ name: "Block value", default: 0, min: 0, visible: "owner" }

@@ -5,6 +5,7 @@
 //   npm run probe -- scripts/probe/balance.mjs
 import { ContentError } from "../../src/world/content/contentReader.ts";
 import { readBalanceRules } from "../../src/sim/rules/balanceRules.ts";
+import { defenceMultiplier } from "../../src/sim/rules/defenceRules.ts";
 import { createStatBlock, statValue } from "../../src/sim/stats.ts";
 import { createResourceBlock, stepResourceBlock } from "../../src/sim/resources.ts";
 import { rollLoot } from "../../src/sim/rules/itemRules.ts";
@@ -115,8 +116,9 @@ for (const kind of creatures.kindList) {
     if (kind.traits.length === 0) {
       const wantAuto = want.dps * (1 - role.tacticShare);
       check(`${kind.id} L${level}: auto-attack dps ${auto.toFixed(2)} is ${wantAuto.toFixed(2)}`, near(auto, wantAuto, 0.03), `${auto} vs ${wantAuto}`);
-      const armorStat = statValue(block, statIndex("armor"));
-      check(`${kind.id} L${level}: armour is a share of damage stopped`, near(armorStat / (armorStat + 400 + 85 * level), Math.min(0.9, role.mitigation * kind.balance.scale.armour), 0.01));
+      // Its defence (armour, dodge, parry, control... - rules/combat.json5) stops the role's share in all.
+      const eh = defenceMultiplier(game.combat.defence, (id) => (game.statIndex.has(id) ? statValue(block, game.statIndex.get(id)) : 0), level, { health }).physical;
+      check(`${kind.id} L${level}: its defence stops the role's share of damage`, near(1 - 1 / eh, Math.min(0.9, role.mitigation * kind.balance.scale.armour), 0.01), `${(1 - 1 / eh).toFixed(3)}`);
     }
     check(`${kind.id} L${level}: XP value is the role's`, near(statValue(block, statIndex("xpValue")), role.xp * kind.balance.scale.xp, 0.001));
   }

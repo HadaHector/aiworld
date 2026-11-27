@@ -2,7 +2,8 @@ import type { Entity } from "../entity";
 import type { SkillDef } from "../rules/skillRules";
 import { LOCAL } from "../rules/skillRules";
 import { restore } from "../resources";
-import { statValues } from "../stats";
+import { statValue, statValues } from "../stats";
+import { defenceValues, type StatReader } from "../rules/defenceRules";
 import { EVENT_FLAG, EVENT_KIND, type CombatEventKind } from "./events";
 import { FLAG, hasFlag, lowerFlag, raiseFlag } from "./flags";
 import { endMagic, signal } from "./magic";
@@ -20,6 +21,8 @@ export interface EventFields {
   amount?: number;
   extra?: number;
   absorbed?: number;
+  blocked?: number;
+  resisted?: number;
   flags?: number;
   reason?: number;
   name?: string;
@@ -39,6 +42,8 @@ export function emit(sys: Sys, kind: CombatEventKind, f: EventFields): void {
       amount: f.amount ?? 0,
       extra: f.extra ?? 0,
       absorbed: f.absorbed ?? 0,
+      ...(f.blocked ? { blocked: f.blocked } : {}),
+      ...(f.resisted ? { resisted: f.resisted } : {}),
       flags: f.flags ?? 0,
       reason: f.reason ?? 0,
       name: f.name ?? "",
@@ -94,6 +99,41 @@ const markHostile = (sys: Sys, ...units: (Entity | undefined)[]) => {
   for (const u of units) if (u?.combat) u.combat.lastHostile = now;
 };
 
+// --- defence (rules/defenceRules.ts) ---
+
+/** A unit's stats by id, for the defence parts (0 for one it has not). */
+function statsOf(sys: Sys, unit: Entity | undefined): StatReader {
+  return (id) => {
+    const i = sys.rules.statIndex.get(id);
+    return i === undefined || !unit?.stats ? 0 : statValue(unit.stats, i);
+  };
+}
+const levelOf = (sys: Sys, unit: Entity | undefined): number => {
+  const i = sys.rules.statIndex.get("level");
+  return i !== undefined && unit?.stats ? statValue(unit.stats, i) : 1;
+};
+
+/** What is left of each unit's ward (the `absorb` part). */
+const wards = new WeakMap<Entity, { left: number }>();
+
+/** The flags a hostile spell may raise that crowd-control avoidance can shake off. */
+const AVOIDABLE: ReadonlySet<number> = new Set([FLAG.stunned, FLAG.rooted, FLAG.silenced, FLAG.pacified, FLAG.disarmed]);
+
+/**
+ * Whether a hostile magic's crowd control fails to take on `target` (the `control` part): rolled on
+ * the magic's own random, so a replay rolls the same; a resist event when it does.
+ */
+export function avoidsControl(sys: Sys, magic: Magic, target: Entity, flag: number): boolean {
+  const d = sys.rules.combat.defence;
+  if (!d.on.control || !AVOIDABLE.has(flag) || magic.caster === target.id) return false;
+  const source = sys.world.entity(magic.caster);
+  if (source && relation(sys, source, target) !== "enemy") return false;
+  const chance = defenceValues(d, statsOf(sys, target), levelOf(sys, source)).control;
+  if (chance <= 0 || magic.random() >= chance) return false;
+  emit(sys, "resisted", { source: magic.caster, target: target.id, skill: magic.skill.index, at: target });
+  return true;
+}
+
 // --- damage and healing ---
 
 export interface HitOptions {
@@ -117,10 +157,15 @@ export function dealDamage(sys: Sys, magic: Magic, target: Entity, base: number,
     emit(sys, "miss", { ...common, flags: EVENT_FLAG.immune | periodic });
     return;
   }
+  // Out of combat until this blow: a ward is whole again.
+  const fresh = sys.world.time() - combat.lastHostile >= sys.rules.combat.combatTimeout;
   markHostile(sys, source, target);
 
   let amount = Math.max(0, base);
   let flags = periodic;
+  let blocked = 0;
+  let resisted = 0;
+  let defence: ReturnType<typeof defenceValues> | null = null;
   const set = rollSet(sys, skill, options.roll);
   if (set >= 0) {
     const rolls = sys.rules.combat.rolls[set];
@@ -132,6 +177,40 @@ export function dealDamage(sys: Sys, magic: Magic, target: Entity, base: number,
     if (magic.random() < rollValue(sys, rolls.crit, source, target, amount)) {
       amount *= rollValue(sys, rolls.critMultiplier, source, target, amount);
       flags |= EVENT_FLAG.crit;
+    }
+    // The defence (rules/combat.json5, *defence*): a weapon's blow may be dodged or parried (not one
+    // over time, not while stunned), blocked by a shield, and is cut by armour; a spell by the
+    // target's resistance to its school.
+    if (rolls.defence !== "none") {
+      defence = defenceValues(sys.rules.combat.defence, statsOf(sys, target), levelOf(sys, source));
+      if (rolls.defence === "physical") {
+        if (!options.periodic && !hasFlag(combat.flags, FLAG.stunned)) {
+          const dodge = defence.dodge;
+          const parry = skill.tags.includes("melee") ? defence.parry : 0;
+          if (dodge + parry > 0) {
+            const r = magic.random();
+            if (r < dodge + parry) {
+              emit(sys, r < dodge ? "dodge" : "parry", { ...common, flags });
+              addThreat(sys, target, source, 0);
+              return;
+            }
+          }
+          if (defence.block > 0 && defence.blockValue > 0 && magic.random() < defence.block) {
+            blocked = Math.min(amount, defence.blockValue);
+            amount -= blocked;
+            flags |= EVENT_FLAG.blocked;
+          }
+        }
+        amount *= 1 - defence.armor;
+      } else {
+        const school = skill.tags.find((t) => t.startsWith("school."))?.slice(7);
+        const share = school ? defence.resist(school) : 0;
+        if (share > 0) {
+          resisted = amount * share;
+          amount -= resisted;
+          flags |= EVENT_FLAG.resisted;
+        }
+      }
     }
     amount = Math.max(0, rollValue(sys, rolls.mitigate, source, target, amount));
   }
@@ -150,13 +229,25 @@ export function dealDamage(sys: Sys, magic: Magic, target: Entity, base: number,
     }
   }
 
+  // The ward (the `absorb` part), after the shields skills put up.
+  if (sys.rules.combat.defence.on.absorb && amount > 0) {
+    const most = (defence ?? defenceValues(sys.rules.combat.defence, statsOf(sys, target), levelOf(sys, source))).ward;
+    let ward = wards.get(target);
+    if (!ward || fresh) wards.set(target, (ward = { left: most }));
+    ward.left = Math.min(ward.left, most);
+    const taken = Math.min(ward.left, amount);
+    ward.left -= taken;
+    amount -= taken;
+    absorbed += taken;
+  }
+
   const health = sys.rules.health;
   const before = target.resources.current[health];
   restore(target.resources, health, -amount);
   const dealt = before - target.resources.current[health];
   const overkill = amount - dealt;
   addThreat(sys, target, source, (dealt + absorbed) * sys.rules.combat.threat.damage * options.threat);
-  emit(sys, "hit", { ...common, amount: dealt, extra: overkill, absorbed, flags });
+  emit(sys, "hit", { ...common, amount: dealt, extra: overkill, absorbed, blocked, resisted, flags });
 
   if (source) {
     trigger(sys, source, "hitDealt", skill);

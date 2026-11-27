@@ -7,7 +7,7 @@ import {
   type SummonData, type ThreatData,
 } from "./actions";
 import { flagRaised, interrupt, requestCast } from "./casting";
-import { addThreat, dealDamage, emit, heal, taunt } from "./combat";
+import { addThreat, avoidsControl, dealDamage, emit, heal, taunt } from "./combat";
 import { REASON } from "./events";
 import { lowerFlag, raiseFlag } from "./flags";
 import { changeStacks, changeState, endMagic, evaluate, members, runActions, scopeFor, sourceOf, startMagic } from "./magic";
@@ -63,6 +63,8 @@ attachRun<FlagData>("flag", {
     const raised: number[] = [];
     if (!target.combat) return raised;
     for (const flag of data.flags) {
+      // A hostile stun, root, silence or disarm may not take (the defence's `control` part).
+      if (avoidsControl(sys, magic, target, flag)) continue;
       if (raiseFlag(target.combat.flags, flag)) {
         raised.push(flag);
         flagRaised(sys, target, flag);

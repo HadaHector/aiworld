@@ -1,0 +1,3 @@
+// Resistance to holy spells: rated as armour is, against the attacker's level (rules/combat.json5,
+// `defence.parts.resist`).
+{ name: "Holy resistance", default: 0, min: 0, visible: "owner" }

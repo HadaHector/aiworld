@@ -50,7 +50,10 @@ share of its damage its tactics deal.
 - **damage a second** = `playerHealth(L) / ttd / (1 - playerMitigation(L))`; the auto-attack is
   `(1 - tacticShare)` of it, per swing (`weaponSpeed`) less what strength adds, spread 80-120%. The
   tactics' share is what B7 will fit.
-- **armour** is solved from the combat formula for the share asked.
+- **defence** (B8, ABILITIES.md *Defence*): the share asked is an effective-health target,
+  `1 / (1 - mitigation)`, shared out among the defence parts that are on (armour, dodge, parry,
+  control; resistance for spells at `spellBudget`), so a pack can turn a part off and the creature
+  still takes the role's time to kill. With armour alone it is the old armour for the share.
 - Roles: `normal`/`brute` (10 s, 35 s: a fight costs about 29% of health), `skirmisher`, `caster`,
   `swarm` (one of about three), `livestock` (no damage), `elite` (30 s, 12 s), `boss` (120 s, 25 s; no
   phases).

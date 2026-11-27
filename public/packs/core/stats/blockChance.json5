@@ -1,0 +1,3 @@
+// Block chance, in percent: a shield stopping `blockValue` of a physical blow (rules/combat.json5,
+// `defence.parts.block`). From a shield.
+{ name: "Block chance", default: 0, min: 0, visible: "owner" }
