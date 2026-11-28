@@ -67,10 +67,17 @@ the atlas and index. `scripts/icons/catalogue.mjs` is the list of names.
 
 A skill draws `skill-<its id>` once a loaded icon set has that name, else the `icon` its file names
 (`skillIconName` in `src/ui/icons.ts`). So the generated skill icons (prompts in
-`assets_work/comfyUI/skills.json`, 58 of them: the four classes' skills, the effects they put on
-targets, and the item uses) take over as they are made, and a skill without one keeps its Craftpix
-picture. Skills that share a Craftpix icon today (Poison and Poison Arrow, Smite and Heal, Charge and
-Dazed) each get one of their own.
+`assets_work/comfyUI/skills.json`, 46 of them: the four classes' skills and the effects they put on
+targets) take over as they are made, and a skill without one keeps its Craftpix picture. Skills that
+share a Craftpix icon today (Poison and Poison Arrow, Smite and Heal, Charge and Dazed) each get one of
+their own. Three kinds share instead (the owner's call):
+
+- **The attack** draws the weapon in the main hand, in its rarity's colour (`attackIcon`), on the
+  action bar and in the spell book; barehanded it keeps the attack skill's own icon.
+- **An effect a skill file names `iconOf`** draws that skill's generated icon: Battle Shout's buff
+  (`battleShouted`) is Battle Shout's.
+- **An item's use** (a potion's drink, food, the bandage, the quest salve and charm, the tome's reading)
+  draws the item's icon (`loadItemUseIcons`), so the potion's effect looks like the potion.
 
 **Making them** (no GPU until the owner opens a window). `skills.json` has `square: true`: `icongen.py`
 then saves the VAE Decode output for both the icon and the full save and leaves the background removal

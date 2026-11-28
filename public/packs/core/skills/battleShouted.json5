@@ -2,6 +2,7 @@
 {
   name: "Battle Shout",
   icon: "weapon-banner-purple",
+  iconOf: "battleShout",
   display: "buff",
   stacking: { per: "host", add: "replace", value: "stronger" },
   states: { roused: { length: 1800, hold: [{ do: "modifier", stat: "strength", kind: "percent", value: { add: [10, { mul: [3, { sub: ["level", 1] }] }] } }] } },

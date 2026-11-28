@@ -24,6 +24,8 @@ export interface SpellBookOptions {
   cast: (skill: number) => void;
   setAttacking: (on: boolean) => void;
   teleport: () => void;
+  /** The attack's icon - the weapon in hand; the attack skill's own when not given. */
+  attackIcon?: () => IconSpec;
 }
 
 const HOW: Record<string, string> = { auto: "learned at a level", trainer: "taught by a trainer", item: "learned from a book", talent: "a talent", quest: "a quest's reward" };
@@ -76,7 +78,7 @@ export function createSpellBook(options: SpellBookOptions): SpellBook {
     const active = spells.filter((s) => !game.skills[s.skill].passive && game.skills[s.skill].id !== "autoAttack");
     const passive = spells.filter((s) => game.skills[s.skill].passive && game.skills[s.skill].id !== "autoAttack");
     el("div", HEADING, body, "Abilities");
-    entry(body, "Attack", skillIcon(game.skills[game.skillIndex.get("autoAttack") ?? -1]), "always", ["Swing at your target with your weapon until you stop or it dies. Use it again to stop."], { kind: "attack" }, () => options.setAttacking(!mirror.own.attacking));
+    entry(body, "Attack", options.attackIcon?.() ?? skillIcon(game.skills[game.skillIndex.get("autoAttack") ?? -1]), "always", ["Swing at your target with your weapon until you stop or it dies. Use it again to stop."], { kind: "attack" }, () => options.setAttacking(!mirror.own.attacking));
     for (const s of active) {
       const def = game.skills[s.skill];
       const how = learned.get(s.skill);

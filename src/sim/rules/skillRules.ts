@@ -183,6 +183,8 @@ export interface SkillDef {
   name: string;
   /** The name of its icon in an icon set (ICONS.md); "" for none - the screens draw a placeholder by school. */
   icon: string;
+  /** Another skill whose generated icon (`skill-<id>`) it shares - an effect and the skill that gives it; "" for its own. */
+  iconOf: string;
   tags: string[];
   type: SkillType;
   weapon: boolean;
@@ -246,7 +248,7 @@ interface Entry {
 const SKILL_KEYS = [
   "name", "tags", "type", "weapon", "startsAttack", "passive", "target", "hostOn", "range", "minRange", "los", "facing", "cost", "cooldown", "category", "gcd",
   "requires", "blockedBy", "targetRequires", "targetBlockedBy", "display", "dispel", "keepOnDeath", "stacking", "areas", "groups", "vars", "start", "states",
-  "cues", "icon",
+  "cues", "icon", "iconOf",
 ];
 const STATE_KEYS = ["length", "period", "enter", "tick", "exit", "hold", "next", "on", "bar", "breakOnMove", "interruptible", "commit", "refill"];
 const FILTER_KEYS = ["relation", "alive", "has", "hasNot", "flags", "notFlags", "self", "los", "range", "facing"];
@@ -551,6 +553,7 @@ function readSkill(entry: Entry, index: number, vars: string[], read: ReadContex
     index,
     name: reader.optionalString(obj, "name", "") ?? entry.id,
     icon: reader.optionalString(obj, "icon", "") ?? "",
+    iconOf: reader.optionalString(obj, "iconOf", "") ?? "",
     tags: obj.tags === undefined ? [] : reader.stringList(obj, "tags", ""),
     type,
     weapon: reader.boolean(obj, "weapon", "", false),
