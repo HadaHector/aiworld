@@ -32,7 +32,7 @@ optional `min` and `max`. Fractions of a level interpolate; levels under 1 read 
 | `playerMitigation` | 20% → 35% | Share of a same-level attacker's weapon damage the player's armour stops. |
 | `xpToNext` | 250 … 5,130 | `40*L^2 + 210*L`; level 10 costs 20,850 XP (kills 55%, quests 45%, `xpSplit`). |
 | `income` | 270 → 2,000 copper an hour | Kills 40%, quests 35%, chests 25% (`incomeSplit`); 100 kills an hour (`killsPerHour`). |
-| `itemBudget` | 4 → 24 | Stat points of a common weapon-slot item; slots weigh `slotWeights`, rarities their own budget. |
+| `itemBudget` | 1 → 5.6 | Stat points of a common weapon-slot item; slots weigh `slotWeights`, rarities their own budget. A common kit about equals the level-up points (ITEMS.md, *The ladder*; was 4 → 24). |
 | `statPoints` | 3 at 2 → 5 at 10 | Level-up stat points (37 by ten), placed by class weights (SKILLBANK.md). |
 | `skillsActive`, `skillsPassive` | 2 → 7; 0 → 2 | Class skills known by level, auto-attack not counted (SKILLBANK.md). |
 | `tactics`, `questEffortMin/Max` | | Data for the tasks that use them (creature complexity, quests). |

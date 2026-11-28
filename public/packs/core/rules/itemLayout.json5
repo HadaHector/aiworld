@@ -17,8 +17,9 @@
   // Grey trash: it can be worn, but is worth little at a vendor - a tenth of a real piece's price. A name
   // word for each level.
   trash: { levels: [2, 4, 6, 8, 10], rarity: "poor", role: "trash", names: ["Frayed", "Patched", "Battered", "Worn", "Faded"], value: 0.1 },
-  // An item can be worn from one level under its own.
-  below: 1,
+  // An item can be worn from two levels under its own: a quest may offer gear two levels over its own
+  // (rules/quests.json5 `rewardLevel`), and a character doing it can wear it.
+  below: 2,
   // A rolled stat runs from 80% of its value to its value.
   spread: 0.2,
   // A set's armour is shared among these slots by their balance slot weights (the cloak takes a little).

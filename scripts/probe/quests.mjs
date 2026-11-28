@@ -742,6 +742,12 @@ await section("the generator", async () => {
   check("a letter down the road pays for the walk", mean(efforts.road) > mean(efforts.talk) * 2, `${mean(efforts.road).toFixed(1)} vs ${mean(efforts.talk).toFixed(1)}`);
   // Item choices.
   const rules0 = (await generatedWorld("tiny", 1)).rules.quests;
+  const itemRules0 = (() => {
+    const r = loadRulesFromDisk("tiny");
+    loadCreatureRulesFromDisk("tiny", r, 1);
+    loadProgressionRulesFromDisk("tiny", r, 1);
+    return loadItemRulesFromDisk("tiny", r, 1);
+  })();
   check("every choice offers what the rules say", choices.every((c) => c.items.length === rules0.rewardChoices), String(choices.map((c) => c.items.length)));
   check("...all of one rarity", choices.every((c) => new Set(c.items.map((x) => x.rarity)).size === 1));
   check("...no item twice", choices.every((c) => new Set(c.items.map((x) => x.id)).size === c.items.length));
@@ -771,11 +777,19 @@ await section("the generator", async () => {
   check("most quests give no item at all", none.length > allQuests.length / 2, `${none.length}/${allQuests.length}`);
   check("some give consumables", fixed.length > 0);
   const rank = (c) => c.rarities[c.items[0].rarity].order;
-  check("a chain's last quest aims for the higher rarity", choices.every((c) => !(c.quest.chain && c.quest.chain.index === c.quest.chain.of) || c.rarities[c.items[0].rarity].id === rules0.rewardRarity.finale), JSON.stringify([...new Set(choices.map((c) => c.rarities[c.items[0].rarity].id))]));
+  // The ladder (ITEMS.md) has its rarities at their levels (common to 4, green at 6 and 7, blue at 9): a
+  // chain's last quest gets the best rarity its reward templates have near its level, up to the finale's.
+  const bestNear = (lvl, aim) => {
+    const near = rules0.rewardTemplates.map((t) => (itemRules0.generated.get(t) ?? []).map((i) => itemRules0.types[i]).filter((x) => Math.abs(x.itemLevel - lvl) <= rules0.rewardLevel)).filter((l) => l.length > 0);
+    return Math.min(...near.map((l) => Math.max(...l.map((x) => itemRules0.rarities[x.rarity].order).filter((o) => o <= aim), -Infinity)));
+  };
+  const finaleAim = itemRules0.rarities.find((r) => r.id === rules0.rewardRarity.finale).order;
+  check("a chain's last quest aims for the higher rarity there is near its level", choices.every((c) => !(c.quest.chain && c.quest.chain.index === c.quest.chain.of) || !Number.isFinite(bestNear(c.quest.level, finaleAim)) || c.rarities[c.items[0].rarity].order === bestNear(c.quest.level, finaleAim)), JSON.stringify([...new Set(choices.map((c) => c.rarities[c.items[0].rarity].id))]));
   const weapons = choices.flatMap((c) => c.items).filter((x) => x.kind === "weapon").length;
   const all = choices.flatMap((c) => c.items).length;
   log(`${choices.length} item choices of ${rules0.rewardChoices}: ${weapons} weapons, ${all - weapons} armour; templates ${JSON.stringify(Object.fromEntries([...new Set(choices.flatMap((c) => c.items.map((x) => x.template)))].map((t) => [t, choices.flatMap((c) => c.items).filter((x) => x.template === t).length])))}`);
-  check("weapons and armour are both offered through the worlds", weapons / all >= 0.3 && weapons / all <= 0.7, `${weapons}/${all}`);
+  // Three kinds go round now (weapons, armour, trinkets: ITEMS.md, *The ladder*), so weapons are about a third.
+  check("weapons and armour are both offered through the worlds", weapons / all >= 0.2 && weapons / all <= 0.7, `${weapons}/${all}`);
   check("no choice is all weapons", choices.every((c) => c.items.some((x) => x.kind !== "weapon")));
   // A quest's reward filter is kept wherever it is drawn.
   const filtered = choices.filter((c) => /(^|\+)(curseLifted|wardCharm)$/.test(c.quest.chain?.id.split("#").at(-1) ?? ""));
@@ -1001,7 +1015,7 @@ for (const introSeed of (process.env.INTRO_SEEDS ?? "2,7,8,15").split(",").map(N
   const slot = me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === reward);
   check("the chosen reward in the bag", slot >= 0, rewarding.rewards.choice.join());
   await send({ type: "itemEquip", from: { container: 0, slot } });
-  check("...and worn", me.belongings.equipment.some((x) => x != null && server.debug.items.ctx.store.get(x).type === reward), JSON.stringify(last("itemRefused")));
+  check("...and worn", me.belongings.equipment.some((x) => x != null && server.debug.items.ctx.store.get(x).type === reward), `${JSON.stringify(last("itemRefused"))} at level ${level}, the quest ${rewarding.level}, the item ${items.types[reward].itemLevel}`);
   check("standing with the village's folk", [...me.standing.values()].some((v) => v > 3000), JSON.stringify([...me.standing]));
   log(`the intro (seed ${seed}, ${intro.filter((q) => q.chain).map((q) => q.objectives.map((o) => o.kind).join("+")).join(" / ")}): level ${startLevel} -> ${level}, ${me.belongings.wallet[items.main]} copper, wearing ${items.types[reward].name}`);
 });

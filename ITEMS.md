@@ -541,3 +541,53 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   off hand, neck and ring. Whatever can be worn is worn when the character is made, in bag order, so
   a second item for a slot the plain kit fills (the cloth slippers) takes it and the first goes to the bag.
   The cloth and leather pieces have no `gear` yet, so they do not show on the body.
+
+## The ladder (vertical slice, 2026-11-28)
+
+Agreed with the owner for SLICE.md I8 and I1. Full numbers: `npm run probe -- scripts/probe/itemLadder.mjs --report`.
+
+- **An item type** is an armour type in a slot (cloth for mage and priest, leather for the ranger, mail
+  for the warrior; head, shoulders, chest, wrists, hands, waist, legs, feet), a cloak, an amulet, a
+  ring, a weapon family (sword, axe, mace, dagger, bow, staff, wand), a shield (buckler, round shield)
+  or the casters' off hand (orb): **37 types, one icon each**.
+- **Six items a type** over levels 1-10, the rungs of `rules/itemLayout.json5`: start (1, common), loot
+  (3, common), shop (4, common), quest (6, green), loot (7, green), loot (9, blue); and **grey trash**
+  at 2, 4, 6, 8 and 10, which can be worn (a level 4 grey beats the starting piece; the owner's idea)
+  and sells for a tenth of a real piece. 37 × 11 = 407 generated types.
+- **A template only names the type**: `ladder: "<line>"`, the slot, the name with `{tier}`, a word per
+  rung, the icon, and per-rung looks (`rungs: { start: { gear, tint } }`) - see `itemTemplates/`. Ids
+  are `<template>.<rung>`: `sword.start`, `leatherChest.loot9`, `ring.trash4`. Its type's
+  `parts` are `{ rung, role, line }`.
+- **Every number from the curves** (`src/sim/rules/itemLadder.ts`, `ladderBudget`): stat points
+  `itemBudget(level, slot, rarity)` split by the line's weights; armour the slot's share of the set the
+  defence rules (`defenceFor`) want for `playerMitigation`, times the armour type (cloth 0.55, leather 1,
+  mail 1.45); weapon damage the line's share of `playerDps` a swing; block from the line's curve;
+  price `value: "balance"` (grey: `trash.value` of it). Worn from two levels under the item's.
+- **Gear about equals levels** (the owner's call): `itemBudget` runs 1 to 5.6, so a common kit (about
+  6.6 slot weights) carries what the 37 level-up points do; stamina is mostly off the armour lines, so
+  health in a full kit lands within 25% of `playerHealth` (the probe checks it at 1, 5 and 10).
+- **Rarities**: green +25%, blue +50% (the owner kept them); grey now 0.85.
+
+**Loot (I1)**
+
+- A loot entry `{ gear: "loot", rarity: [...], spread: 1 }` gives a ladder item of that role within
+  `spread` levels of the source's level (`gearPool`); where none is that near the window widens to 3
+  and the rarity steps down, so a rare asked at level 1 gives a common of the level, never the level 9
+  rare. Every creature table rolls `lootTables/gear.json5` once a kill (76% nothing, 18% grey, 5%
+  loot, 1% rare); humanoids `gearHumanoid` (more of it). Creatures keep their trash and valuable
+  materials.
+- **New tables**: `caveChest`, `mineChest`, `cryptChest`, `motteChest`, and `caveBoss`, `mineBoss`,
+  `cryptBoss`, `motteBoss` (a boss always drops a piece of its level, green or better). They are not
+  wired yet: today a lair's chests are the generic `dungeonChest` and a lair's boss drops its kind's
+  table; the dungeon code needs to name a style's chest table and its boss's (a hook for the dungeons lane).
+- **Money**: kills give the kills' share of `income` (40%, by role, scale "brute" etc.), a chest about
+  12 brute kills' (`chestsPerHour: 5` in `rules/balance.json5`, the chests' 25%). The probe checks both
+  by level. Selling drops adds on top: the sell rate is 25%.
+- **Vendors**: `roles: ["shop"]` in a stock lists ladder items by role; the smith sells the metal types'
+  shop and start rungs and mail, the shopkeeper potions, cloth, leather, bows, staves, wands and trinkets.
+- **Prices**: potions `value: "potion"` (3 minutes of income); repair is `repairShare` (5%) of the value
+  for a full repair (`rules/items.json5`, checked against the balance).
+- **Quests**: `rewardTemplates` are every laddered template; `rewardLevel` is 1, so a reward is always
+  wearable at its quest's level. A chain's last quest gets the best rarity there is near its level.
+- **The old authored gear** (the cloth and leather sets, plate pieces, rings) is still in `items/`, no
+  longer in kits, loot or shops; the axis generator stays (the items probe tests it on a probe pack).
