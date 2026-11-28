@@ -73,3 +73,20 @@ export function packSourcesFromDisk(config) {
   const sources = packs.map((pack) => ({ id: pack.id, files: pack.files.map((path) => ({ path, text: readFileSync(`${root}/${pack.id}/${path}`, "utf8") })) }));
   return { sources, packs: packs.map((pack) => pack.id) };
 }
+
+/**
+ * Everything the duel tool (B7, DUEL.md) reads under a config: the game rules with the creature kinds
+ * and origin combinations joined to their templates (so before the item rules, which give characters
+ * their start kit), the item rules, and the class templates from the skill bank.
+ */
+export async function loadDuelRulesFromDisk(configName = DEFAULT_CONFIG.name, seed = 0) {
+  const { readSkillBank } = await import("../src/sim/rules/skillBank.ts");
+  const { readClassTemplates } = await import("../src/sim/rules/classGen.ts");
+  const game = loadRulesFromDisk(configName);
+  const creatures = loadCreatureRulesFromDisk(configName, game, seed);
+  const progression = loadProgressionRulesFromDisk(configName, game, seed);
+  const items = loadItemRulesFromDisk(configName, game, seed);
+  const packs = packSourcesFromDisk(readConfigFromDisk(configName)).sources;
+  const bank = readSkillBank(packs, game);
+  return { game, creatures, progression, items, classes: bank ? readClassTemplates(packs, bank) : [] };
+}

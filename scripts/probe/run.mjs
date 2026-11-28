@@ -20,7 +20,7 @@ const CATEGORIES = {
   dungeons: ["dungeons", "navigation"],
   "terrain-water": ["water", "riverLevels", "mapTiles", "swim", "vale"],
   gameplay: ["lairSave", "lairLogin", "defence", "abilities", "entities", "collision", "creatures", "beast", "chat", "feedback", "ambience"],
-  rules: ["balance", "skillBank", "items", "progression", "quests", "npcs", "saves", "starts"],
+  rules: ["balance", "skillBank", "items", "progression", "quests", "npcs", "saves", "starts", "duel"],
   art: ["body", "beast", "icons", "feedback"],
 };
 /** Checks that fail today because the work they check is not built: run only with --worklists. */
