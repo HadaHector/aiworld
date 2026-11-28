@@ -1,14 +1,20 @@
 // Builds the icons-generated pack from the picked ComfyUI icons: one atlas, one index.
 //
-//   node scripts/icons/buildGenerated.mjs [--src assets_work/comfyUI/v2/selected/full] [--out public/packs/icons-generated] [--size 64]
+//   node scripts/icons/buildGenerated.mjs [--src assets_work/comfyUI/v2/selected/full]
+//       [--squares assets_work/comfyUI/skills/selected/full] [--out public/packs/icons-generated] [--size 64]
 //
-// The source is the folder review.py fills (assets_work/comfyUI/review.py): one cutout PNG with an alpha
-// channel per picked icon, named for the icon. Each is cropped to its content and fitted into the cell
-// with the same margin, so all of them fill the icon alike whatever the model drew.
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+// Two sources, both folders review.py fills (assets_work/comfyUI/review.py), one PNG per picked icon,
+// named for the icon:
+// - `--src`, the item icons: cutouts with an alpha channel. Each is cropped to its content and fitted
+//   into the cell with the same margin, so all of them fill the icon alike whatever the model drew.
+// - `--squares`, the skill icons (icongen.py --square): full squares, background and all. Each is scaled
+//   to the cell as it is, with no crop. Their names are the skills' own (`icon: "skill-<id>"`), so the
+//   pack replaces the craftpix stand-ins of the same name (ICONS.md, *Skill icons*).
+// A missing folder is skipped (either set may not be generated yet); both missing is an error.
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { decodePng, encodePng } from "./png.mjs";
-import { fitInto } from "./image.mjs";
+import { fillSquare, fitInto } from "./image.mjs";
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -16,14 +22,20 @@ const option = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 const src = resolve(option("src", "assets_work/comfyUI/v2/selected/full"));
+const squares = resolve(option("squares", "assets_work/comfyUI/skills/selected/full"));
 const out = resolve(option("out", "public/packs/icons-generated"));
 const SIZE = Number(option("size", "64"));
 const COLUMNS = 16;
 const PAD = Math.round(SIZE / 16);
 
-const files = readdirSync(src).filter((f) => f.endsWith(".png")).sort();
-if (files.length === 0) throw new Error(`no picked icons in ${src}: pick some with review.py first`);
-const icons = files.map((f) => ({ name: f.slice(0, -4), image: fitInto(decodePng(readFileSync(join(src, f))), SIZE, PAD) }));
+const pngs = (dir) => (existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".png")).sort() : []);
+const icons = [
+  ...pngs(src).map((f) => ({ name: f.slice(0, -4), image: fitInto(decodePng(readFileSync(join(src, f))), SIZE, PAD) })),
+  ...pngs(squares).map((f) => ({ name: f.slice(0, -4), image: fillSquare(decodePng(readFileSync(join(squares, f))), SIZE) })),
+];
+if (icons.length === 0) throw new Error(`no picked icons in ${src} or ${squares}: pick some with review.py first`);
+const twice = icons.map((i) => i.name).filter((name, n, all) => all.indexOf(name) !== n);
+if (twice.length) throw new Error(`picked in both folders: ${twice.join(", ")}`);
 
 const rows = Math.ceil(icons.length / COLUMNS);
 const atlas = { width: COLUMNS * SIZE, height: rows * SIZE, data: new Uint8ClampedArray(COLUMNS * SIZE * rows * SIZE * 4) };
@@ -41,6 +53,7 @@ writeFileSync(
 );
 writeFileSync(
   join(out, "pack.json5"),
-  `{\n  name: "Generated icons",\n  description: "Item icons made with an image model (assets_work/comfyUI): the game's own look. Replaces the Craftpix icons of the same name.",\n  // After icons-craftpix, so a name in both comes from here.\n  priority: 20,\n}\n`,
+  `{\n  name: "Generated icons",\n  description: "Item and skill icons made with an image model (assets_work/comfyUI): the game's own look. Replaces the Craftpix icons of the same name.",\n  // After icons-craftpix, so a name in both comes from here.\n  priority: 20,\n}\n`,
 );
-console.log(`${icons.length} icons in a ${atlas.width}x${atlas.height} atlas -> ${out}`);
+const skills = pngs(squares).length;
+console.log(`${icons.length} icons (${icons.length - skills} items, ${skills} skill squares) in a ${atlas.width}x${atlas.height} atlas -> ${out}`);
