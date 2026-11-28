@@ -41,11 +41,16 @@ const typeOf = (id) => items.types[items.typeIndex.get(id)];
 const stat = (id) => game.statIndex.get(id);
 
 /** The item rules from the packs plus one probe pack of extra files - for what must be refused. */
-function withProbePack(files) {
+function withProbePack(files, seed = 1234) {
   const sources = packSourcesFromDisk(readConfigFromDisk(CONFIG)).sources;
   const probe = { id: "probe", files: [{ path: "pack.json5", text: "{ name: 'Probe', priority: 100 }" }, ...Object.entries(files).map(([path, text]) => ({ path, text }))] };
-  return resolveItemRules([...sources, probe], game, 1234);
+  return resolveItemRules([...sources, probe], game, seed);
 }
+// Core's gear is laddered (ITEMS.md, *The ladder*; scripts/probe/itemLadder.mjs tests it); the axis
+// generator is tested on the old sword and chestpiece templates, brought by a probe pack.
+const AXIS_PACK = { "itemTemplates/axisSword.json5": "// Swords from parts (see ITEMS.md, Generated item types): a metal times a form times how well it is\n// made (its model, weapons/sword.json5) times a rarity, so 3 x 3 x 3 x 3 = 81, less the crude rare and\n// plain ornate ones: 63 types. The metals' levels (1, 4, 8) leave a sword near every level a quest's reward can be at (QUESTS.md, *Item choices*). The rarer tiers draw extra stats from the pool below, which ones by the seed.\n{\n  kind: \"weapon\",\n  icon: \"item-sword-{material}-{form}\",\n  slot: \"mainHand\",\n  name: \"{make}{material} {form}\",\n  axes: {\n    material: [\n      { id: \"bronze\", name: \"Bronze\", tint: \"#c89a5a\", level: 1, budget: 1 },\n      { id: \"hardened\", name: \"Hardened\", tint: \"#b98a4e\", level: 4, budget: 1.25 },\n      // Iron needs some skill with swords (PROGRESSION.md: a discipline's level is a stat items require).\n      { id: \"iron\", name: \"Iron\", tint: \"#d6dae0\", level: 8, budget: 1.5, requires: { and: [{ ge: [\"level\", { sub: [\"itemLevel\", 8] }] }, { ge: [\"swordSkill\", 10] }] } },\n    ],\n    form: [\n      { id: \"short\", name: \"Shortsword\", stats: { weaponMin: [2, 3], weaponMax: [4, 5], weaponSpeed: -0.4, agility: [1, 2] } },\n      { id: \"long\", name: \"Longsword\", stats: { weaponMin: [3, 4], weaponMax: [6, 8], strength: [1, 2] } },\n      { id: \"great\", name: \"Greatsword\", fills: [\"offHand\"], stats: { weaponMin: [6, 8], weaponMax: [11, 14], weaponSpeed: 1.2, strength: [2, 3] }, durability: 60 },\n    ],\n    // How well it is made (CHARACTERS.md, *Weapons and shields*): which of the family's models it is.\n    make: [\n      { id: \"crude\", name: \"Crude \", gear: [\"sword.crude\"], budget: 0.85 },\n      { id: \"standard\", name: \"\", gear: [\"sword.standard\"] },\n      { id: \"ornate\", name: \"Ornate \", gear: [\"sword.ornate\"], budget: 1.2, level: 5 },\n    ],\n  },\n  rarities: [\"common\", \"uncommon\", \"rare\"],\n  // No crude rarity, no plain ornament.\n  never: [{ make: \"crude\", rarity: \"rare\" }, { make: \"ornate\", rarity: \"common\" }],\n  unscaled: [\"weaponSpeed\"],\n  extra: { stamina: [1, 3], strength: [1, 2], agility: [1, 2], spirit: [1, 2], intellect: [1, 2] },\n  durability: 45,\n  value: \"balance\",   // from the curves (rules/balance.json5): the level, slot and rarity set it\n  requires: { ge: [\"level\", { sub: [\"itemLevel\", 8] }] },\n}\n", "itemTemplates/axisChest.json5": "// Body armour from parts: a material (which sets the gear and the piece) times how well it is made\n// times a rarity - 3 x 3 x 3 = 27 types, none of them a worn uncommon or rare.\n{\n  kind: \"armour\",\n  slot: \"chest\",\n  name: \"{make} {material}\",\n  axes: {\n    material: [\n      { id: \"leather\", icon: \"item-leather-jerkin\", name: \"Leather Jerkin\", gear: [\"jerkin\"], stats: { armor: [18, 24], agility: [1, 2] }, durability: 40 },\n      { id: \"mail\", icon: \"item-mail-hauberk\", name: \"Mail Hauberk\", gear: [\"mailShirt\"], stats: { armor: [40, 50], stamina: [1, 2] }, level: 5, budget: 1.2, durability: 55 },\n      { id: \"plate\", icon: \"item-plate-cuirass\", name: \"Plate Cuirass\", gear: [\"mailShirt\", \"breastplate\"], stats: { armor: [70, 85], stamina: [2, 3] }, level: 10, budget: 1.4, durability: 75 },\n    ],\n    make: [\n      { id: \"worn\", name: \"Worn\", budget: 0.8 },\n      { id: \"sturdy\", name: \"Sturdy\" },\n      { id: \"fine\", name: \"Fine\", budget: 1.15 },\n    ],\n  },\n  rarities: [\"common\", \"uncommon\", \"rare\"],\n  never: [{ make: \"worn\", rarity: \"uncommon\" }, { make: \"worn\", rarity: \"rare\" }],\n  extra: { stamina: [1, 2], strength: [1, 2], agility: [1, 2], spirit: [1, 2] },\n  value: \"balance\",   // from the curves (rules/balance.json5): the level, slot and rarity set it\n}\n" };
+const axis = withProbePack(AXIS_PACK);
+const axisOf = (id) => axis.types[axis.typeIndex.get(id)];
 function refused(files, what, pattern) {
   try {
     withProbePack(files);
@@ -63,24 +68,25 @@ await section("rules", () => {
   check("money shown in denominations", formatMoney(items.currencies[items.main], 12345) === "1g 23s 45c", formatMoney(items.currencies[items.main], 12345));
   check("a plain currency shown as a number", formatMoney(items.currencies[items.currencyIndex.get("marks")], 7) === "7");
   check("zero money shown", formatMoney(items.currencies[items.main], 0) === "0c");
-  check("sword makes 63 types (3 metals x 3 forms x 3 makes x 3 rarities, never: crude rare, ornate common)", items.generated.get("sword").length === 63, String(items.generated.get("sword")?.length));
-  check("chestpiece makes 21 types (never: worn uncommon or rare)", items.generated.get("chestpiece").length === 21, String(items.generated.get("chestpiece")?.length));
-  const long = typeOf("sword.iron.long.standard.common");
+  check("an axis template makes 63 types (3 metals x 3 forms x 3 makes x 3 rarities, never: crude rare, ornate common)", axis.generated.get("axisSword").length === 63, String(axis.generated.get("axisSword")?.length));
+  check("another makes 21 types (never: worn uncommon or rare)", axis.generated.get("axisChest").length === 21, String(axis.generated.get("axisChest")?.length));
+  check("core's sword is a ladder: six rungs and five greys", items.generated.get("sword").length === 11, String(items.generated.get("sword")?.length));
+  const long = axisOf("axisSword.iron.long.standard.common");
   check("a generated type's name from its parts", long?.name === "Iron Longsword", long?.name);
   check("a generated type's item level from its parts", long?.itemLevel === 8);
-  check("a part's field overrides (the greatsword fills the off hand)", typeOf("sword.bronze.great.standard.common").fills.join() === String(items.slotIndex.get("offHand")));
-  check("the weapon speed is left unscaled", typeOf("sword.iron.great.standard.rare").stats.find((s) => s.stat === stat("weaponSpeed"))?.min === 1.2);
-  const plain = typeOf("sword.bronze.long.standard.common").stats.find((s) => s.stat === stat("strength"));
-  const iron = typeOf("sword.iron.long.standard.common").stats.find((s) => s.stat === stat("strength"));
+  check("a part's field overrides (the greatsword fills the off hand)", axisOf("axisSword.bronze.great.standard.common").fills.join() === String(items.slotIndex.get("offHand")));
+  check("the weapon speed is left unscaled", axisOf("axisSword.iron.great.standard.rare").stats.find((s) => s.stat === stat("weaponSpeed"))?.min === 1.2);
+  const plain = axisOf("axisSword.bronze.long.standard.common").stats.find((s) => s.stat === stat("strength"));
+  const iron = axisOf("axisSword.iron.long.standard.common").stats.find((s) => s.stat === stat("strength"));
   check("a material's budget scales stats", plain.max < iron.max, `${plain.max} vs ${iron.max}`);
-  check("a rare type has two extra stats", typeOf("sword.bronze.great.standard.rare").stats.length === typeOf("sword.bronze.great.standard.common").stats.length + 2);
+  check("a rare type has two extra stats", axisOf("axisSword.bronze.great.standard.rare").stats.length === axisOf("axisSword.bronze.great.standard.common").stats.length + 2);
   // The same seed, the same catalogue; another seed, other extra stats somewhere.
-  const again = loadItemRulesFromDisk(CONFIG, game, 1234);
+  const again = withProbePack(AXIS_PACK);
   const sig = (r) => r.types.map((t) => `${t.id}:${t.stats.map((s) => `${s.stat}/${s.min}/${s.max}`).join(",")}`).join("|");
-  check("the same seed gives the same catalogue", sig(again) === sig(items) && again.hash === items.hash);
-  const other = loadItemRulesFromDisk(CONFIG, game, 99);
-  check("another seed gives the same ids", other.types.map((t) => t.id).join() === items.types.map((t) => t.id).join());
-  check("another seed draws other extra stats", sig(other) !== sig(items));
+  check("the same seed gives the same catalogue", sig(again) === sig(axis) && again.hash === axis.hash);
+  const other = withProbePack(AXIS_PACK, 99);
+  check("another seed gives the same ids", other.types.map((t) => t.id).join() === axis.types.map((t) => t.id).join());
+  check("another seed draws other extra stats", sig(other) !== sig(axis));
   check("bread's skill is listed for the skill rules", items.abilityRefs.some((r) => r.id === "eatBread" && r.path === "use.skill"));
   check("the player template's belongings", items.entities.get("player")?.bag === 20 && items.entities.get("player")?.bank === 40);
   check("the dummy's loot", items.entities.get("trainingDummy")?.loot === "trainingDummy");
@@ -97,7 +103,7 @@ await section("rules", () => {
 
 // --- rolls ---
 await section("rolls", () => {
-  const sword = typeOf("sword.iron.long.standard.rare");
+  const sword = typeOf("sword.loot9");
   let lowSeen = false;
   let highSeen = false;
   let inRange = true;
@@ -143,9 +149,9 @@ await section("loot", () => {
   const tomeFor = (origins) => rollLoot(items, "chest", context, mulberry32(7), new Set(origins)).some((d) => "type" in d && items.types[d.type].id === "tomeOfFrostNova");
   check("the mage's book drops for a mage", tomeFor(["mage"]));
   check("...and not for a priest or for nobody", !tomeFor(["priest"]) && !tomeFor([]));
-  // 2-3 rolls, mean 2.5; wolf pelts weigh 20 of 120.
+  // 2-3 rolls, mean 2.5; wolf pelts weigh 20 of 95 (lootTables/chest.json5).
   const pelts = counts.get("wolfPelt") ?? 0;
-  const expected = N * 2.5 * (20 / 120);
+  const expected = N * 2.5 * (20 / 95);
   check("weights hold over 10,000 rolls", Math.abs(pelts - expected) / expected < 0.05, `${pelts} vs ${expected.toFixed(0)}`);
   // Nesting and conditions: the dummy's table gives starter gear through a nested table, and the key
   // only to a looter under level 5.
@@ -161,9 +167,10 @@ await section("loot", () => {
   const isKey = (d) => "type" in d && items.types[d.type].id === "rustyKey";
   check("a condition holds for a low looter", low.filter(isKey).length === 500);
   check("a condition fails for a high one", high.filter(isKey).length === 0);
-  const starter = new Set(["tunic", "leatherBoots", "leatherBelt", "leatherBracers", "copperRing", "apprenticeRobe"]);
-  check("a nested table gives its items", low.some((d) => "type" in d && starter.has(items.types[d.type].id)));
-  check("a template entry gives only matching types", low.filter((d) => "type" in d && items.types[d.type].template === "sword").every((d) => items.types[d.type].parts.material === "bronze" && items.types[d.type].rarity <= 2));
+  // The nested starter table gives starting pieces; the gear entry grey trash near the source's level (1).
+  check("a nested table gives its items", low.some((d) => "type" in d && items.types[d.type].parts.role === "start"));
+  const greys = low.filter((d) => "type" in d && items.types[d.type].parts.role === "trash");
+  check("a gear entry gives its role near the source's level", greys.length > 0 && greys.every((d) => items.types[d.type].itemLevel <= 3), [...new Set(greys.map((d) => items.types[d.type].itemLevel))].join());
   check("the same seed, the same drop", JSON.stringify(dummyDrops(1, 9)) === JSON.stringify(dummyDrops(1, 9)));
 });
 
@@ -229,26 +236,26 @@ await section("belongings", () => {
   // Equipment: modifiers on, off, the look.
   const strengthBefore = statOf(p, "strength");
   const minBefore = statOf(p, "weaponMin");
-  system.give(p, items.typeIndex.get("sword.bronze.long.standard.uncommon"), 1);
-  const swordAt = bagIndex(p, "sword.bronze.long.standard.uncommon");
+  system.give(p, items.typeIndex.get("sword.start"), 1);
+  const swordAt = bagIndex(p, "sword.start");
   const sword = bagItem(p, swordAt);
   const values = itemStats(items.types[sword.type], sword.roll);
   const swordStrength = values[items.types[sword.type].stats.findIndex((s) => s.stat === stat("strength"))] ?? 0;
-  check("equipping", system.equip(p, B(swordAt)) === "" && typeIdOf(worn(p, "mainHand")) === "sword.bronze.long.standard.uncommon");
+  check("equipping", system.equip(p, B(swordAt)) === "" && typeIdOf(worn(p, "mainHand")) === "sword.start");
   check("the sword's strength is on the wearer", statOf(p, "strength") === strengthBefore + swordStrength, `${statOf(p, "strength")} vs ${strengthBefore}+${swordStrength}`);
   check("its weapon damage too", statOf(p, "weaponMin") > minBefore);
   check("under the slot's source", p.stats.modifiers.some((m) => m.source === "item:mainHand" && m.stat === stat("weaponMin")));
-  check("the body shows the sword", p.gear.includes("sword.bronze.long.standard.uncommon"));
-  check("unequipping", system.unequip(p, slot("mainHand")) === "" && statOf(p, "strength") === strengthBefore && statOf(p, "weaponMin") === minBefore && !p.gear.includes("sword.bronze.long.standard.uncommon"));
+  check("the body shows the sword", p.gear.includes("sword.start"));
+  check("unequipping", system.unequip(p, slot("mainHand")) === "" && statOf(p, "strength") === strengthBefore && statOf(p, "weaponMin") === minBefore && !p.gear.includes("sword.start"));
   check("no item:mainHand modifiers left", !p.stats.modifiers.some((m) => m.source === "item:mainHand"));
   check("a stack cannot be worn", system.equip(p, B(bagIndex(p, "bread"))) === "slot");
 
   // A two-handed sword fills the off hand; something in the off hand takes it off.
-  system.give(p, items.typeIndex.get("sword.bronze.great.standard.common"), 1);
-  check("a greatsword goes on", system.equip(p, B(bagIndex(p, "sword.bronze.great.standard.common"))) === "");
+  system.give(p, items.typeIndex.get("bow.start"), 1);
+  check("a two-handed bow goes on", system.equip(p, B(bagIndex(p, "bow.start"))) === "");
   check("bread cannot go in the off hand", system.move(p, B(bagIndex(p, "bread")), E("offHand"), 0) === "slot");
   // Equip the long sword back into the main hand: the greatsword swaps into its bag slot.
-  check("a one-hander swaps the two-hander out", system.equip(p, B(bagIndex(p, "sword.bronze.long.standard.uncommon"))) === "" && typeIdOf(worn(p, "mainHand")) === "sword.bronze.long.standard.uncommon" && bagIndex(p, "sword.bronze.great.standard.common") >= 0);
+  check("a one-hander swaps the two-hander out", system.equip(p, B(bagIndex(p, "sword.start"))) === "" && typeIdOf(worn(p, "mainHand")) === "sword.start" && bagIndex(p, "bow.start") >= 0);
 
   // Requires: an iron greatsword wants level 0 (itemLevel 8 - 8), a level-1 player passes; push it.
   system.give(p, items.typeIndex.get("plateHelm"), 1);
@@ -258,7 +265,7 @@ await section("belongings", () => {
 
   // What an item asks, line by line: an iron sword wants sword skill 10 as well as its level - a
   // level-10 character with no sword skill lacks exactly that.
-  const iron = items.types[items.typeIndex.get("sword.iron.long.standard.common")];
+  const iron = items.types[items.typeIndex.get("sword.loot9")];
   const names = Object.fromEntries(game.stats.map((st) => [st.id, st.name]));
   const have = { level: 10, swordSkill: 0 };
   const lines = requirementLines(iron.requires.source, { itemLevel: iron.itemLevel }, (id) => have[id], names);
@@ -293,7 +300,7 @@ await section("belongings", () => {
   const breadAt = bagIndex(p, "bread");
   const before = bagItem(p, breadAt).count;
   check("using bread", system.use(p, B(breadAt)) === "" && hookCalls[0] === "use eatBread" && bagItem(p, breadAt).count === before - 1);
-  check("a sword is not used", system.use(p, B(bagIndex(p, "sword.bronze.great.standard.common"))) === "cannot");
+  check("a sword is not used", system.use(p, B(bagIndex(p, "bow.start"))) === "cannot");
 
   // Quest items: one to a quest line (its roll), never dropped.
   system.give(p, items.typeIndex.get("rustyKey"), 1, 777);
@@ -456,14 +463,14 @@ await section("boundary", async () => {
   check("and it is gone for a", inA.some((m) => m.type === "entityDespawn" && m.id === ground.id));
 
   // Equipping changes the look for the other client.
-  await send(a, { type: "debugItem", item: "sword.bronze.long.standard.uncommon", count: 1 });
-  const swordAt = server.debug.entity(a.id).belongings.bag.findIndex((id) => id != null && rulesHere.types[server.debug.items.store.get(id).type].id === "sword.bronze.long.standard.uncommon");
+  await send(a, { type: "debugItem", item: "sword.start", count: 1 });
+  const swordAt = server.debug.entity(a.id).belongings.bag.findIndex((id) => id != null && rulesHere.types[server.debug.items.store.get(id).type].id === "sword.start");
   take(a);
   take(b);
   await send(a, { type: "itemEquip", from: { container: BAG, slot: swordAt } });
   inA = take(a);
   inB = take(b);
-  check("b sees a's new sword", inB.some((m) => m.type === "entityGear" && m.id === a.id && m.gear.includes("sword.bronze.long.standard.uncommon")));
+  check("b sees a's new sword", inB.some((m) => m.type === "entityGear" && m.id === a.id && m.gear.includes("sword.start")));
   check("a gets the sword's modifiers", inA.some((m) => m.type === "entityModifiers" && m.modifiers.some((x) => x.source === "item:mainHand")));
   await send(a, { type: "itemMove", from: { container: BAG, slot: 19 }, to: { container: EQUIPMENT, slot: 0 }, count: 0 });
   check("a bad move is refused with a reason", take(a).some((m) => m.type === "itemRefused" && m.reason === "empty"));

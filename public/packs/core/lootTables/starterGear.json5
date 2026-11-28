@@ -1,12 +1,4 @@
-// Plain gear for a beginner, nested in other tables.
+// Plain gear for a beginner, nested in other tables: a starting piece of any type.
 {
-  pick: [
-    { weight: 2, item: "tunic" },
-    { weight: 2, item: "leatherBoots" },
-    { weight: 2, item: "leatherBelt" },
-    { weight: 2, item: "leatherBracers" },
-    { weight: 1, item: "copperRing" },
-    { weight: 1, item: "apprenticeRobe" },
-    { weight: 3, template: "chestpiece", where: { material: ["leather", "mail"] } },
-  ],
+  pick: [{ weight: 1, gear: "start" }],
 }

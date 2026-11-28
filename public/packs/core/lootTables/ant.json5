@@ -6,5 +6,5 @@
     { weight: 25, item: "acidGland" },
     { weight: 25 },
   ],
-  always: [{ money: [0.5, 1.5], scale: "swarm" }],   // a share of a swarm kill's money at its level (rules/balance.json5)
+  always: [{ money: [0.5, 1.5], scale: "swarm" }, { table: "gear" }],   // a share of a swarm kill's money at its level (rules/balance.json5)
 }

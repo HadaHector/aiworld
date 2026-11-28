@@ -421,7 +421,7 @@ await section("server", async () => {
   check("people's starting discipline", lvl(b, "mining") === 5);
   // A class starts with its own weapon in hand (its origin's `items.start`).
   const held = (e) => { const it = t.server.debug.items; const id = e.belongings.equipment[it.ctx.items.slotIndex.get("mainHand")]; return id == null ? "" : it.ctx.items.types[it.ctx.store.get(id).type].id; };
-  check("a warrior starts with a sword, a mage with a staff", held(a) === "sword.bronze.short.crude.common" && held(b) === "ashStaff", `${held(a)} / ${held(b)}`);
+  check("a warrior starts with a sword, a mage with a staff", held(a) === "sword.start" && held(b) === "staff.start", `${held(a)} / ${held(b)}`);
 
   // A wolf both fought, killed: full XP to each (credit `all`), Classic's amount for a level-1 wolf.
   const S = t.server.debug.creatures.debug;
@@ -469,12 +469,13 @@ await section("server", async () => {
   dummy.combat.threat.set(b.id, { amount: 5, last: t.server.time });
   // b is a mage, with a staff: a sword in hand for the sword skill below.
   const itemsSys = t.server.debug.items;
-  itemsSys.give(b, itemsSys.ctx.items.typeIndex.get("sword.bronze.short.standard.common"), 1);
-  itemsSys.equip(b, { container: 0, slot: b.belongings.bag.findIndex((id) => id != null && itemsSys.ctx.items.types[itemsSys.ctx.store.get(id).type].id === "sword.bronze.short.standard.common") });
+  itemsSys.give(b, itemsSys.ctx.items.typeIndex.get("sword.start"), 1);
+  itemsSys.equip(b, { container: 0, slot: b.belongings.bag.findIndex((id) => id != null && itemsSys.ctx.items.types[itemsSys.ctx.store.get(id).type].id === "sword.start") });
   const before = xp(b);
   t.clients[1].send({ type: "target", id: dummy.id });
   t.clients[1].send({ type: "attack", on: true });
-  await t.pump(150);
+  // A sword swings every 2.4 s (rules/itemLayout.json5), and may miss: time for a few.
+  await t.pump(300);
   const gained = xp(b) - before;
   check("a defeat gives XP", gained > 0, String(gained));
   await t.pump(90);
@@ -537,8 +538,8 @@ await section("server", async () => {
   await t.pump(3);
   check("book: teaches, and is used up", b.combat.spells.some((s) => s.skill === frostNova && s.source === "learn:item") && bagSlot() < 0);
 
-  // An item requirement on a discipline: iron swords need sword skill 10.
-  const iron = t.server.debug.items.ctx.items.typeIndex.get("sword.iron.short.standard.common");
+  // An item requirement on a discipline: the level 9 iron sword needs sword skill 10 (itemTemplates/sword.json5).
+  const iron = t.server.debug.items.ctx.items.typeIndex.get("sword.loot9");
   t.server.debug.items.give(a, iron, 1);
   const ironSlot = () => a.belongings.bag.findIndex((id) => id != null && t.server.debug.items.store.get(id).type === iron);
   const refused = t.server.debug.items.equip(a, { container: 0, slot: ironSlot() });

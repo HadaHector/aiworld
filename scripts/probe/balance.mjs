@@ -157,11 +157,12 @@ check("creature kinds were moved to roles", roled >= 20, `${roled} kinds`);
 
 // --- prices from the budget ---
 {
-  const sword = items.types[items.typeIndex.get("sword.bronze.short.standard.common")];
-  const iron = items.types[items.typeIndex.get("sword.iron.short.standard.common")];
-  const rare = items.types[items.typeIndex.get("sword.iron.short.standard.rare")];
-  check("a generated sword has a price from the curves", sword.value === balance.itemPrice(1, "mainHand", 1), String(sword.value));
-  check("iron (level 8) costs more than bronze", iron.value > sword.value * 3, `${iron.value} vs ${sword.value}`);
+  // The sword ladder (ITEMS.md, *The ladder*): bronze at 3, iron (green) at 7, the rare at 9.
+  const sword = items.types[items.typeIndex.get("sword.loot3")];
+  const iron = items.types[items.typeIndex.get("sword.loot7")];
+  const rare = items.types[items.typeIndex.get("sword.loot9")];
+  check("a generated sword has a price from the curves", sword.value === balance.itemPrice(3, "mainHand", 1), String(sword.value));
+  check("iron (level 7) costs more than bronze", iron.value > sword.value * 2, `${iron.value} vs ${sword.value}`);
   check("rare costs more than common at the same level", rare.value > iron.value, `${rare.value} vs ${iron.value}`);
   const priced = items.types.filter((t) => t.template);
   check("no generated item is free", priced.every((t) => t.value > 0), String(priced.filter((t) => !(t.value > 0)).length));

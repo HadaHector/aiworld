@@ -64,6 +64,8 @@ export interface BalanceRules {
   slotWeights: ReadonlyMap<string, number>;
   /** Kills in an hour of play: money and XP per kill follow from it. */
   killsPerHour: number;
+  /** Chests opened in an hour of play: a chest's money is the chests' share of income over this. */
+  chestsPerHour: number;
   /** Shares of income from kills, quests and chests. */
   incomeSplit: { kills: number; quests: number; chests: number };
   /** Minutes of income: a health potion, a weapon of the level band. */
@@ -103,7 +105,7 @@ export interface BalanceRules {
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const TOP_KEYS = [
-  "curves", "roles", "dpsRoles", "slotWeights", "killsPerHour", "incomeSplit", "priceMinutes", "sellRate", "repairShare", "regen", "pace", "xpSplit",
+  "curves", "roles", "dpsRoles", "slotWeights", "killsPerHour", "chestsPerHour", "incomeSplit", "priceMinutes", "sellRate", "repairShare", "regen", "pace", "xpSplit",
   "armourFormula",
 ];
 
@@ -258,6 +260,7 @@ function makeBalance(data: unknown, file: string, issues: ContentIssue[]): Balan
   const sellRate = reader.optionalNumber(obj, "sellRate", "", 0.25, { min: 0, max: 1 });
   const repairShare = reader.optionalNumber(obj, "repairShare", "", 0.05, { min: 0 });
   const killsPerHour = reader.optionalNumber(obj, "killsPerHour", "", 100, { min: 1 });
+  const chestsPerHour = reader.optionalNumber(obj, "chestsPerHour", "", 5, { min: 0.1 });
 
   const role = (id: string): RoleDef => {
     const r = roles.get(id);
@@ -287,6 +290,7 @@ function makeBalance(data: unknown, file: string, issues: ContentIssue[]): Balan
     dpsRoles,
     slotWeights,
     killsPerHour,
+    chestsPerHour,
     incomeSplit,
     priceMinutes,
     sellRate,

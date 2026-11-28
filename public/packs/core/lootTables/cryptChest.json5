@@ -1,0 +1,15 @@
+// A crypt's chest: grave goods - a purse, a key, old gear.
+{
+  rolls: [2, 3],
+  pick: [
+    { weight: 15, item: "coinPouch" },
+    { weight: 5, item: "rustyKey" },
+    { weight: 20, item: "healthPotion", count: [1, 2] },
+    { weight: 10, item: "manaPotion", count: [1, 2] },
+    { weight: 30, gear: "loot", rarity: ["common", "uncommon"] },
+    { weight: 15, gear: "trash" },
+    { weight: 8, gear: "loot", rarity: "rare" },
+  ],
+  // About 12 brute kills' money (rules/balance.json5: chests are a quarter of an hour's income, 5 an hour).
+  always: [{ money: [10, 15], scale: "brute" }],
+}

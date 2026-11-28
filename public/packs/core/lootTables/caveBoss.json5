@@ -1,0 +1,15 @@
+// The cave lair's boss.
+// A boss always drops one piece of gear of its level, uncommon or better, and a boss's money
+// (rules/balance.json5, role boss: 15 kills' worth).
+{
+  rolls: 1,
+  pick: [
+    { weight: 65, gear: ["loot", "quest"], rarity: "uncommon" },
+    { weight: 35, gear: "loot", rarity: "rare" },
+  ],
+  always: [
+    { money: [0.8, 1.2], scale: "boss" },
+    { item: "healthPotion", count: [1, 2] },
+    { item: "bearPelt" },
+  ],
+}

@@ -1,0 +1,12 @@
+// Gear any creature may drop (SLICE.md 3b; ITEMS.md, *The ladder*), rolled once a kill: ladder items
+// within a level of the creature's. Most kills drop none; grey trash (wearable, a little better than
+// what it replaces at its level) is the common find, a ladder loot item the uncommon one, a rare the
+// slim chance. At 100 kills an hour: about 18 grey, 5 loot and 1 rare an hour.
+{
+  pick: [
+    { weight: 76 },
+    { weight: 18, gear: "trash" },
+    { weight: 5, gear: "loot", rarity: ["common", "uncommon"] },
+    { weight: 1, gear: "loot", rarity: "rare" },
+  ],
+}

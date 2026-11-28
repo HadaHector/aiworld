@@ -19,8 +19,10 @@
     xpToNext: { poly: [40, 210, 0] },
     // Money a player earns an hour (copper) at level L; kills, quests and chests split it below.
     income: { from: 270, to: 2000 },
-    // Stat points an item of the level carries at slot weight 1 and common rarity.
-    itemBudget: { from: 4, to: 24 },
+    // Stat points an item of the level carries at slot weight 1 and common rarity. A full kit weighs about
+    // 6.6 slots, so a common kit carries about what the levels give (37 stat points by ten): the owner's
+    // call, 2026-11-28 (was 4 to 24, which made a level-10 kit worth 160 points).
+    itemBudget: { from: 1, to: 5.6 },
     // Stat points reaching level L gives (none at 1): 3 at 2 rising to 5 at 10, 37 by ten. They go by the
     // class's weights (`statPoints` in rules/progression.json5: automatic in the slice, the owner's
     // call). With the 15 health a level already gives, a warrior lands near playerHealth (450 at 10).
@@ -71,6 +73,9 @@
 
   // Kills in an hour of play, and how an hour's income is split.
   killsPerHour: 100,
+  // Chests opened in an hour (the start's, the lairs'): a chest holds the chests' share of an hour's income
+  // over this - about 12 brute kills' money (lootTables/*Chest.json5).
+  chestsPerHour: 5,
   incomeSplit: { kills: 0.4, quests: 0.35, chests: 0.25 },
   // Prices in minutes of income at the item's level: a health potion, a weapon of the band.
   priceMinutes: { potion: 3, weapon: 25 },

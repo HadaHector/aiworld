@@ -1,0 +1,13 @@
+// Mail hands armour, the warrior's: Gauntletss.
+// A ladder (rules/itemLayout.json5, ITEMS.md *The ladder*): six items over levels 1-10 and grey
+// trash between; its stats, armour, damage and price come from the curves.
+{
+  kind: "armour",
+  slot: "hands",
+  icon: "item-plate-gauntlets",
+  ladder: "mail",
+  name: "{tier} Gauntlets",
+  gear: ["gauntlets"],
+  tint: "#a0a4aa",
+  tiers: { start: "Ringed", loot3: "Bronze", shop: "Riveted", quest: "Hardened", loot7: "Iron", loot9: "Ornate Iron" },
+}

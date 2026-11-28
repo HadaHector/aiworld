@@ -40,12 +40,14 @@
     herbalSalve: { icons: ["potion-bowl-violet", "potion-dewdrop-green", "herb-clover", "herb-lilac", "herb-red-berries", "herb-bulb-red"], tints: [] },
     wardingCharm: { icons: ["charm-jewel-red"], tints: [] },
   },
-  rewardTemplates: ["sword", "mace", "axe", "dagger", "staff", "bow", "wand", "buckler", "roundShield", "chestpiece", "boots", "helm"],
+  rewardTemplates: ["amulet", "axe", "bow", "buckler", "cloak", "clothChest", "clothFeet", "clothHands", "clothHead", "clothLegs", "clothShoulders", "clothWaist", "clothWrists", "dagger", "leatherChest", "leatherFeet", "leatherHands", "leatherHead", "leatherLegs", "leatherShoulders", "leatherWaist", "leatherWrists", "mace", "mailChest", "mailFeet", "mailHands", "mailHead", "mailLegs", "mailShoulders", "mailWaist", "mailWrists", "orb", "ring", "roundShield", "staff", "sword", "wand"],
   rewardChoices: 3,
   rewardRarity: { quest: "uncommon", finale: "rare" },
   // An item's level is within this many of the quest's, or it is not offered: a level 4 quest does not
   // give level 1 gear. Where nothing fits, the quest gives consumables instead.
-  rewardLevel: 2,
+  // One level either way since the item ladder (ITEMS.md, *The ladder*): gear is worn from two levels
+  // under its own, so a reward is always wearable by someone doing the quest.
+  rewardLevel: 1,
   // Most quests give no item at all. Some give a few consumables (a fixed reward, not a choice): a
   // quest of at least `minEffort` that gives no choice does with probability `chance`, `perEffort`
   // of them for each effort, most `max`, of a kind available at its level (`from`).
