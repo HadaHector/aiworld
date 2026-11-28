@@ -1,6 +1,6 @@
 import type { Entity } from "../entity";
 import type { CreatureKind } from "../rules/creatureRules";
-import { RUN_SPEED } from "../playerBody";
+import { MOVE_SPEED } from "../playerBody";
 import { EVENT_KIND, type CombatEvent } from "../skills/events";
 import { canMove, FLAG, hasFlag } from "../skills/flags";
 import { gap } from "../skills/unit";
@@ -156,7 +156,7 @@ export function runDuel(rules: DuelRules, options: DuelOptions): DuelResult {
   let fled = false;
   let outOfRange = 0;
   let moving = 0;
-  const speedOf = (u: Entity, share: number) => RUN_SPEED * share * (statValues(u.stats!)[game.statIndex.get("speed") ?? -1] ?? 1);
+  const speedOf = (u: Entity, share: number) => MOVE_SPEED * share * (statValues(u.stats!)[game.statIndex.get("speed") ?? -1] ?? 1);
 
   function move(u: Entity, direction: number, pace: number): boolean {
     if (direction === 0 || arena.pushed(u) || !canMove(u.combat!.flags)) return false;
