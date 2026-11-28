@@ -185,7 +185,7 @@ guesses to be tuned):
 | Gold | money per hour at level L, split kills / quests / chests | tied to the price curves |
 | Price | a potion = minutes of income; a level-band weapon = hours of income | potion about 4 min, a good weapon about 40 min |
 | Sell rate | share of the buy price a vendor pays | 25% |
-| Item power | stat budget by level, slot and rarity | green +15% over common, blue +35% |
+| Item power | stat budget by level, slot and rarity | green +25% over common, blue +50% (owner, 2026-11-28) |
 | Drops | items an hour by rarity; one upgrade expected per level | |
 | Skill count | skills a character knows by level | from the class templates (3b) |
 | Stat points | points per level | a curve |
@@ -783,3 +783,9 @@ Not started; to be sized and put into sessions.
      not a cutout) and a full-square mode in `buildGenerated.mjs` (no crop to content); 3. a GPU window the
      owner opens: about 70 skills x 8 variations, picked on the review page, built into `icons-generated`.
      Steps 1-2 need no GPU and are the main session's.
+- **17 Item generation merged** (I8 + I1, 084ca50; ITEMS.md *The ladder*). Owner's calls: armour types cloth,
+  leather, mail; rarity budgets green +25%, blue +50%; one item type per weapon family; the ladder start 1,
+  loot 3, shop 4, quest 6, loot 7, loot 9; wearable grey trash at 2, 4, 6, 8, 10; the item budget curve
+  lowered to 1→5.6. Old weapon ids are gone (e.g. `sword.start`). Open: the lair chest and boss tables
+  (cave, mine, crypt, motte) exist but lairs don't use them yet (dungeons lane). The quests check stays red
+  until E10.
