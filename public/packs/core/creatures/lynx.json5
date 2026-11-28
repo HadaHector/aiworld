@@ -23,5 +23,5 @@
     { id: "snow", name: "Snow", habitat: ["snowyTaiga", "windsweptFell", "icePeaks"], look: { color: [0.85, 0.84, 0.82], beast: "lynx.snow" }, scale: { armour: 1.5 } },
     { id: "sand", name: "Sand", habitat: ["desertRange", "sageHills", "maquis"], look: { color: [0.75, 0.56, 0.37], beast: "lynx.sand" } },
   ],
-  traits: { pick: [0, 1], pool: ["swift", "old", "rabid"] },
+  traits: { pick: [0, 1], pool: ["rabid"] },
 }

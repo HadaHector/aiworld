@@ -21,5 +21,5 @@
     { id: "red", name: "Red", habitat: ["meadow", "bluebellWood", "autumnWood", "heatherMoor", "greenAlps", "alpineMeadow"] },
     { id: "reindeer", name: "Reindeer", habitat: ["snowyTaiga", "frostSteppe", "polarDesert", "frozenBog"], look: { color: [0.66, 0.6, 0.53], beast: "stag.reindeer" }, scale: { health: 1.25 } },
   ],
-  traits: { pick: [0, 1], pool: ["swift", "old", "thickHide"] },
+  traits: { pick: [0, 1], pool: ["thickHide"] },
 }

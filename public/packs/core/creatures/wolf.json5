@@ -22,5 +22,5 @@
     { id: "frost", name: "Frost", habitat: ["snowyTaiga", "frostSteppe", "windsweptFell"], look: { color: [0.85, 0.88, 0.92], beast: "wolf.frost" }, scale: { armour: 1.75 }, spells: [{ skill: "frostBite" }], tactics: [{ skill: "frostBite", every: [14, 18] }] },
     { id: "plains", name: "Plains", habitat: ["meadow", "savanna"], look: { color: [0.7, 0.58, 0.4], beast: "wolf.plains" }, never: ["thickHide"] },
   ],
-  traits: { pick: [0, 1], pool: ["rabid", "thickHide", "swift", "old"] },
+  traits: { pick: [0, 1], pool: ["rabid", "thickHide"] },
 }

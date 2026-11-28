@@ -75,7 +75,7 @@ Asked and answered before this plan was written:
     { id: "frost", name: "Frost", habitat: ["snowyTaiga", "frostSteppe"], color: [0.85, 0.88, 0.92],
       stats: { armor: 60 }, spells: [{ skill: "frostBite" }] },
   ],
-  traits: { pick: [0, 1], pool: ["rabid", "thickHide", "swift", "old"] },
+  traits: { pick: [0, 1], pool: ["rabid", "thickHide"] },
 }
 ```
 
@@ -87,7 +87,7 @@ Asked and answered before this plan was written:
 - **Traits** come from `creatureTraits/<id>.json5`: a few modifiers, spells or tactics, and an
   optional name prefix (`{ name: "Rabid", spells: [{ skill: "rabidBite" }], modifiers: [...] }`).
   **Which traits a kind gets is picked from the world seed and the kind's id**, `pick` of them from
-  the pool, so one world's Timber Wolves are swift and another's thick-hided, and the same seed
+  the pool, so one world's Timber Wolves are rabid and another's thick-hided, and the same seed
   always the same. This is what makes kinds procedural rather than a fixed bestiary, as rolled extra
   stats do for item types.
 - **Levels.** A kind has no level of its own: a spawned creature's level is its zone's rolled level
@@ -97,7 +97,7 @@ Asked and answered before this plan was written:
 - **Hostility** is a template field already (ABILITIES.md): `hostile` creatures aggro by proximity,
   `neutral` ones only fight when attacked. Both are enemies of players.
 - **Whitelists and blacklists** (GAMEPLAY.md): `rules/creatures.json5`'s `never` names species,
-  variants or traits a game turns off; a variant's `never: ["swift"]` keeps a trait off it.
+  variants or traits a game turns off; a variant's `never: ["rabid"]` keeps a trait off it.
 - **Checked at load**: an unknown entity template, skill, loot table, trait, stat or biome is a
   content error naming the file and path. A biome that the world config drops is simply not there.
 - **The catalogue depends on the seed** (traits), so it is resolved with it, as item rules are:
@@ -301,7 +301,7 @@ interface Brain {
   closer and covered no ground - for `stuck` (4 s): there is no pathfinding, and a creature that
   cannot get round a wall gives up rather than running at it.
   Evading applies the rules' `evadeSkill` (core's `evade`: a magic holding `immune`, ended on
-  arriving), clears threat, and runs home at twice a player's pace (`EVADE_PACE`). Hits on it show "Immune", as on any
+  arriving), clears threat, and runs home at 1.5 times a player's pace (`EVADE_PACE`). Hits on it show "Immune", as on any
   immune unit.
 - **Line of sight** for aggro uses the same ray as casting (ABILITIES.md). Chasing does not need
   sight; losing the target out of range is the leash's business.
@@ -356,7 +356,7 @@ and despawns already reach the clients that see them.
 - **Camps**: `banditCamp`.
 - **Skills**: `bite`, `frostBite` (a slow), `rabidBite` (a bleed), `gore` (a charge with a short
   stun), `hexBolt` (a cast to kick), `venom`, `web`, `evade`.
-- **Traits**: `rabid`, `thickHide`, `swift`, `old`.
+- **Traits**: `rabid`, `thickHide`.
 - **Loot tables**: `wolf` (pelts and fangs - new material items), `boar` (meat, hide), `bandit`
   (money, bread, the item templates' weapons), `spider` (silk, venom sac).
 - **Habitats** reach most of the 25 biomes, and every one of the four is in the meadow, so
@@ -493,9 +493,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   (6 m/s, `src/sim/playerBody.ts`); Shift does nothing. A kind's `speed` is shares of that pace, so
   changing it moves them too: `walk` (wandering, 0.16-0.25: 1-1.5 m/s) and `run`, the chase. A
   normal enemy chases at 1, as fast as a player, so it cannot be outrun, only kited or slowed:
-  beetle and undead 0.9, crocodile 0.95, wolf 1.05, lynx and stag 1.1 (traits: Old 0.9, Swift
-  1.08 on top). A fleeing creature runs at `FLEE_PACE` (0.8) of its chase, a little slower than a
-  player, so it can be caught; the leash and an evade run home at `EVADE_PACE` (2, 12 m/s).
+  beetle and undead 0.9, crocodile 0.95, wolf 1.05, lynx and stag 1.1. No trait changes speed
+  (the Old and Swift traits were removed 2026-11-28). A fleeing creature runs at `FLEE_PACE` (0.8) of its chase, a little slower than a
+  player, so it can be caught; the leash and an evade run home at `EVADE_PACE` (1.5, 9 m/s).
   Swimming is WATER.md's `swimSpeed` share of the same pace. The walk and run cycles (humans and
   beasts) take their speed from how far the body moved, so their feet keep up at any pace.
 - **The probe** (`scripts/probe/creatures.mjs`, 85 checks, about 45 s): rules and refusals, traits

@@ -1,5 +1,5 @@
 // The boar's body plan (see BEASTS.md): a wedge - a long snout, a great head and shoulders over
-// short legs, the body falling away to a small rump. Tusks grow by the seed (and the old trait), a
+// short legs, the body falling away to a small rump. Tusks grow by the seed, a
 // crest of bristles runs down the back. Lengths in metres at size 1.
 {
   name: "Boar",
@@ -40,8 +40,8 @@
   ],
   parts: [
     { id: "ear", bone: "head", at: 0.9, around: 55, length: 0.11, radius: 0.055, flat: 0.3, direction: [0.7, 0.65, -0.3], curve: -0.2, mirror: true, colour: "coat", sink: 0.15 },
-    // Tusks curving up out of the lower jaw: stubs on some, a threat on others; the old grow them long.
-    { id: "tusk", bone: "head", at: 0.22, around: 118, length: 0.13, radius: 0.022, direction: [0.45, 0.35, 0.8], curve: 0.9, mirror: true, colour: "horn", scale: [0.45, 1.5], traits: { old: 1.4 }, sink: 0.2 },
+    // Tusks curving up out of the lower jaw: stubs on some, a threat on others.
+    { id: "tusk", bone: "head", at: 0.22, around: 118, length: 0.13, radius: 0.022, direction: [0.45, 0.35, 0.8], curve: 0.9, mirror: true, colour: "horn", scale: [0.45, 1.5], sink: 0.2 },
   ],
   cards: [
     // A crest of bristles down the neck and back - standing up, dark.

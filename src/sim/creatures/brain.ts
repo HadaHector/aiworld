@@ -42,8 +42,9 @@ const TACTIC_EVERY = 0.3;
 /** A fleeing creature runs at this share of its chase: a little slower than a player, so it can be
  *  caught, as in Classic. */
 const FLEE_PACE = 0.8;
-/** Running home from a leash or an evade, a share of MOVE_SPEED: quick, it is immune and out of it. */
-const EVADE_PACE = 2;
+/** Running home from a leash or an evade, a share of MOVE_SPEED: quicker than a player, it is immune
+ *  and out of it. */
+const EVADE_PACE = 1.5;
 /** Threat a creature puts its aggro, or a pulled group-mate's foes, on its table with. */
 const AGGRO_THREAT = 1;
 

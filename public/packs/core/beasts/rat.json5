@@ -54,7 +54,7 @@
   ],
   cards: [
     // Mangy, spiky fur along the hunched back.
-    { id: "mange", bone: "belly", from: 0, to: 1, around: 0, arc: 160, count: 34, length: [0.05, 0.09], width: [0.04, 0.06], lean: 0.75, droop: 0.05, mask: "strands", colour: "fur", traits: { rabid: 1.5, old: 1.2 } },
+    { id: "mange", bone: "belly", from: 0, to: 1, around: 0, arc: 160, count: 34, length: [0.05, 0.09], width: [0.04, 0.06], lean: 0.75, droop: 0.05, mask: "strands", colour: "fur", traits: { rabid: 1.5 } },
     { id: "nape", bone: "chest", from: 0, to: 1, around: 0, arc: 140, count: 20, length: [0.05, 0.08], width: [0.04, 0.06], lean: 0.8, droop: 0, mask: "strands", colour: "fur", chance: 0.7 },
   ],
   paint: {

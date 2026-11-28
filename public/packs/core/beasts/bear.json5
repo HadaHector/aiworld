@@ -45,7 +45,7 @@
   ],
   cards: [
     // Shag on the hump and the neck, falling back and down.
-    { id: "shag", bone: "shoulders", from: 0, to: 0.7, around: 0, arc: 200, count: 90, length: [0.1, 0.16], width: [0.06, 0.09], lean: 0.7, droop: 0.25, mask: "strands", colour: "shag", traits: { old: 1.3 } },
+    { id: "shag", bone: "shoulders", from: 0, to: 0.7, around: 0, arc: 200, count: 90, length: [0.1, 0.16], width: [0.06, 0.09], lean: 0.7, droop: 0.25, mask: "strands", colour: "shag" },
     { id: "mane", bone: "neck", from: 0, to: 1, around: 0, arc: 300, count: 50, length: [0.09, 0.14], width: [0.06, 0.09], lean: 0.65, droop: 0.2, mask: "strands", colour: "shag" },
     { id: "cheeks", bone: "head", from: 0.75, to: 1, around: 90, arc: 70, count: 16, length: [0.06, 0.09], width: [0.05, 0.07], lean: 0.7, droop: 0.3, mask: "tuft", colour: "coat", mirror: true },
   ],
