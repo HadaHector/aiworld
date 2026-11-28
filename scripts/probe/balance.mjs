@@ -106,7 +106,7 @@ for (const kind of creatures.kindList) {
     const want = balance.creatureBaseline(kind.balance, level);
     const health = statValue(block, statIndex("maxHealth"));
     // Traits are modifiers on top (a thick-hided one has more), so compare with them stripped by their percent.
-    const hasTraitHealth = kind.traits.includes("old") || kind.traits.includes("thickHide");
+    const hasTraitHealth = kind.traits.includes("thickHide");
     const wantHealth = want.health;
     if (!hasTraitHealth) check(`${kind.id} L${level}: health ${Math.round(health)} is the baseline's ${Math.round(wantHealth)}`, near(health, wantHealth, 0.02), `${health} vs ${wantHealth}`);
     // Damage: weapon swings plus the tactics' share is the role's dps.

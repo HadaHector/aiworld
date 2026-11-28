@@ -32,7 +32,7 @@ seed, in the spirit of the humanoids - and a new beast is pack data, not code.
   to `bodyMesh.ts`/`gearDef.ts` at the same time, so shared files are touched only where this plan
   says so, and lightly.
 - **Deterministic from a seed.** An individual's size, markings and parts come from its entity seed
-  (already in its spawn); a kind's traits (rabid, old, frost...) shift the ranges.
+  (already in its spawn); a kind's traits (rabid, frost...) shift the ranges.
 - **Built, not loaded.** No hand-made meshes or textures.
 
 ## The body plan
@@ -183,7 +183,7 @@ group**, not lofted geometry. The shape is in an **alpha mask** painted procedur
 - **Data.** In the plan: `cards: [{ id, place, count, length, width, lean, curl, droop, mask,
   tint, soft, gate }]`; masks are rules in the plan (`masks: { strands: { ... } }`). A pack adds
   a hair, a mane or a tentacle by data alone, and a trait can turn a group on or scale its length
-  (a rabid wolf's bristling ruff, an old bear's shag).
+  (a rabid wolf's bristling ruff).
 
 ### Painted atlas
 
@@ -200,7 +200,7 @@ palette and the individual's seed and kind's traits:
    seed-placed marks), `spots` (a spider's abdomen mark).
 3. **Features**: eyes, nose, mouth line, claws, tusk and horn tint, mane colour.
 4. **Kind tint**: the kind's `look.color` (frost wolf white, jungle spider green) is the palette's
-   centre; traits shift it (old = greyer).
+   centre; traits shift it.
 
 Same painter structure as `paint.ts` (a per-texel region buffer, painted from what each texel lies
 on), in `beast/paintBeast.ts`; no new texture pipeline.
@@ -252,7 +252,7 @@ The beast animator is a new file; the humanoid's `animation.ts` stays as it is.
 - **Speed follows the entity's movement speed**: a beast animates at the speed over the ground
   the client works out from snapshots, as the humanoid gait does; the species' `speed.walk/run`
   shares just decide which gait it is in. So a creature chasing at 5 m/s gallops and one
-  wandering strolls, and a slow kind (old trait) takes shorter strides at the same pace.
+  wandering strolls, and a slower kind takes shorter strides at the same pace.
 - **Footsteps** are reported (`step`) per foot touch-down so FEEDBACK.md's footstep sounds and dust
   work, with the feet bone mapped to the paws.
 

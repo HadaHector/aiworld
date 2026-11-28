@@ -25,5 +25,4 @@
     { id: "jungle", name: "Jungle", habitat: ["rainforest", "cloudForest", "cypressBayou"], look: { color: [0.25, 0.4, 0.2], beast: "spider.jungle" } },
     { id: "sand", name: "Sand", habitat: ["desert", "redBush"], look: { color: [0.75, 0.55, 0.35], beast: "spider.sand" }, scale: { armour: 1.6 } },
   ],
-  traits: { pick: [0, 1], pool: ["swift", "old"] },
 }

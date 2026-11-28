@@ -22,5 +22,5 @@
     { id: "dust", name: "Dust", habitat: ["savanna", "sageHills", "redBush", "maquis"], look: { color: [0.62, 0.48, 0.34], beast: "boar.dust" } },
     { id: "mire", name: "Mire", habitat: ["reedMarsh", "rainforest", "cloudForest"], look: { color: [0.25, 0.27, 0.2], beast: "boar.mire" }, scale: { health: 1.3 } },
   ],
-  traits: { pick: [0, 1], pool: ["thickHide", "old"] },
+  traits: { pick: [0, 1], pool: ["thickHide"] },
 }

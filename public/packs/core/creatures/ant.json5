@@ -21,5 +21,4 @@
     { id: "giant", name: "Giant", habitat: ["meadow", "maquis", "sageHills", "rainforest"] },
     { id: "fire", name: "Fire", habitat: ["savanna", "redBush", "desert"], look: { color: [0.62, 0.2, 0.08], beast: "ant.fire" }, stats: { strength: 10 } },
   ],
-  traits: { pick: [0, 1], pool: ["swift", "old"] },
 }

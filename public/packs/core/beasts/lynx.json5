@@ -50,7 +50,7 @@
   cards: [
     // The cheek ruff, flaring back from under the ears, and a fuller coat on the chest.
     { id: "ruff", bone: "head", from: 0.55, to: 1, around: 90, arc: 120, count: 40, length: [0.07, 0.12], width: [0.05, 0.07], lean: 0.75, droop: 0.3, mask: "strands", colour: "ruff", mirror: true },
-    { id: "bib", bone: "neck", from: 0.2, to: 1, around: 180, arc: 140, count: 26, length: [0.07, 0.11], width: [0.05, 0.07], lean: 0.6, droop: 0.35, mask: "strands", colour: "belly", traits: { old: 1.3 } },
+    { id: "bib", bone: "neck", from: 0.2, to: 1, around: 180, arc: 140, count: 26, length: [0.07, 0.11], width: [0.05, 0.07], lean: 0.6, droop: 0.35, mask: "strands", colour: "belly" },
     { id: "bob", bone: "tail1", from: 0, to: 0.9, around: 0, arc: 360, count: 14, length: [0.05, 0.08], width: [0.04, 0.06], lean: 0.8, droop: 0.05, mask: "strands", colour: "tuft" },
   ],
   paint: {

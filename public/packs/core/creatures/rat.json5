@@ -21,5 +21,5 @@
     { id: "bog", name: "Bog", habitat: ["reedMarsh", "frozenBog"], look: { color: [0.32, 0.34, 0.25], beast: "rat.bog" } },
     { id: "plague", name: "Plague", habitat: ["cypressBayou", "reedMarsh"], look: { color: [0.2, 0.18, 0.17], beast: "rat.plague" }, spells: [{ skill: "rabidBite" }], tactics: [{ skill: "rabidBite", every: [12, 16] }] },
   ],
-  traits: { pick: [0, 1], pool: ["rabid", "swift", "old"] },
+  traits: { pick: [0, 1], pool: ["rabid"] },
 }

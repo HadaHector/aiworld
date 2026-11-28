@@ -22,5 +22,5 @@
     { id: "sand", name: "Sand", habitat: ["desert", "sandSea"], look: { color: [0.72, 0.6, 0.3], beast: "scorpion.sand" } },
     { id: "black", name: "Black", habitat: ["saltFlat", "desertRange"], look: { color: [0.11, 0.1, 0.1], beast: "scorpion.black" }, stats: { strength: 10 } },
   ],
-  traits: { pick: [0, 1], pool: ["swift", "old", "thickHide"] },
+  traits: { pick: [0, 1], pool: ["thickHide"] },
 }

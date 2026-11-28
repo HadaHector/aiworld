@@ -21,5 +21,5 @@
     { id: "emerald", name: "Emerald", habitat: ["rainforest", "cloudForest", "palmGrove"], look: { color: [0.12, 0.33, 0.18], beast: "beetle.emerald" } },
     { id: "bronze", name: "Bronze", habitat: ["redBush", "maquis"], look: { color: [0.48, 0.27, 0.12], beast: "beetle.bronze" }, scale: { armour: 1.2 } },
   ],
-  traits: { pick: [0, 1], pool: ["thickHide", "old"] },
+  traits: { pick: [0, 1], pool: ["thickHide"] },
 }

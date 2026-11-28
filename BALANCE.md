@@ -67,7 +67,7 @@ share of its damage its tactics deal.
   species, a variant may set its own (variants multiply). A kind with a role no longer has `stamina`,
   `armor`, `weaponMin`, `weaponMax` in `stats` or `perLevel`: the spawner (`creatures/system.ts`) applies
   `perLevel` growth for the rest, then `applyCreature`. A kind without a role works as before. Traits and
-  other modifiers (thick-hided, old, swift) stay on top of the derived base. A small health that stamina
+  other modifiers (thick-hided) stay on top of the derived base. A small health that stamina
   cannot reach (a swarm at level 10) is a flat modifier, source `balance`.
 - **Loot money**: `{ money: [0.5, 1.5], scale: "brute" }` is that share of a brute kill's money at the
   source's level (`income x 40% / 100 kills`), at least 1.
