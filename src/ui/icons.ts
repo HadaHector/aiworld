@@ -1,7 +1,8 @@
 import type { PackSource } from "../world/content/resolveContent";
 import { parseFile } from "../world/content/resolveContent";
 import type { ContentIssue } from "../world/content/contentReader";
-import type { ItemTypeDef } from "../sim/rules/itemRules";
+import type { ItemRules, ItemTypeDef } from "../sim/rules/itemRules";
+import type { ItemState } from "../sim/protocol";
 import type { SkillDef } from "../sim/rules/skillRules";
 
 /**
@@ -93,9 +94,32 @@ export function itemIcon(type: ItemTypeDef | null | undefined, color: string): I
   return { name: type?.icon ?? "", glyph: GLYPH_BY_KIND[type?.kind ?? ""] ?? "misc", color };
 }
 
-/** A skill's icon name: its own generated one (`skill-<id>`, ICONS.md) once a loaded set has it, else
+/** Skills an item uses (a potion's drink, a tome's reading), by id: the item's icon. */
+const itemUseIcons = new Map<string, string>();
+
+/** Notes which skills items use, so those skills (and the effects they leave) draw the item's icon. */
+export function loadItemUseIcons(items: ItemRules): void {
+  itemUseIcons.clear();
+  for (const type of items.types) if (type.use?.skill && !itemUseIcons.has(type.use.skill)) itemUseIcons.set(type.use.skill, type.icon);
+}
+
+/** A skill's icon name (ICONS.md): an item's use draws the item's icon; otherwise its own generated one
+ *  (`skill-<id>`, or `skill-<iconOf>` for an effect sharing its skill's) once a loaded set has it, else
  *  the `icon` its file names - so a skill keeps its current picture until its own is made. */
-export const skillIconName = (skill: SkillDef | null | undefined): string => (skill && hasIcon(`skill-${skill.id}`) ? `skill-${skill.id}` : (skill?.icon ?? ""));
+export function skillIconName(skill: SkillDef | null | undefined): string {
+  if (!skill) return "";
+  const item = itemUseIcons.get(skill.id);
+  if (item !== undefined) return item;
+  const own = `skill-${skill.iconOf || skill.id}`;
+  return hasIcon(own) ? own : skill.icon;
+}
+
+/** The attack's icon: the weapon in the main hand (`equipment` by slot), or the attack skill's barehanded. */
+export function attackIcon(skill: SkillDef | null | undefined, items: ItemRules, equipment: readonly (ItemState | null)[] | undefined): IconSpec {
+  const main = items.slotIndex.get("mainHand");
+  const type = main === undefined ? undefined : items.types[items.typeIndex.get(equipment?.[main]?.type ?? "") ?? -1];
+  return type ? itemIcon(type, items.rarities[type.rarity].color) : skillIcon(skill);
+}
 
 /** What to draw for a skill: its school's glyph and colour, or a swing for a physical skill. */
 export function skillIcon(skill: SkillDef | null | undefined): IconSpec {

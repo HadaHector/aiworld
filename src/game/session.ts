@@ -52,7 +52,7 @@ import { createNameplates, isNpc, type Nameplates } from "./nameplates";
 import { nextEnemy } from "./targeting";
 import { EVENT_KIND } from "../sim/skills/events";
 import { FLAG } from "../sim/skills/flags";
-import { loadIconSets } from "../ui/icons";
+import { attackIcon, loadIconSets, loadItemUseIcons } from "../ui/icons";
 import { loadMarkerKinds, npcMarkers, type MapMarker } from "../map/markers";
 import { mouthSite } from "../sim/dungeons";
 import { PLAYER_TEMPLATE } from "../sim/rules/gameRules";
@@ -161,6 +161,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   }
   /** Races, gear and outfits for everyone else's bodies, resolved once. */
   loadIconSets(packSet.sources);
+  loadItemUseIcons(itemRules);
   const markerKinds = loadMarkerKinds(packSet.sources);
   const bodyKit = createBodyKit(packSet.sources);
   /** Beast body plans (BEASTS.md), and each creature kind's traits this world. */
@@ -913,6 +914,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     cast: castSpell,
     setAttacking: (on) => client.send({ type: "attack", on }),
     teleport: () => aimTeleport(false),
+    attackIcon: () => attackIcon(gameRules.skills[gameRules.skillIndex.get("autoAttack") ?? -1], itemRules, belongings.containers[2]),
   });
   listenWindow("keydown", (e) => {
     if (!view || entering || menuOpen || e.repeat) return;

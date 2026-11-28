@@ -3,7 +3,7 @@ import type { ItemRules } from "../sim/rules/itemRules";
 import { describeSkill } from "../sim/rules/skillText";
 import type { EntityMirror } from "../game/entityMirror";
 import type { BelongingsMirror } from "../game/belongingsMirror";
-import { TELEPORT_ICON, hasIcon, iconFace, iconHtml, itemIcon, skillIcon, type IconSpec } from "./icons";
+import { TELEPORT_ICON, attackIcon, hasIcon, iconFace, iconHtml, itemIcon, skillIcon, type IconSpec } from "./icons";
 import { itemTooltip } from "./inventoryScreen";
 import { LOCAL, type SkillDef } from "../sim/rules/skillRules";
 import { BAR_COLOURS, GOLD, PANEL, SLOT, SLOT_CLASS } from "./theme";
@@ -65,6 +65,7 @@ const STORAGE = "aiworld.actionBar.";
 const TELEPORT_SEEN = "@teleport";
 export const TELEPORT_TEXT = "Puts you where the pointer is: its key teleports at once, a click on the slot waits for a click on the world (Escape to cancel).";
 const BAG = 0;
+const EQUIPMENT = 2;
 
 interface Saved {
   slots: (BarAction | null)[];
@@ -243,7 +244,7 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
 
   /** What to draw on a slot. */
   function iconOf(action: BarAction): IconSpec {
-    if (action.kind === "attack") return skillIcon(game.skills[game.skillIndex.get("autoAttack") ?? -1]);
+    if (action.kind === "attack") return attackIcon(game.skills[game.skillIndex.get("autoAttack") ?? -1], items, belongings.containers[EQUIPMENT]);
     if (action.kind === "teleport") return TELEPORT_ICON;
     if (action.kind === "skill") return skillIcon(game.skills[game.skillIndex.get(action.skill) ?? -1]);
     const type = items.types[items.typeIndex.get(action.item) ?? -1];
@@ -347,6 +348,15 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
   }
 
   draw();
+  // The attack slot shows the weapon in hand: redrawn when that changes.
+  let weapon = "";
+  const stopWeapon = belongings.onChange(() => {
+    const main = items.slotIndex.get("mainHand");
+    const now = main === undefined ? "" : (belongings.containers[EQUIPMENT]?.[main]?.type ?? "");
+    if (now === weapon) return;
+    weapon = now;
+    draw();
+  });
   return {
     element: root,
     keys: KEYS,
@@ -366,6 +376,7 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
     },
     update,
     dispose: () => {
+      stopWeapon();
       tip.remove();
       root.remove();
     },
