@@ -66,6 +66,14 @@ export function crop(img, { x, y, width, height }) {
   return { width, height, data };
 }
 
+/** Scales a full-square picture (a skill icon, background and all) to fill a size x size cell, with no
+ *  crop to content (a picture that is not square keeps the middle of its longer side). */
+export function fillSquare(img, size) {
+  const side = Math.min(img.width, img.height);
+  const square = side === img.width && side === img.height ? img : crop(img, { x: Math.floor((img.width - side) / 2), y: Math.floor((img.height - side) / 2), width: side, height: side });
+  return area(square, size, size);
+}
+
 /** Crops an image to its content, scales it down to fit inside a size x size cell less `pad` on every
  *  side, and centres it: the fill rule every painted icon gets, so icons of any source fill alike. */
 export function fitInto(img, size, pad) {
