@@ -64,7 +64,7 @@ times) can allow for the shared CPU.
 | dungeons | dungeons, navigation; worklists caves, caveMouths |
 | terrain-water | water, riverLevels, mapTiles, swim, vale |
 | gameplay | abilities, entities, collision, creatures, beast, chat, feedback, ambience |
-| rules | balance, items, progression, quests, npcs, saves, starts |
+| rules | balance, skillBank, items, progression, quests, npcs, saves, starts, duel |
 | art | body, beast, icons, feedback |
 
 Probes that sweep seeds or layouts have a quick default; `--full` (or `PROBE_FULL=1`) gives the whole sweep, e.g.
@@ -103,6 +103,7 @@ All 26 pass; `all` takes 213 s, about as long as quests does beside the others.
 | body | 4 | 6 | - | race bodies: manifold, winding, weights |
 | icons | 3 | 5 | - | icon names core uses exist in the pack (seven listed as waiting for generation) |
 | balance | 3 | 5 | 431 | balance curves, role stats, prices |
+| duel | 4 | 4 | 181 | the duel tool (DUEL.md): every class at 1, 5, 10 against the dummy and a creature of each role runs, sane numbers |
 | ambience | 0.3 | 0.5 | - | ambience levels, lair songs compose |
 | *caves* (worklist) | 169 | - | 119 (fails) | lairs on a headless server, walked to every spot; fails until cave navigation (NAVIGATION.md step 6) |
 | *caveMouths* (worklist) | 22 | - | fails 2 of 20 | the vale's cave mouths' lairs lay out whole (seed 6: two minimal lairs) |
@@ -120,6 +121,7 @@ Scripts that print or write, checking nothing; run them with the probe hook (`np
 - `cellwhy.mjs`: why cells are empty, per kind and condition (FEATURES.md, *Why a cell is empty*).
 - `music.mjs`: a composed song as tracker text.
 - `worldHash.mjs`: a hash of the world's layout and some chunks, to show a refactor changes nothing.
+- `duel.mjs` (`npm run duel`): the duel and fit tool, a class against a dummy or a creature against the balance curves (DUEL.md).
 
 ## The pruning of 2026-11-25
 

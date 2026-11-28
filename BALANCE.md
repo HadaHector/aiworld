@@ -6,7 +6,8 @@ health, damage and armour from them, loot money and generated item prices from t
 tool (B7), the defence model (B8), the player's stats and gear landing on the curves, and the bot (B3)
 come after.
 
-Probe: `npm run probe -- scripts/probe/balance.mjs`.
+Probe: `npm run probe -- scripts/probe/balance.mjs`. Where each class lands on these curves: the duel tool,
+`npm run duel -- all` (B7, DUEL.md).
 
 ## The idea
 
