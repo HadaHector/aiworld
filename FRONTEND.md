@@ -72,7 +72,8 @@ logging out. The quest log comes after step 9, which has the quests to put in it
   there is no world yet.
 - **Worlds** opens the world list.
 - **Options** opens the same sound and graphics panel the game's `O` opens (`hud.options`), with a
-  read-only list of the keys. Settings stay in `localStorage` per browser, not in saves.
+  read-only list of the keys. Moving is WASD or the arrows at one pace (6 m/s; there is no sprint,
+  2026-11-28: Shift does nothing), Space jumps and swims up, X dives. Settings stay in `localStorage` per browser, not in saves.
 - **Quit** is shown only where the page can close itself (a desktop app window, later). In a
   browser tab there is nothing to quit to, so it is left out.
 - **The version and the packs** are in a corner, as small print.

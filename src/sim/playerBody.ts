@@ -10,15 +10,15 @@ export const WATER_WADING = 1;
 export const WATER_SWIMMING = 2;
 export const WATER_SUBMERGED = 3;
 
-/** Walking pace, and running - metres a second. */
-export const WALK_SPEED = 6;
-export const RUN_SPEED = 12;
+/** The pace a body moves at, metres a second: a player's, and what creatures' `speed` shares are of
+ *  (CREATURES.md). There is no sprint. */
+export const MOVE_SPEED = 6;
 
-/** What a player wants this step: a world-space direction (length 0-1), running, jumping. */
+/** What a body wants this step: a world-space direction (its length the share of MOVE_SPEED, 1 for a
+ *  player at full pace; a creature's may be more), jumping. */
 export interface BodyInput {
   moveX: number;
   moveZ: number;
-  run: boolean;
   jump: boolean;
   /** Swimming up and down (WATER.md), held; a jump from the surface hops out. */
   rise?: boolean;
@@ -30,7 +30,7 @@ export interface PlayerBody {
   readonly motor: CharacterMotor;
   /** Radians about y, 0 facing +z: the way it last moved. */
   readonly facing: number;
-  /** `speedScale` multiplies walking and running pace: the entity's `speed` stat (see ENTITIES.md). */
+  /** `speedScale` multiplies the pace: the entity's `speed` stat (see ENTITIES.md). */
   step: (deltaSeconds: number, input: BodyInput, speedScale?: number) => void;
   /** Turns it to a facing where it stands - a creature turning to its target (CREATURES.md). */
   face: (facing: number) => void;
@@ -72,7 +72,7 @@ export function createPlayerBody(
   let hop = 0;
 
   function step(deltaSeconds: number, input: BodyInput, speedScale = 1): void {
-    const speed = (input.run ? RUN_SPEED : WALK_SPEED) * speedScale;
+    const speed = MOVE_SPEED * speedScale;
     let moveX = input.moveX * speed;
     let moveZ = input.moveZ * speed;
     const feet = motor.state.feet;
@@ -106,7 +106,7 @@ export function createPlayerBody(
         motor.update(Math.min(deltaSeconds, 0.1), { move: { x: moveX * rules.swimSpeed, y: 0, z: moveZ * rules.swimSpeed }, jump: true });
       } else {
         const planar = Math.hypot(moveX, moveZ);
-        const scale = forced ? 1 : Math.min(1, (WALK_SPEED * speedScale * rules.swimSpeed) / Math.max(1e-6, planar));
+        const scale = forced ? 1 : Math.min(1, (MOVE_SPEED * speedScale * rules.swimSpeed) / Math.max(1e-6, planar));
         motor.update(Math.min(deltaSeconds, 0.1), { move: { x: moveX * scale, y: 0, z: moveZ * scale }, jump: false });
         const at = motor.state.feet;
         const wanted = input.dive ? -rules.verticalSpeed : input.rise ? rules.verticalSpeed : Math.max(-rules.verticalSpeed, Math.min(rules.verticalSpeed, (floatY - y0) * 3));
@@ -120,7 +120,7 @@ export function createPlayerBody(
     } else if (!below && !collision.hasGroundAt(feet.x, feet.z)) {
       // No collision here yet: stand on the terrain itself until it comes.
       // (Afloat, it floats there too.)
-      const scale = swimming && rules ? Math.min(1, (WALK_SPEED * speedScale * rules.swimSpeed) / Math.max(1e-6, Math.hypot(moveX, moveZ))) : 1;
+      const scale = swimming && rules ? Math.min(1, (MOVE_SPEED * speedScale * rules.swimSpeed) / Math.max(1e-6, Math.hypot(moveX, moveZ))) : 1;
       const ground = heightAt(feet.x, feet.z);
       motor.teleport({ x: feet.x + moveX * scale * deltaSeconds, y: swimming && here && rules ? Math.max(ground, here.surface - rules.floatDepth) : ground, z: feet.z + moveZ * scale * deltaSeconds });
     } else {

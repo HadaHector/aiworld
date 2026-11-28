@@ -166,7 +166,7 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
       home: { x, y: entity.y, z },
       wander: member?.wander ?? kind.wander,
       brain: createBrain(world.time()),
-      input: { moveX: 0, moveZ: 0, run: false, jump: false },
+      input: { moveX: 0, moveZ: 0, jump: false },
       diedAt: -1,
       emptiedAt: -1,
     };

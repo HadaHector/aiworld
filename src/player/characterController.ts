@@ -36,7 +36,7 @@ export interface Character {
 
 /**
  * The player as the client sees it: a capsule drawn wherever the server has its body, turned the
- * way it last moved - and the keys (WASD or the arrows, Shift to run, Space to jump) turned into
+ * way it last moved - and the keys (WASD or the arrows, Space to jump) turned into
  * what it wants, relative to the camera. Where it actually goes is the server's business (see
  * SIMULATION.md).
  */
@@ -67,7 +67,6 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
     return {
       moveX: forward.x * axis.y + right.x * axis.x,
       moveZ: forward.z * axis.y + right.z * axis.x,
-      run: input.running(),
       jump: input.takeJump(),
       rise: input.rising(),
       dive: input.diving(),

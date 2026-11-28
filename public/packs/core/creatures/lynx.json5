@@ -11,7 +11,7 @@
   perLevel: { strength: 1.5, agility: 1.8 },
   spells: [{ skill: "rabidBite" }],
   tactics: [{ skill: "rabidBite", every: [10, 14] }],
-  speed: { walk: 0.22, run: 0.5 },
+  speed: { walk: 0.22, run: 1.1 },
   group: { size: [1, 1], spread: 4 },
   habitat: { snowyTaiga: 3, greenAlps: 2, windsweptFell: 2, icePeaks: 2, alpineMeadow: 1, autumnWood: 1, desertRange: 2, sageHills: 2, maquis: 1 },
   levelOffset: 1,

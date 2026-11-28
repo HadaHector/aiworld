@@ -10,7 +10,7 @@
   perLevel: { strength: 1.3, agility: 1.3 },
   spells: [{ skill: "venom" }],
   tactics: [{ skill: "venom", every: [10, 14] }],
-  speed: { walk: 0.2, run: 0.44 },
+  speed: { walk: 0.2, run: 1.0 },
   group: { size: [1, 2], spread: 6 },
   habitat: { desert: 3, sandSea: 3, desertRange: 2, saltFlat: 2, redBush: 2, savanna: 1 },
   levelOffset: 1,

@@ -8,7 +8,7 @@ const RIGHT_KEYS = new Set(["d", "arrowright"]);
 const JUMP_KEPT_MS = 200;
 
 /** Tracks WASD/arrow key state and exposes a normalized movement axis (x = strafe, y = forward) -
- *  and Space, as a jump to take once per press, and Shift held, to run. (Swings come from the
+ *  and Space, as a jump to take once per press. (Swings come from the
  *  server now, when an ability plays one: see ABILITIES.md.) */
 export function createInput() {
   const pressed = new Set<string>();
@@ -52,10 +52,6 @@ export function createInput() {
     return taken;
   }
 
-  function running(): boolean {
-    return pressed.has("shift");
-  }
-
   function dispose() {
     window.removeEventListener("focusin", onFocusIn);
     window.removeEventListener("keydown", onKeyDown);
@@ -67,5 +63,5 @@ export function createInput() {
   /** X held: diving. */
   const diving = (): boolean => pressed.has("x");
 
-  return { getMoveAxis, takeJump, running, rising, diving, dispose };
+  return { getMoveAxis, takeJump, rising, diving, dispose };
 }

@@ -10,7 +10,7 @@
   roster: false,
   stats: { strength: 9, agility: 9, intellect: 8, weaponSpeed: 3 },
   perLevel: { strength: 1.5, agility: 1, intellect: 1.5 },
-  speed: { walk: 0.22, run: 0.42 },
+  speed: { walk: 0.22, run: 1.0 },
   habitat: { meadow: 1, bluebellWood: 1, autumnWood: 1, sageHills: 1, maquis: 1, savanna: 1, heatherMoor: 1, redBush: 1, desert: 1 },
   respawn: [480, 600],
   loot: "bandit",

@@ -154,7 +154,7 @@ Colliders so far:
 The motor's step (0.75 m) and steepest ground (52 degrees) are set for these: a plinth is stepped
 onto, and the steepest stair (50 degrees) walked up.
 
-The game's player walks on the motor through these: WASD, Shift to run, Space to jump. Where its
+The game's player walks on the motor through these: WASD (6 m/s, no sprint), Space to jump. Where its
 chunk's collision is not built yet it stands on the terrain's own height. The settings panel's
 "Spectator" swaps it for a free-flying camera with no body.
 

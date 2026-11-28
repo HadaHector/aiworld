@@ -11,7 +11,7 @@
   perLevel: { strength: 1.8, agility: 0.8 },
   spells: [{ skill: "maul" }],
   tactics: [{ skill: "maul", every: [14, 18] }],
-  speed: { walk: 0.16, run: 0.4 },
+  speed: { walk: 0.16, run: 0.95 },
   group: { size: [1, 2], spread: 6 },
   habitat: { cypressBayou: 3, reedMarsh: 2, rainforest: 2, palmGrove: 2, desert: 1, saltFlat: 1, sandSea: 1 },
   levelOffset: 2,

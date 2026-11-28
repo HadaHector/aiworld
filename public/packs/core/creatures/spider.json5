@@ -13,7 +13,7 @@
     { skill: "web", control: true, after: 4, every: [16, 20] },
     { skill: "venom", every: [10, 14] },
   ],
-  speed: { walk: 0.2, run: 0.42 },
+  speed: { walk: 0.2, run: 1.0 },
   group: { size: [1, 2], spread: 8 },
   habitat: { bluebellWood: 2, autumnWood: 1, rainforest: 3, cloudForest: 3, cypressBayou: 3, reedMarsh: 1, meadow: 1, desert: 1, redBush: 1 },
   levelOffset: 1,

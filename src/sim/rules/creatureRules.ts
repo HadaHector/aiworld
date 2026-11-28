@@ -36,7 +36,8 @@ export interface CreatureKind {
   /** What each level above 1 adds to a stat's base, flat. */
   perLevel: { stat: number; value: number }[];
   tactics: TacticDef[];
-  /** Shares of the body's walk and run speeds: wandering, and chasing or fleeing. */
+  /** Shares of MOVE_SPEED (the player's pace, src/sim/playerBody.ts): wandering, and chasing (a
+   *  normal enemy 1, as fast as a player) or fleeing (FLEE_PACE of the chase). */
   speed: { walk: number; run: number };
   /** How many stand at a point when it holds a group of this kind, and how far apart. */
   group: { size: [number, number]; spread: number };

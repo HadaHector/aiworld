@@ -10,7 +10,7 @@
   perLevel: { strength: 1.3, agility: 1.3 },
   spells: [{ skill: "acid" }],
   tactics: [{ skill: "acid", every: [14, 18], when: { gt: ["distance", 3] } }],
-  speed: { walk: 0.22, run: 0.44 },
+  speed: { walk: 0.22, run: 1.0 },
   group: { size: [2, 3], spread: 5 },
   habitat: { meadow: 1, savanna: 3, redBush: 3, desert: 2, sageHills: 2, maquis: 2, rainforest: 1 },
   levelOffset: 1,

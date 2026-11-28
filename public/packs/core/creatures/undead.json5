@@ -11,7 +11,7 @@
   roster: false,
   stats: { strength: 9, agility: 6, intellect: 4, weaponSpeed: 3.2 },
   perLevel: { strength: 1.5, agility: 0.8, intellect: 0.5 },
-  speed: { walk: 0.16, run: 0.34 },
+  speed: { walk: 0.16, run: 0.9 },
   group: { size: [2, 3], spread: 5 },
   habitat: {},
   respawn: [480, 600],
