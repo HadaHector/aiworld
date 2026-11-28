@@ -71,3 +71,17 @@ A skill draws `skill-<its id>` once a loaded icon set has that name, else the `i
 targets, and the item uses) take over as they are made, and a skill without one keeps its Craftpix
 picture. Skills that share a Craftpix icon today (Poison and Poison Arrow, Smite and Heal, Charge and
 Dazed) each get one of their own.
+
+**Making them** (no GPU until the owner opens a window). `skills.json` has `square: true`: `icongen.py`
+then saves the VAE Decode output for both the icon and the full save and leaves the background removal
+(RMBG) out of the graph (`--square` does the same for any list). In `assets_work/comfyUI/`:
+
+```bash
+python icongen.py --list skills.json --out skills --n 8 --full --square
+python review.py --list skills.json --out skills     # pick one per skill; the school shows where an item's rarity does
+npm run icons:generated                              # items from v2/selected/full, skills from skills/selected/full
+```
+
+`buildGenerated.mjs` takes the skill squares from `--squares` (default `assets_work/comfyUI/skills/selected/full`)
+and scales each whole square to the cell (`fillSquare` in `scripts/icons/image.mjs`), with no crop to
+content; the item cutouts keep the crop and fit. Either folder may be missing.
