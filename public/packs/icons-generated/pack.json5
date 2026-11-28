@@ -1,6 +1,6 @@
 {
   name: "Generated icons",
-  description: "Item icons made with an image model (assets_work/comfyUI): the game's own look. Replaces the Craftpix icons of the same name.",
+  description: "Item and skill icons made with an image model (assets_work/comfyUI): the game's own look. Replaces the Craftpix icons of the same name.",
   // After icons-craftpix, so a name in both comes from here.
   priority: 20,
 }
