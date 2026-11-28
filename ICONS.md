@@ -62,3 +62,12 @@ reads with the pack absent, and that every skill and item type has a placeholder
 `npm run icons` (see the pack's README): `scripts/icons/build.mjs` reads the four zips in memory with
 its own small zip and PNG readers (no dependencies), scales each set into a 64 px cell, and writes
 the atlas and index. `scripts/icons/catalogue.mjs` is the list of names.
+
+## Skill icons (2026-11-28)
+
+A skill draws `skill-<its id>` once a loaded icon set has that name, else the `icon` its file names
+(`skillIconName` in `src/ui/icons.ts`). So the generated skill icons (prompts in
+`assets_work/comfyUI/skills.json`, 58 of them: the four classes' skills, the effects they put on
+targets, and the item uses) take over as they are made, and a skill without one keeps its Craftpix
+picture. Skills that share a Craftpix icon today (Poison and Poison Arrow, Smite and Heal, Charge and
+Dazed) each get one of their own.
