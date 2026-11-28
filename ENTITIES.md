@@ -393,7 +393,7 @@ client):
   `combat(on)`, `spawn(template)` - for the console and probes.
 
 **The movement speed stat**, so a modifier is seen to do something: a stat `speed` (default 1,
-min 0.1) that the body's walk and run speeds are multiplied by. +50% speed and the player runs
+min 0.1) that the body's pace is multiplied by. +50% speed and the player runs
 visibly faster - the server's doing, as it should be.
 
 **`npm run server`**:

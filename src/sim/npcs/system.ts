@@ -401,7 +401,7 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
         patrol.next = (patrol.next + 1) % patrol.points.length;
         patrol.waitUntil = now + PATROL_WAIT[0] + Math.random() * (PATROL_WAIT[1] - PATROL_WAIT[0]);
       } else {
-        entity.body.step(deltaSeconds, { moveX: (dx / d) * PATROL_PACE, moveZ: (dz / d) * PATROL_PACE, run: false, jump: false }, 1);
+        entity.body.step(deltaSeconds, { moveX: (dx / d) * PATROL_PACE, moveZ: (dz / d) * PATROL_PACE, jump: false }, 1);
         const { feet, grounded } = entity.body.motor.state;
         entity.x = feet.x;
         entity.y = feet.y;

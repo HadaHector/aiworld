@@ -767,7 +767,7 @@ export function createServer(options: ServerOptions): Server {
     entity.body = null;
     player.arrival = at;
     player.arrived = false;
-    player.input = { moveX: 0, moveZ: 0, run: false, jump: false };
+    player.input = { moveX: 0, moveZ: 0, jump: false };
     want(to.id);
     if (from !== to.id) release(from);
     // The client clears what it knows of entities on a Transfer; so does what tells it of them.
@@ -938,7 +938,7 @@ export function createServer(options: ServerOptions): Server {
     const arrival: Arrival = { x: at.x, z: at.z, start: (at as Arrival).start };
     // Left in a lair: laid out again once its dimension is there and the body is made (restoreLair).
     if (at === record.travel && record.travel.lair && record.travel.y !== undefined) Object.assign(arrival, { y: record.travel.y, lair: record.travel.lair });
-    const joined: Player = { entity, arrival, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: record, playing: 0 };
+    const joined: Player = { entity, arrival, arrived: false, input: { moveX: 0, moveZ: 0, jump: false }, ackSeq: 0, character: record, playing: 0 };
     players.set(entity.id, joined);
     connection.player = joined;
     connection.selecting = false;
@@ -1322,7 +1322,7 @@ export function createServer(options: ServerOptions): Server {
         if (chosen) progression!.adopt(entity, chosen.origins);
         // A quick character starts where a new one would (NPCS.md, *The starting site*).
         const arrival = startOf(first, message.origins && typeof message.origins === "object" ? message.origins : {});
-        const joined: Player = { entity, arrival, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: null, playing: 0 };
+        const joined: Player = { entity, arrival, arrived: false, input: { moveX: 0, moveZ: 0, jump: false }, ackSeq: 0, character: null, playing: 0 };
         players.set(entity.id, joined);
         connection.player = joined;
         connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, world: world?.name ?? "", saves: saves !== null, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0, devCommands });
@@ -1397,7 +1397,7 @@ export function createServer(options: ServerOptions): Server {
         if (!player) return;
         const length = Math.hypot(message.moveX, message.moveZ);
         const scale = length > 1 ? 1 / length : 1;
-        player.input = { moveX: message.moveX * scale, moveZ: message.moveZ * scale, run: message.run, jump: player.input.jump || message.jump, rise: message.rise === true, dive: message.dive === true };
+        player.input = { moveX: message.moveX * scale, moveZ: message.moveZ * scale, jump: player.input.jump || message.jump, rise: message.rise === true, dive: message.dive === true };
         player.ackSeq = message.seq;
         return;
       }
@@ -1621,7 +1621,7 @@ export function createServer(options: ServerOptions): Server {
       player.playing += deltaSeconds;
       // Stunned, rooted or dead: the body stands (ABILITIES.md, *States on a unit*).
       const free = canMove(entity.combat?.flags);
-      const input = free ? player.input : { moveX: 0, moveZ: 0, run: false, jump: false };
+      const input = free ? player.input : { moveX: 0, moveZ: 0, jump: false };
       const { x, y, z } = entity;
       entity.body.step(deltaSeconds, input, entityStat(rules, entity, "speed", 1));
       player.input = { ...player.input, jump: false };

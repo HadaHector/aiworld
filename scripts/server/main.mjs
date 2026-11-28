@@ -242,7 +242,7 @@ function driveBot() {
   }
   const t = server.tick / TICK_HZ;
   bot.seq = (bot.seq + 1) & 0xffff;
-  bot.end.send({ type: "intent", seq: bot.seq, moveX: Math.cos(t / 20), moveZ: Math.sin(t / 20), run: true, jump: server.tick % 90 === 0 });
+  bot.end.send({ type: "intent", seq: bot.seq, moveX: Math.cos(t / 20), moveZ: Math.sin(t / 20), jump: server.tick % 90 === 0 });
 }
 
 /** The --hunt bot (CREATURES.md): hunts the nearest creatures, printing what it fights and loots,
@@ -313,7 +313,7 @@ function createLootRun() {
     },
     drive(tick) {
       bot.seq = (bot.seq + 1) & 0xffff;
-      send({ type: "intent", seq: bot.seq, moveX: 0, moveZ: 0, run: false, jump: false });
+      send({ type: "intent", seq: bot.seq, moveX: 0, moveZ: 0, jump: false });
       if (tick === 30) send({ type: "teleport", x: 5, z: 3 });
       if (tick === 40) report("before");
       if (tick === 45) send({ type: "debugResource", entity: dummy, resource: rules.health, delta: -1e9 });

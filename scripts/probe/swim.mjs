@@ -39,7 +39,7 @@ let id = 0, seq = 0;
 const pump = async (steps, intent = {}) => {
   for (let i = 0; i < steps; i++) {
     await new Promise((r) => setImmediate(r));
-    channel.client.send({ type: "intent", seq: ++seq, moveX: 0, moveZ: 0, run: false, jump: false, ...intent });
+    channel.client.send({ type: "intent", seq: ++seq, moveX: 0, moveZ: 0, jump: false, ...intent });
     server.step(1 / 30);
     for (const m of channel.client.receive()) {
       if (m.type === "welcome" && m.playerId) id = m.playerId;

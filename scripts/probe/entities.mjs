@@ -355,9 +355,9 @@ await (async () => {
   const walk = async (c) => {
     const e = server.debug.entity(c.id);
     const from = { x: e.x, z: e.z };
-    c.end.send({ type: "intent", seq: 1, moveX: 1, moveZ: 0, run: false, jump: false });
+    c.end.send({ type: "intent", seq: 1, moveX: 1, moveZ: 0, jump: false });
     await pump(15);
-    c.end.send({ type: "intent", seq: 2, moveX: 0, moveZ: 0, run: false, jump: false });
+    c.end.send({ type: "intent", seq: 2, moveX: 0, moveZ: 0, jump: false });
     await pump(1);
     return Math.hypot(e.x - from.x, e.z - from.z);
   };

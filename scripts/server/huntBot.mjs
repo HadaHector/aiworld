@@ -138,7 +138,7 @@ export function createHuntClient(rules, creatures, end, progression = null) {
   function move(towardX, towardZ, run) {
     const m = me();
     state.seq = (state.seq + 1) & 0xffff;
-    if (!m || towardX === null) return end.send({ type: "intent", seq: state.seq, moveX: 0, moveZ: 0, run: false, jump: false });
+    if (!m || towardX === null) return end.send({ type: "intent", seq: state.seq, moveX: 0, moveZ: 0, jump: false });
     const dx = towardX - m.x;
     const dz = towardZ - m.z;
     const d = Math.hypot(dx, dz) || 1;

@@ -10,7 +10,7 @@
   perLevel: { strength: 1.5, agility: 1 },
   spells: [{ skill: "gore" }],
   tactics: [{ skill: "gore", every: [14, 18] }],
-  speed: { walk: 0.2, run: 0.4 },
+  speed: { walk: 0.2, run: 1.0 },
   group: { size: [2, 3], spread: 5 },
   habitat: { meadow: 3, bluebellWood: 2, autumnWood: 3, maquis: 2, sageHills: 2, savanna: 2, rainforest: 1, cloudForest: 1, reedMarsh: 1, redBush: 1 },
   flee: { at: 0.2, time: 6 },

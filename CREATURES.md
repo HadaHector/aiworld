@@ -63,7 +63,7 @@ Asked and answered before this plan was written:
   spells: [{ skill: "autoAttack" }, { skill: "bite" }],
   // What the brain does with them (see *The brain*); auto-attack needs no entry.
   tactics: [{ skill: "bite", every: [5, 8] }],
-  speed: { walk: 0.3, run: 1 },       // shares of the body's walk and run: wandering, chasing
+  speed: { walk: 0.3, run: 1 },       // shares of the player's pace (6 m/s): wandering, chasing
   group: { size: [2, 4], spread: 6 }, // a pack: how many, how far apart they stand
   habitat: { meadow: 2, bluebellWood: 3, autumnWood: 3, snowyTaiga: 2, frostSteppe: 2 },
   levelOffset: 0,                     // added to the zone's rolled level
@@ -301,7 +301,7 @@ interface Brain {
   closer and covered no ground - for `stuck` (4 s): there is no pathfinding, and a creature that
   cannot get round a wall gives up rather than running at it.
   Evading applies the rules' `evadeSkill` (core's `evade`: a magic holding `immune`, ended on
-  arriving), clears threat, and runs home at full run speed. Hits on it show "Immune", as on any
+  arriving), clears threat, and runs home at twice a player's pace (`EVADE_PACE`). Hits on it show "Immune", as on any
   immune unit.
 - **Line of sight** for aggro uses the same ray as casting (ABILITIES.md). Chasing does not need
   sight; losing the target out of range is the leash's business.
@@ -486,10 +486,18 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   now cost frames of up to about 0.3 s (building the mesh), not a 12 s freeze.
 - **Core's numbers** were tuned with the hunt bot: a level 1 player kills a same-level wolf or boar
   in 25-35 s and wins most fights; three at once, or a bandit camp, kill it. Then made easier at the
-  user's asking: creatures chase at 0.40-0.45 of the body's run (4.8-5.4 m/s), below a player's
-  6 m/s walk, so a player can always get away (the 12 m/s run is a stand-in sprint); swings every
+  user's asking: swings every
   2.8-3.2 s and tactics half as often; and mostly alone - `groups` 60% single, 28% pairs, 12% packs
   of two or three.
+- **Speed** (2026-11-28, the owner: no sprint in the game). Players move at one pace, `MOVE_SPEED`
+  (6 m/s, `src/sim/playerBody.ts`); Shift does nothing. A kind's `speed` is shares of that pace, so
+  changing it moves them too: `walk` (wandering, 0.16-0.25: 1-1.5 m/s) and `run`, the chase. A
+  normal enemy chases at 1, as fast as a player, so it cannot be outrun, only kited or slowed:
+  beetle and undead 0.9, crocodile 0.95, wolf 1.05, lynx and stag 1.1 (traits: Old 0.9, Swift
+  1.08 on top). A fleeing creature runs at `FLEE_PACE` (0.8) of its chase, a little slower than a
+  player, so it can be caught; the leash and an evade run home at `EVADE_PACE` (2, 12 m/s).
+  Swimming is WATER.md's `swimSpeed` share of the same pace. The walk and run cycles (humans and
+  beasts) take their speed from how far the body moved, so their feet keep up at any pace.
 - **The probe** (`scripts/probe/creatures.mjs`, 85 checks, about 45 s): rules and refusals, traits
   from the seed, zones and points on `small`, the lifecycle and the brain on a real `tiny` server,
   and a hunt. Not covered: a creature stuck behind a wall (the `stuck` rule), camps' group aggro

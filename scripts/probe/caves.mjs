@@ -42,7 +42,7 @@ let id = 0, seq = 0;
 const told = [];
 const pump = (steps = 1, intent) => {
   for (let i = 0; i < steps; i++) {
-    if (intent) channel.client.send({ type: "intent", seq: (seq = (seq + 1) & 0xffff), moveX: intent.x, moveZ: intent.z, run: true, jump: false });
+    if (intent) channel.client.send({ type: "intent", seq: (seq = (seq + 1) & 0xffff), moveX: intent.x, moveZ: intent.z, jump: false });
     server.step(1 / 30);
     for (const m of channel.client.receive()) {
       if (m.type === "welcome") id = m.playerId;

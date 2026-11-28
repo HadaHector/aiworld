@@ -446,8 +446,8 @@ if left out - rather than from the player template, which keeps `src/sim` untouc
 built while the dimension loads; the capsule stands in until it is ready and then stays, unseen, as
 what the camera and the house lights follow. Speed and vertical speed come from how far the player
 moved since the last snapshot, eased; a move of more than 3 m is a teleport. The body turns toward
-the player's facing rather than snapping. 1 or F swings. The game's own walk (6 m/s) and run
-(12 m/s) are not final: at them the gait runs; at 1.2-1.5 and 3 m/s it would walk and jog as tuned.
+the player's facing rather than snapping. 1 or F swings. The game's one pace (6 m/s; the 12 m/s
+sprint is gone) is not final: at it the gait runs; at 1.2-1.5 and 3 m/s it would walk and jog as tuned.
 
 **Bodies for everyone** (after the verdict, *Next steps* 1): every humanoid entity the client
 knows - other players, NPCs, the training dummy - is drawn with a body when its template's `look`

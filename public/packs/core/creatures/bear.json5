@@ -10,7 +10,7 @@
   perLevel: { strength: 1.8, agility: 0.8 },
   spells: [{ skill: "maul" }],
   tactics: [{ skill: "maul", every: [12, 16] }],
-  speed: { walk: 0.18, run: 0.42 },
+  speed: { walk: 0.18, run: 1.0 },
   group: { size: [1, 2], spread: 6 },
   habitat: { meadow: 1, bluebellWood: 2, autumnWood: 3, snowyTaiga: 3, greenAlps: 2, alpineMeadow: 2, windsweptFell: 1, cloudForest: 1 },
   levelOffset: 2,

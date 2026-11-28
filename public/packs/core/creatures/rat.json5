@@ -10,7 +10,7 @@
   perLevel: { strength: 1, agility: 1.3 },
   spells: [{ skill: "bite" }],
   tactics: [{ skill: "bite", every: [8, 12] }],
-  speed: { walk: 0.22, run: 0.46 },
+  speed: { walk: 0.22, run: 1.0 },
   group: { size: [3, 5], spread: 4 },
   habitat: { reedMarsh: 3, cypressBayou: 3, frozenBog: 2, meadow: 1, heatherMoor: 2, palmGrove: 1 },
   respawn: [180, 300],

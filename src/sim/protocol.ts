@@ -46,7 +46,6 @@ export interface Intent {
   seq: number; // u16, wrapping
   moveX: number; // f32
   moveZ: number; // f32
-  run: boolean;
   jump: boolean;
   /** Swimming up and down, held (WATER.md). */
   rise?: boolean;

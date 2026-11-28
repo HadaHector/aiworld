@@ -77,7 +77,7 @@ export function createFightClient(rules, end) {
     const dummy = state.dummy;
     state.seq = (state.seq + 1) & 0xffff;
     if (!me || !dummy) {
-      end.send({ type: "intent", seq: state.seq, moveX: 0, moveZ: 0, run: false, jump: false });
+      end.send({ type: "intent", seq: state.seq, moveX: 0, moveZ: 0, jump: false });
       return;
     }
     const dx = dummy.x - me.x;

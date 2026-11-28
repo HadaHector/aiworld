@@ -610,7 +610,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     // What the player wants, to the server; the server steps; where the player is, back. While the
     // spectator camera flies the keys are its own, and the player stands.
     const started = performance.now();
-    const intent = spectator.active ? { moveX: 0, moveZ: 0, run: false, jump: false } : character.readIntent(camera);
+    const intent = spectator.active ? { moveX: 0, moveZ: 0, jump: false } : character.readIntent(camera);
     intentSeq = (intentSeq + 1) & 0xffff;
     client.send({ type: "intent", seq: intentSeq, ...intent });
     for (const extra of extraPlayers) extra.step();
@@ -721,7 +721,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         for (const message of extra.client.receive()) if (message.type === "transfer") extra.client.send({ type: "arrived" });
         const t = performance.now() / 1000 - started;
         seq = (seq + 1) & 0xffff;
-        extra.client.send({ type: "intent", seq, moveX: Math.cos(t / 4) * 0.25, moveZ: Math.sin(t / 4) * 0.25, run: false, jump: false });
+        extra.client.send({ type: "intent", seq, moveX: Math.cos(t / 4) * 0.25, moveZ: Math.sin(t / 4) * 0.25, jump: false });
       },
       close: () => extra.client.close(),
     });
