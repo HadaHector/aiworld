@@ -1,0 +1,13 @@
+// Leather wrists armour, the ranger's: Bracerss.
+// A ladder (rules/itemLayout.json5, ITEMS.md *The ladder*): six items over levels 1-10 and grey
+// trash between; its stats, armour, damage and price come from the curves.
+{
+  kind: "armour",
+  slot: "wrists",
+  icon: "item-leather-bracers",
+  ladder: "leather",
+  name: "{tier} Bracers",
+  gear: ["bracers"],
+  tint: "#6a4a2e",
+  tiers: { start: "Rawhide", loot3: "Tanned", shop: "Sturdy", quest: "Hardened", loot7: "Studded", loot9: "Wildwood" },
+}

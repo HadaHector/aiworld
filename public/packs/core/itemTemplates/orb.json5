@@ -1,0 +1,11 @@
+// A caster's off hand, the mage's and the priest's.
+// A ladder (rules/itemLayout.json5, ITEMS.md *The ladder*): six items over levels 1-10 and grey
+// trash between; its stats, armour, damage and price come from the curves.
+{
+  kind: "trinket",
+  slot: "offHand",
+  icon: "item-spell-orb",
+  ladder: "orb",
+  name: "{tier}",
+  tiers: { start: "Glass Orb", loot3: "Prayer Book", shop: "Crystal Orb", quest: "Illuminated Psalter", loot7: "Starglass Orb", loot9: "Runed Tome", trash: "Cracked Orb" },
+}

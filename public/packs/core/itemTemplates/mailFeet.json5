@@ -1,0 +1,13 @@
+// Mail feet armour, the warrior's: Sabatonss.
+// A ladder (rules/itemLayout.json5, ITEMS.md *The ladder*): six items over levels 1-10 and grey
+// trash between; its stats, armour, damage and price come from the curves.
+{
+  kind: "armour",
+  slot: "feet",
+  icon: "item-leather-boots",
+  ladder: "mail",
+  name: "{tier} Sabatons",
+  gear: ["boots"],
+  tint: "#a0a4aa",
+  tiers: { start: "Ringed", loot3: "Bronze", shop: "Riveted", quest: "Hardened", loot7: "Iron", loot9: "Ornate Iron" },
+}

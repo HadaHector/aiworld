@@ -11,7 +11,7 @@
   resources: ["rage"],
   stats: { strength: 3, stamina: 2 },
   // Where its level-up stat points go (rules/progression.json5 `statPoints`).
-  statWeights: { strength: 0.4, stamina: 0.4, agility: 0.2 },
+  statWeights: { strength: 0.5, stamina: 0.25, agility: 0.25 },
   spells: [{ skill: "autoAttack" }, { skill: "heroicStrike" }, { skill: "charge" }],
   disciplines: { class: 1 },
   unlocks: {
@@ -34,5 +34,5 @@
     ],
   },
   trees: ["warriorArms"],
-  items: { start: [{ item: "sword.bronze.short.crude.common" }, { item: "woodenShield" }, { item: "bronzeCap" }, { item: "bronzeToken" }, { item: "leatherShoulders" }, { item: "woolCloak" }, { item: "leatherGloves" }, { item: "leatherBracers" }, { item: "leatherBelt" }, { item: "copperRing" }] },
+  items: { start: [{ item: "sword.start" }, { item: "roundShield.start" }, { item: "mailHead.start" }, { item: "mailShoulders.start" }, { item: "mailChest.start" }, { item: "mailWrists.start" }, { item: "mailHands.start" }, { item: "mailWaist.start" }, { item: "mailLegs.start" }, { item: "mailFeet.start" }, { item: "cloak.start" }, { item: "amulet.start" }, { item: "ring.start" }] },
 }

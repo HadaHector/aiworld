@@ -31,5 +31,5 @@
     ],
   },
   trees: ["priestLight"],
-  items: { start: [{ item: "oakMace" }, { item: "prayerBook" }, { item: "sunPendant" }, { item: "goldRing" }, { item: "clothHood" }, { item: "clothMantle" }, { item: "clothCloak" }, { item: "clothCuffs" }, { item: "clothGloves" }, { item: "ropeBelt" }, { item: "clothSlippers" }] },
+  items: { start: [{ item: "mace.start" }, { item: "orb.start" }, { item: "clothHead.start" }, { item: "clothShoulders.start" }, { item: "clothChest.start" }, { item: "clothWrists.start" }, { item: "clothHands.start" }, { item: "clothWaist.start" }, { item: "clothLegs.start" }, { item: "clothFeet.start" }, { item: "cloak.start" }, { item: "amulet.start" }, { item: "ring.start" }] },
 }

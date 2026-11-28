@@ -1,14 +1,11 @@
-// What a bandit drops: money, food, and now and then their gear.
+// What a bandit drops: money, food, and their gear.
 {
   rolls: [1, 2],
   pick: [
     { weight: 35, item: "bread", count: [1, 2] },
-    { weight: 20, table: "starterGear" },
-    { weight: 15, template: "sword", rarity: ["common", "uncommon"], where: { material: "bronze" } },
-    // A bandit's knife or hatchet, roughly made.
-    { weight: 6, template: "dagger", rarity: ["common", "uncommon"], where: { material: "bronze", make: "crude" } },
-    { weight: 5, template: "axe", rarity: ["common", "uncommon"], where: { material: "bronze", make: "crude" } },
-    { weight: 30 },
+    { weight: 15, item: "coinPouch" },
+    { weight: 10, item: "brokenTooth", count: [1, 2] },
+    { weight: 40 },
   ],
-  always: [{ money: [0.6, 1.8], scale: "brute" }],   // a share of a brute kill's money at its level (rules/balance.json5)
+  always: [{ money: [0.6, 1.8], scale: "brute" }, { table: "gearHumanoid" }],   // a share of a brute kill's money at its level (rules/balance.json5)
 }

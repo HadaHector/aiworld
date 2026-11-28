@@ -1,15 +1,20 @@
-// What a smith sells (NPCS.md, *The vendor's shop*): metal weapons, shields and chestpieces of the
-// first levels.
+// What a smith sells (NPCS.md, *The vendor's shop*): the shop rung of every metal type (ITEMS.md, *The
+// ladder*: one shop upgrade a type, level 4) and the starting pieces again, for a lost one.
 {
   items: [
-    { template: "sword", levels: [1, 10] },
-    { template: "mace", levels: [1, 10] },
-    { template: "axe", levels: [1, 10] },
-    { template: "dagger", levels: [1, 10] },
-    { template: "buckler", levels: [1, 10] },
-    { template: "roundShield", levels: [1, 10] },
-    { template: "chestpiece", levels: [1, 10] },
-    { item: "leatherBracers" },
-    { item: "plateGauntlets" },
+    { template: "sword", roles: ["start", "shop"] },
+    { template: "axe", roles: ["start", "shop"] },
+    { template: "mace", roles: ["start", "shop"] },
+    { template: "dagger", roles: ["start", "shop"] },
+    { template: "buckler", roles: ["start", "shop"] },
+    { template: "roundShield", roles: ["start", "shop"] },
+    { template: "mailHead", roles: ["shop"] },
+    { template: "mailShoulders", roles: ["shop"] },
+    { template: "mailChest", roles: ["shop"] },
+    { template: "mailWrists", roles: ["shop"] },
+    { template: "mailHands", roles: ["shop"] },
+    { template: "mailWaist", roles: ["shop"] },
+    { template: "mailLegs", roles: ["shop"] },
+    { template: "mailFeet", roles: ["shop"] },
   ],
 }

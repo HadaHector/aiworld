@@ -1,0 +1,13 @@
+// Cloth legs armour, the mage and priest's: Trouserss.
+// A ladder (rules/itemLayout.json5, ITEMS.md *The ladder*): six items over levels 1-10 and grey
+// trash between; its stats, armour, damage and price come from the curves.
+{
+  kind: "armour",
+  slot: "legs",
+  icon: "item-linen-trousers",
+  ladder: "cloth",
+  name: "{tier} Trousers",
+  gear: ["trousers"],
+  tint: "#8a7aa8",
+  tiers: { start: "Linen", loot3: "Homespun", shop: "Woollen", quest: "Embroidered", loot7: "Silken", loot9: "Runed" },
+}

@@ -1,31 +1,21 @@
-// Bows from parts, held in the left hand and drawn with the right: a plain stave, a wrapped one, a recurve.
-// A material (its tint) times how well it is made (its model, weapons/bow.json5) times a rarity.
+// Bows, the ranger's: held in the left fist, so they fill the off hand.
+// A ladder (rules/itemLayout.json5, ITEMS.md *The ladder*): six items over levels 1-10 and grey
+// trash between; its stats, armour, damage and price come from the curves.
 {
   kind: "weapon",
-  icon: "item-bow-{material}",
   slot: "mainHand",
   fills: ["offHand"],
-  name: "{make}{material} Bow",
-  axes: {
-    material: [
-      { id: "ash", name: "Ash", tint: "#8a6a40", level: 1, budget: 1 },
-      { id: "oak", name: "Oak", tint: "#6b4a2a", level: 8, budget: 1.5 },
-    ],
-    // How well it is made (CHARACTERS.md, *Weapons and shields*): which of the family's models it is.
-    make: [
-      { id: "crude", name: "Crude ", gear: ["bow.crude"], budget: 0.85 },
-      { id: "standard", name: "", gear: ["bow.standard"] },
-      { id: "ornate", name: "Ornate ", gear: ["bow.ornate"], budget: 1.2, level: 5 },
-    ],
+  icon: "item-bow-ash",
+  ladder: "bow",
+  name: "{tier} Bow",
+  tiers: { start: "Crude Ash", loot3: "Ash", shop: "Seasoned Ash", quest: "Carved Ash", loot7: "Oak", loot9: "Ornate Oak", trash: "Battered" },
+  rungs: {
+    start: { gear: ["bow.crude"], tint: "#8a6a40" },
+    loot3: { gear: ["bow.standard"], tint: "#8a6a40" },
+    shop: { gear: ["bow.standard"], tint: "#9a7848" },
+    quest: { gear: ["bow.ornate"], tint: "#9a7848" },
+    loot7: { gear: ["bow.standard"], tint: "#6b4a2a" },
+    loot9: { gear: ["bow.ornate"], tint: "#6b4a2a" },
+    trash: { gear: ["bow.crude"], tint: "#8a7a60" },
   },
-  // No crude rarity, no plain ornament.
-  never: [{ make: "crude", rarity: "rare" }, { make: "ornate", rarity: "common" }],
-  stats: { weaponMin: [2, 3], weaponMax: [4, 6], weaponSpeed: 0.6, agility: [1, 2], attackRange: 25 },
-  // A bow shoots: auto-attack reaches 30 m with one (stats/attackRange.json5).
-  unscaled: ["weaponSpeed", "attackRange"],
-  rarities: ["common", "uncommon", "rare"],
-  extra: { stamina: [1, 3], strength: [1, 2], agility: [1, 2], spirit: [1, 2], intellect: [1, 2] },
-  requires: { ge: ["level", { sub: ["itemLevel", 8] }] },
-  durability: 45,
-  value: "balance",   // from the curves (rules/balance.json5): the level, slot and rarity set it
 }

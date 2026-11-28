@@ -32,5 +32,5 @@
     ],
   },
   trees: [],
-  items: { start: [{ item: "bow.ash.crude.common" }, { item: "leatherShoulders" }, { item: "woolCloak" }, { item: "leatherGloves" }, { item: "leatherBracers" }, { item: "leatherBelt" }, { item: "leatherBoots" }, { item: "copperRing" }] },
+  items: { start: [{ item: "bow.start" }, { item: "leatherHead.start" }, { item: "leatherShoulders.start" }, { item: "leatherChest.start" }, { item: "leatherWrists.start" }, { item: "leatherHands.start" }, { item: "leatherWaist.start" }, { item: "leatherLegs.start" }, { item: "leatherFeet.start" }, { item: "cloak.start" }, { item: "amulet.start" }, { item: "ring.start" }] },
 }

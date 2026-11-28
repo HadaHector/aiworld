@@ -1,0 +1,10 @@
+// Gear a humanoid drops (bandits, the dead): they carry it, so more of it than a beast's.
+{
+  pick: [
+    { weight: 58 },
+    { weight: 26, gear: "trash" },
+    { weight: 12, gear: "loot", rarity: ["common", "uncommon"] },
+    { weight: 3, gear: "loot", rarity: "rare" },
+    { weight: 1, item: "healthPotion" },
+  ],
+}

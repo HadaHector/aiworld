@@ -1,0 +1,56 @@
+// The item ladder (SLICE.md I8; ITEMS.md, *The ladder*): agreed with the owner 2026-11-28. Every item
+// type - an armour type in a slot, a weapon family - is six items over levels 1-10, one per rung, and
+// grey trash at the levels between, which can be worn: a level 4 grey is better than the starting gear.
+// A template (itemTemplates/, `ladder: "<line>"`) names the type and how each rung looks; its stats,
+// armour, damage, block and price all come from the balance curves (rules/balance.json5) and the
+// defence rules (rules/combat.json5): see src/sim/rules/itemLadder.ts.
+{
+  // The six: where each item of a type comes from (its role), its level and rarity.
+  rungs: [
+    { id: "start", role: "start", level: 1, rarity: "common" },
+    { id: "loot3", role: "loot", level: 3, rarity: "common" },
+    { id: "shop", role: "shop", level: 4, rarity: "common" },
+    { id: "quest", role: "quest", level: 6, rarity: "uncommon" },
+    { id: "loot7", role: "loot", level: 7, rarity: "uncommon" },
+    { id: "loot9", role: "loot", level: 9, rarity: "rare" },
+  ],
+  // Grey trash: it can be worn, but is worth little at a vendor - a tenth of a real piece's price. A name
+  // word for each level.
+  trash: { levels: [2, 4, 6, 8, 10], rarity: "poor", role: "trash", names: ["Frayed", "Patched", "Battered", "Worn", "Faded"], value: 0.1 },
+  // An item can be worn from one level under its own.
+  below: 1,
+  // A rolled stat runs from 80% of its value to its value.
+  spread: 0.2,
+  // A set's armour is shared among these slots by their balance slot weights (the cloak takes a little).
+  armourSlots: ["head", "shoulders", "chest", "wrists", "hands", "waist", "legs", "feet", "back"],
+
+  // Lines: what an item of each kind carries.
+  //   armour      share of a full set's armour (1: what the defence rules want for the player's mitigation)
+  //   stats       how its stat points split (from the item budget curve, by level, slot and rarity)
+  //   speed, dps  weapons: seconds a swing, and the share of the player's dps curve its swings make
+  //   block       shields: block chance (%) and block value at levels 1 and 10
+  //   fixed       stats every item of the line has as they are
+  lines: {
+    // Armour types: mage and priest wear cloth, the ranger leather, the warrior mail.
+    cloth: { armour: 0.55, stats: { intellect: 0.5, spirit: 0.35, stamina: 0.15 }, durability: 30 },
+    leather: { armour: 1, stats: { agility: 0.75, stamina: 0.25 }, durability: 40 },
+    mail: { armour: 1.45, stats: { strength: 0.7, stamina: 0.3 }, durability: 55 },
+    // Cloak, neck and ring: anyone's; a little of everything.
+    cloak: { armour: 1, stats: { stamina: 0.2, strength: 0.2, agility: 0.2, intellect: 0.2, spirit: 0.2 }, durability: 30 },
+    jewel: { stats: { stamina: 0.2, strength: 0.2, agility: 0.2, intellect: 0.2, spirit: 0.2 } },
+    // Weapons.
+    sword: { speed: 2.4, dps: 0.4, stats: { strength: 0.8, stamina: 0.2 }, durability: 45 },
+    axe: { speed: 2.8, dps: 0.42, stats: { strength: 0.8, stamina: 0.2 }, durability: 45 },
+    mace: { speed: 2.6, dps: 0.36, stats: { strength: 0.4, spirit: 0.4, stamina: 0.2 }, durability: 45 },
+    dagger: { speed: 1.6, dps: 0.38, stats: { agility: 0.8, stamina: 0.2 }, durability: 40 },
+    // Two-handed: the off hand's budget too.
+    // A bow shoots: auto-attack reaches 30 m with one (stats/attackRange.json5).
+    bow: { speed: 2.6, dps: 0.45, stats: { agility: 0.8, stamina: 0.2 }, fixed: { attackRange: 25 }, durability: 45 },
+    staff: { speed: 3, dps: 0.2, stats: { intellect: 0.65, spirit: 0.25, stamina: 0.1 }, durability: 45 },
+    wand: { speed: 1.8, dps: 0.2, stats: { intellect: 0.6, spirit: 0.3, stamina: 0.1 }, durability: 40 },
+    // Off hands.
+    buckler: { armour: 0.12, stats: { stamina: 0.5, strength: 0.5 }, block: { chance: [6, 10], value: [4, 16] }, durability: 50 },
+    roundShield: { armour: 0.1, stats: { stamina: 0.5, spirit: 0.25, strength: 0.25 }, block: { chance: [5, 8], value: [3, 12] }, durability: 50 },
+    orb: { stats: { intellect: 0.5, spirit: 0.5 } },
+  },
+}
