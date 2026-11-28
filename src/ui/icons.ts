@@ -93,11 +93,16 @@ export function itemIcon(type: ItemTypeDef | null | undefined, color: string): I
   return { name: type?.icon ?? "", glyph: GLYPH_BY_KIND[type?.kind ?? ""] ?? "misc", color };
 }
 
+/** A skill's icon name: its own generated one (`skill-<id>`, ICONS.md) once a loaded set has it, else
+ *  the `icon` its file names - so a skill keeps its current picture until its own is made. */
+export const skillIconName = (skill: SkillDef | null | undefined): string => (skill && hasIcon(`skill-${skill.id}`) ? `skill-${skill.id}` : (skill?.icon ?? ""));
+
 /** What to draw for a skill: its school's glyph and colour, or a swing for a physical skill. */
 export function skillIcon(skill: SkillDef | null | undefined): IconSpec {
   const school = skill?.tags.find((t) => t.startsWith("school."))?.slice(7);
-  if (school) return { name: skill?.icon ?? "", glyph: SCHOOL_GLYPHS[school] ?? "spell", color: SCHOOL_COLOURS[school] ?? hashColour(school) };
-  return { name: skill?.icon ?? "", glyph: skill?.type === "physical" || skill?.tags.includes("melee") ? "physical" : "spell", color: skill?.type === "physical" || skill?.tags.includes("melee") ? "#d0c8b8" : "#c8a8e8" };
+  const name = skillIconName(skill);
+  if (school) return { name, glyph: SCHOOL_GLYPHS[school] ?? "spell", color: SCHOOL_COLOURS[school] ?? hashColour(school) };
+  return { name, glyph: skill?.type === "physical" || skill?.tags.includes("melee") ? "physical" : "spell", color: skill?.type === "physical" || skill?.tags.includes("melee") ? "#d0c8b8" : "#c8a8e8" };
 }
 
 /** The debug teleport's icon: it is no skill. */
