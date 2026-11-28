@@ -1,3 +1,4 @@
+import { pointerTravel } from "../player/thirdPersonCamera";
 import { createDungeonPresence, type DungeonPresence } from "./dungeonPresence";
 import type { DungeonMessage } from "../sim/protocol";
 import { createQuestMirror } from "./questMirror";
@@ -1106,7 +1107,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     });
     listenCanvas("pointerup", (e) => {
       if (e.button !== 0 || !down || !view || !entityMeshes) return;
-      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+      // Travel, not the end point: a drag that turned the camera locked the pointer, which stays put.
+      const moved = Math.max(Math.hypot(e.clientX - down.x, e.clientY - down.y), pointerTravel(canvas));
       down = null;
       if (moved > 4) return;
       // An aimed teleport takes this click.
@@ -1205,7 +1207,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     });
     listenCanvas("pointerup", (e) => {
       if (e.button !== 2 || !down || !view || !entityMeshes) return;
-      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+      // Travel, not the end point: a drag that turned the camera locked the pointer, which stays put.
+      const moved = Math.max(Math.hypot(e.clientX - down.x, e.clientY - down.y), pointerTravel(canvas));
       down = null;
       if (moved > 4) return;
       if (teleportArmed) return setTeleportArmed(false);

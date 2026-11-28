@@ -173,7 +173,8 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
     wanted = { gear, signature: gear.map((g) => `${g.piece}${g.tint}`).join() };
     buildBody();
   };
-  const camera = createThirdPersonCamera(scene, canvas, character.mesh);
+  // The camera looks at the head (about 0.9 of the height up), not the middle of the capsule.
+  const camera = createThirdPersonCamera(scene, canvas, character.mesh, character.settings.height * 0.42);
   const cameraCollision = createCameraCollision(camera, world.collision.world);
   // Camera near/far and the shadow generator's own frustum both need the real camera, which does
   // not exist until here - see World.attachCamera.
